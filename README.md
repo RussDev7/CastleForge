@@ -1,4 +1,4 @@
-# CastleForge - A Powerful Open Source CastleMinerZ ModLoader
+# CastleForge - A Powerful Open Source CMZ ModLoader
 
 A **config‑bootstrapped, in‑process mod-loader** for **CastleMiner Z**.
 
