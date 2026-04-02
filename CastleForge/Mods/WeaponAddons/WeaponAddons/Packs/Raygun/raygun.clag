@@ -1,0 +1,159 @@
+Firearm
+$NAME:         Raygun
+$AUTHOR:       RussDev7
+$DESCRIPTION1: RAYGUUUUN
+$DESCRIPTION2: Uses Bullets
+
+; ==========================================================
+; New Weapon IDs (Synthetic / Local-Only)
+; ----------------------------------------------------------
+; Creates a NEW item ID at runtime by cloning a vanilla class.
+; - AS_NEW_ITEM / NEW_ITEM: enable synthetic item creation.
+; - ITEM_ID: Desired numeric ID (0/omit = auto-assign + persist in config).
+; Notes:
+; - Synthetic IDs are kept vanilla-safe by your networking remaps/filters.
+; ==========================================================
+$AS_NEW_ITEM: true
+$ITEM_ID:     204
+
+; ==========================================================
+; BASE CLASS TO CLONE (IMPORTANT)
+; ----------------------------------------------------------
+; SLOT_ID decides what vanilla behavior/class you inherit.
+; - For true laser behavior, clone a laser gun class (e.g., PrecisionLaser).
+; - Cloning Pistol gives pistol behavior (even if you tint projectile color).
+; ==========================================================
+$SLOT_ID: Pistol
+
+; Ammo type this weapon consumes (enum name or numeric ID).
+$AMMO_ID: Bullets
+
+; ==========================================================
+; Optional UI Icon Override
+; ----------------------------------------------------------
+; Priority order:
+;  1) PNG icon (ICON) if enabled + found.
+;  2) Render icon from MODEL (ICON_RENDER_MODEL) if enabled.
+;  3) Fallback: Normal SLOT_ID icon (vanilla Draw2D / synthetic->base remap).
+;
+; PNG icon:
+; - ICON: Path relative to pack folder (same folder as this .clag).
+; - ICON_ENABLED: Defaults true if ICON is present.
+; ==========================================================
+$ICON:         icon.png
+$ICON_ENABLED: true
+
+; Render icon from the MODEL .xnb (only used if PNG icon is not used).
+; - ICON_RENDER_SIZE: output texture size in pixels (default 64)
+$ICON_RENDER_MODEL: true
+$ICON_RENDER_SIZE:  64
+
+; Optional: Icon render pose (degrees).
+; Tips:
+; - YAW:   Left/right spin.
+; - PITCH: Tilt (helps avoid "top-down flat" look).
+; - ROLL:  In-screen rotation (use 180 if model appears upside-down).
+$ICON_RENDER_YAW_DEG:   -58
+$ICON_RENDER_PITCH_DEG: -162
+$ICON_RENDER_ROLL_DEG:  41
+
+; Optional: Icon render placement (units = model radius).
+; +X = right, -X = left.
+; +Y = up,    -Y = down.
+; +Z = toward camera, -Z = away.
+$ICON_RENDER_OFFSET_X: -0.15
+$ICON_RENDER_OFFSET_Y: 0.22
+$ICON_RENDER_OFFSET_Z: 0
+
+; Optional: Zoom (>1 zooms IN, <1 zooms OUT).
+$ICON_RENDER_ZOOM: 1.0
+
+; ==========================================================
+; Assets / Sounds
+; ----------------------------------------------------------
+; MODEL:
+; - Path relative to the pack folder.
+; - Omit the .xnb extension.
+;   (ex: models\raygun -> <Pack>\models\raygun.xnb)
+;
+; SHOOT_SFX / RELOAD_SFX:
+; - Either a vanilla cue name (ex: LaserGun4, Teleport), OR
+; - A file path relative to the pack folder (WAV/MP3).
+;   Recommended: 16-bit PCM WAV (most compatible).
+; ==========================================================
+$MODEL: models\raygun
+$SHOOT_SFX:  sounds\shoot.wav
+$RELOAD_SFX: sounds\reload.wav
+
+; Optional SFX tuning (only affects file-based SFX, not cue names).
+; Volume: 0..1  (1.0 = full volume).
+; Pitch:  -1..1 (0.0 = normal, + = higher, - = lower).
+$SHOOT_VOL:    1.0
+$SHOOT_PITCH:  0.0
+
+$RELOAD_VOL:   1.0
+$RELOAD_PITCH: 0.0
+
+; ==========================================================
+; Behavior
+; ==========================================================
+$AUTOMATIC: false
+
+; ==========================================================
+; Damage / Handling
+; ==========================================================
+$DAMAGE:             1800
+$SELF_DAMAGE:        0.001
+$INACCURACY_DEG:     0.01
+$BULLETS_PER_SECOND: 8
+$RECOIL_DEG:         3
+
+; ==========================================================
+; Ammo
+; ==========================================================
+$CLIP_SIZE:         20
+$ROUNDS_PER_RELOAD: 20
+
+; ==========================================================
+; Projectile Tuning
+; ==========================================================
+$SECONDS_TO_RELOAD: 1
+$BULLET_LIFETIME:   3
+$BULLET_SPEED:      100
+
+; ==========================================================
+; Visuals
+; ----------------------------------------------------------
+; PROJECTILE_TYPE is only meaningful if your runtime uses it.
+; PROJECTILE_COLOR sets TracerColor (0..1) from R,G,B (0..255).
+; MODEL_COLOR1/2 are best-effort tints applied to supported classes.
+; ==========================================================
+$PROJECTILE_TYPE:  Laser
+$PROJECTILE_COLOR: 0,255,64
+$MODEL_COLOR1:     255,50,50
+$MODEL_COLOR2:     30,30,30
+
+; ==========================================================
+; Optional Crafting Recipe (per-pack)
+; ----------------------------------------------------------
+; RECIPE_ENABLED:      Enable/disable this pack's recipe injection.
+; RECIPE_TYPE:         Crafting tab (Recipe.RecipeTypes): Pistols,
+                       Ammo, Explosives, Advanced, etc.
+; RECIPE_OUTPUT_COUNT: Stack size produced.
+; RECIPE_INGREDIENTS:  "ItemIdOrName:Count, ItemIdOrName:Count, ..."
+;
+; Placement:
+; - RECIPE_INSERT_AFTER: Anchor recipe (result item) in the same
+                         tab (also used for ordering).
+; - RECIPE_INSERT_MODE:
+;     AFTER    = Immediately after anchor (default).
+;     RIGHT_OF = Draw to the right of anchor's row (UI layout patch),
+                 while still inserting after it in the list.
+; ==========================================================
+$RECIPE_ENABLED:      true
+$RECIPE_TYPE:         Pistols
+$RECIPE_OUTPUT_COUNT: 1
+$RECIPE_INGREDIENTS:  Iron:2, WoodBlock:2, SpaceRockInventory:1
+
+$RECIPE_INSERT_AFTER: Pistol
+$RECIPE_INSERT_MODE:  RIGHT_OF

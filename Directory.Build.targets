@@ -1,0 +1,7 @@
+<Project>
+  <!-- Imported late to override project-level debug symbol settings and suppress PDB generation. -->
+  <PropertyGroup>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+</Project>

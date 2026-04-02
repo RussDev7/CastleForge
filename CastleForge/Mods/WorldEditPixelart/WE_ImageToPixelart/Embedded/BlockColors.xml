@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Colors>
+  <Blocks>
+    <!--Dark Red-->
+    <Block Id="20" Name="BloodStone" Color="#FF3B0A0A" />
+    <Block Id="20" Name="BloodStone" Color="#FF6A1414" />
+    <Block Id="20" Name="BloodStone" Color="#FF9B1E1E" />
+
+    <!--Brown-->
+    <Block Id="33" Name="Crate" Color="#FF9D6E42" />
+    <Block Id="33" Name="Crate" Color="#FFB77A55" />
+
+    <!--Purple-->
+    <Block Id="22" Name="IronWall" Color="#FF85107F" />
+    <Block Id="22" Name="IronWall" Color="#FF9F3D92" />
+    <Block Id="22" Name="IronWall" Color="#FFB954A4" />
+    <Block Id="22" Name="IronWall" Color="#FFCF6BAF" />
+    <Block Id="22" Name="IronWall" Color="#FFD884BA" />
+    <Block Id="22" Name="IronWall" Color="#FFE39EC5" />
+
+    <!--Black-->
+    <Block Id="25" Name="DiamondWall" Color="#FF000000" />
+    <Block Id="25" Name="DiamondWall" Color="#FF1A1A1A" />
+
+    <!--Light Brown-->
+    <Block Id="1" Name="Dirt" Color="#FF6E4E2D" />
+    <Block Id="1" Name="Dirt" Color="#FF8B6B46" />
+
+    <!--Tan-->
+    <Block Id="3" Name="Sand" Color="#FFCEAE89" />
+    <Block Id="3" Name="Sand" Color="#FFD8B89A" />
+    <Block Id="3" Name="Sand" Color="#FFE2C3A5" />
+    <Block Id="3" Name="Sand" Color="#FFECD2B0" />
+    <Block Id="3" Name="Sand" Color="#FFF6D9BA" />
+
+    <!--Red-->
+    <Block Id="54" Name="BloodStoneCrate" Color="#FFCD2929" />
+    <Block Id="54" Name="BloodStoneCrate" Color="#FFEB3535" />
+    <Block Id="54" Name="BloodStoneCrate" Color="#FFFF4040" />
+
+    <!--White-->
+    <Block Id="15" Name="Snow" Color="#FFFFFFFF" />
+    <Block Id="15" Name="Snow" Color="#FFF2F2F2" />
+    <Block Id="15" Name="Snow" Color="#FFE4E4E4" />
+
+    <!--Blue-->
+    <Block Id="53" Name="DiamondCrate" Color="#FF0018FD" />
+    <Block Id="53" Name="DiamondCrate" Color="#FF0034F9" />
+    <Block Id="53" Name="DiamondCrate" Color="#FF0051F5" />
+    <Block Id="53" Name="DiamondCrate" Color="#FF006DF1" />
+    <Block Id="53" Name="DiamondCrate" Color="#FF0089ED" />
+    <Block Id="53" Name="DiamondCrate" Color="#FF00A5E9" />
+
+    <!--Lime-->
+    <Block Id="43" Name="SpaceGoo" Color="#FF49FF3D" />
+    <Block Id="43" Name="SpaceGoo" Color="#FF69FF57" />
+    <Block Id="43" Name="SpaceGoo" Color="#FF8CFF70" />
+    <Block Id="43" Name="SpaceGoo" Color="#FFB0FF89" />
+    <Block Id="43" Name="SpaceGoo" Color="#FFCCFFA2" />
+    <Block Id="43" Name="SpaceGoo" Color="#FFE7FFBB" />
+
+    <!--Dark Gray-->
+    <Block Id="21" Name="SpaceRock" Color="#FF696969" />
+    <Block Id="21" Name="SpaceRock" Color="#FF7A7A7A" />
+
+    <!--Green-->
+    <Block Id="18" Name="Leaves" Color="#FF006308" />
+    <Block Id="18" Name="Leaves" Color="#FF197C0A" />
+    <Block Id="18" Name="Leaves" Color="#FF338C0F" />
+    <Block Id="18" Name="Leaves" Color="#FF4B9A14" />
+    <Block Id="18" Name="Leaves" Color="#FF64A41A" />
+    <Block Id="18" Name="Leaves" Color="#FF7DBF1F" />
+
+    <!--Light Blue-->
+    <Block Id="16" Name="Ice" Color="#FFA1CCDC" />
+    <Block Id="16" Name="Ice" Color="#FFADC8E1" />
+    <Block Id="16" Name="Ice" Color="#FFB9D4E6" />
+    <Block Id="16" Name="Ice" Color="#FFBEDFF2" />
+    <Block Id="16" Name="Ice" Color="#FFCCEAF7" />
+    <Block Id="16" Name="Ice" Color="#FFD9F5FB" />
+
+    <!--Dark Orange-->
+    <Block Id="52" Name="GoldCrate" Color="#FFB26501" />
+    <Block Id="52" Name="GoldCrate" Color="#FFB7742A" />
+    <Block Id="52" Name="GoldCrate" Color="#FFB88353" />
+
+    <!--Light Gray-->
+    <Block Id="6" Name="Rock" Color="#FFA9A9A9" />
+    <Block Id="6" Name="Rock" Color="#FFB9B9B9" />
+
+    <!--Yellow-->
+    <Block Id="24" Name="GoldenWall" Color="#FF9F781F" />
+    <Block Id="24" Name="GoldenWall" Color="#FFB98A2A" />
+    <Block Id="24" Name="GoldenWall" Color="#FFCC9B35" />
+    <Block Id="24" Name="GoldenWall" Color="#FFDEAC40" />
+    <Block Id="24" Name="GoldenWall" Color="#FFEFBD4B" />
+    <Block Id="24" Name="GoldenWall" Color="#FFF0C856" />
+  </Blocks>
+</Colors>

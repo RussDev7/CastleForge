@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <ProjectGuid>{9EE7A8EC-3C1B-4299-B737-052F5EBC55D8}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ModLoader</RootNamespace>
+    <AssemblyName>ModLoader</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <NoWarn>$(NoWarn);CS2002</NoWarn>
+    <!-- Suppress 'CoreHashes.cs' being specified multiple times. -->
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <NoWarn>$(NoWarn);CS2002</NoWarn>
+    <!-- Suppress 'CoreHashes.cs' being specified multiple times. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="CastleMinerZ">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="DNA.Common">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Game, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Graphics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Graphics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Xact, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Startup\UI\Loading\ModLoadProgressInfo.cs" />
+    <Compile Include="Startup\UI\Loading\ModLoadProgressForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Startup\UI\Loading\ModLoadProgressWindow.cs" />
+    <Compile Include="Startup\Windows\DarkTitleBarHelper.cs" />
+    <Compile Include="Integrity\Generated\CoreHashes.cs" />
+    <Compile Include="Integrity\HashGuard.cs" />
+    <Compile Include="Attributes\ModPriorityAttribute.cs" />
+    <Compile Include="Core\Resolution\ModsAssemblyResolver.cs" />
+    <Compile Include="Logging\LogSystem.cs" />
+    <Compile Include="Attributes\RequiredDependenciesAttribute.cs" />
+    <Compile Include="Core\Hosting\ModDomainManager.cs" />
+    <Compile Include="Core\Bootstrap\ModBootstrapComponent.cs" />
+    <Compile Include="Contracts\ModBase.cs" />
+    <Compile Include="Core\Loading\ModManager.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Startup\ModLoaderConfig.cs" />
+    <Compile Include="Startup\UI\Startup\StartupModeSelector.cs" />
+    <Compile Include="Startup\UI\Startup\StartupPromptForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <!--
+      Include everything in the Deployment folder, but
+      link it as though it lived at the project root.
+    -->
+    <None Include="Deployment\CastleMinerZ.exe.config">
+      <TargetPath>CastleMinerZ.exe.config</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Deployment\Update&amp;Launch.bat">
+      <TargetPath>Update&amp;Launch.bat</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- MSBuild autogen script to populate GameExe_SHA256 and DNACommon_SHA256 -->
+  <!-- ========== Hash emission -> CoreHashes.cs ========== -->
+  <UsingTask TaskName="WriteDNAHash" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <GameInputFile ParameterType="System.String" Required="true" />
+      <DnaInputFile ParameterType="System.String" Required="true" />
+      <OutFile ParameterType="System.String" Required="true" />
+      <Namespace ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <!-- Assembly refs must be assemblies, not namespaces -->
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Reference Include="System.Security" />
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Func<string,string> sha256Hex = (path) =>
+        {
+          if (!File.Exists(path)) return "";
+          using (var sha = SHA256.Create())
+          using (var fs = File.OpenRead(path))
+          {
+            var h = sha.ComputeHash(fs);
+            return BitConverter.ToString(h).Replace("-", "");
+          }
+        };
+  
+        try
+        {
+          // Ensure output directory exists
+          var outDir = Path.GetDirectoryName(OutFile);
+          if (!string.IsNullOrEmpty(outDir))
+            Directory.CreateDirectory(outDir);
+  
+          var gameHash = sha256Hex(GameInputFile);
+          var dnaHash  = sha256Hex(DnaInputFile);
+  
+          if (string.IsNullOrEmpty(gameHash))
+            Log.LogWarning("[EmitBaselineHashes] File not found (Game): " + GameInputFile + " — emitting empty GameExe_SHA256.");
+  
+          if (string.IsNullOrEmpty(dnaHash))
+            Log.LogWarning("[EmitBaselineHashes] File not found (DNA):  " + DnaInputFile  + " — emitting empty DNACommon_SHA256.");
+  
+          string timestamp = DateTime.UtcNow.ToString("o");
+          var sb = new StringBuilder();
+          sb.AppendLine("/*");
+          sb.AppendLine("SPDX-License-Identifier: GPL-3.0-or-later");
+          sb.AppendLine("Copyright (c) 2025 RussDev7");
+          sb.AppendLine("This file is part of https://github.com/RussDev7/CMZModSuite - see LICENSE for details.");
+          sb.AppendLine("*/");
+          sb.AppendLine();
+          sb.AppendLine("// <auto-generated> DO NOT EDIT.");
+          sb.AppendLine("// Emitted by EmitBaselineDNACommonHash at " + timestamp);
+          sb.AppendLine("namespace " + Namespace + " {");
+          sb.AppendLine("    internal static partial class CoreHashes {");
+          sb.AppendLine("        public const string GameExe_SHA256   = \"" + gameHash + "\";");
+          sb.AppendLine("        public const string DNACommon_SHA256 = \"" + dnaHash  + "\";");
+          sb.AppendLine("    }");
+          sb.AppendLine("}");
+  
+          File.WriteAllText(OutFile, sb.ToString(), Encoding.UTF8);
+        }
+        catch (Exception ex)
+        {
+          Log.LogErrorFromException(ex, /*showStackTrace*/ true);
+          return false;
+        }
+        return true;
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="EmitBaselineDNACommonHash" BeforeTargets="BeforeCompile">
+    <PropertyGroup>
+      <!-- Your tree: project -> ..\..\..\ -> repo root -->
+      <GameBaseline>$(MSBuildProjectDirectory)\..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</GameBaseline>
+      <DNABaseline>$(MSBuildProjectDirectory)\..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</DNABaseline>
+      <!-- Output file (you chose to keep it in source under Integrity\Generated) -->
+      <GenFile>Integrity\Generated\CoreHashes.cs</GenFile>
+      <!-- Namespace for CoreHashes -->
+      <CoreHashesNamespace>ModLoader</CoreHashesNamespace>
+    </PropertyGroup>
+    <Message Text="Hashing '$(GameBaseline)' and '$(DNABaseline)' -&gt; '$(GenFile)'" Importance="High" />
+    <WriteDNAHash GameInputFile="$(GameBaseline)" DnaInputFile="$(DNABaseline)" OutFile="$(GenFile)" Namespace="$(CoreHashesNamespace)" />
+    <ItemGroup>
+      <Compile Include="$(GenFile)" />
+    </ItemGroup>
+  </Target>
+  <!-- ===================================================================== -->
+</Project>

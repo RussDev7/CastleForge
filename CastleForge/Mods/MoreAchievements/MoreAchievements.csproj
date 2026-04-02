@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <ProjectGuid>{3DBFF608-38AD-46FF-A578-49EF0E6FD914}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>MoreAchievements</RootNamespace>
+    <AssemblyName>MoreAchievements</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\!Mods\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\!Mods\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>..\..\..\ReferenceAssemblies\Patching\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="CastleMinerZ">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="DNA.Common">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="DNA.Steam">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Steam.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Game, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Graphics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Graphics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Xact, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="NLayer">
+      <HintPath>..\..\..\ReferenceAssemblies\Media\NLayer.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CustomAchievements\1%29 Easy\ArchitectIAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\BlockBreakerIAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\CraftIronPickaxeAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\CraftTorchesAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\PlaceCratesAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\PlaceGlassWindowsAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\PlaceSpawnPointAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\PlaceTeleporterAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\ZedKillerIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\AlwaysArmedIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\ArchitectIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\CraftAmmoAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\DragonSlayerIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\ExplorerIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\MasterAxeAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\MasterSpadeAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\SharpshooterIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\SurvivorIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\TorchlighterIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\TriggerHappyIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\ZedKillerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\LaserSpecialistIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\LumberjackIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\RockBottomAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\CrafterIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\SkeletonSlayerIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\GrenadeSpecialistIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\LaserSpecialistIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\TntSpecialistIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\SpelunkerIAchievement.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\TorchlighterIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\ZombieSlayerIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\AlienStalkerIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\AlwaysArmedIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\ArchitectIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\BlockBreakerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\CrafterIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\ExplorerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\ExplorerIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\MasterPickaxeAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\GuidedJusticeIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\MasterToolsmithAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\TntSpecialistIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\DragonSlayerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\2%29 Normal\GuidedJusticeIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\HellhoundSlayerIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\LaserSpecialistIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\ZedKillerIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\SessionVeteranAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\SkeletonSlayerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\ZombieSlayerIIAchievement.cs" />
+    <Compile Include="CustomAchievements\3%29 Hard\DragonSlayerIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\BlockBreakerIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\DragonSlayerIVAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\ExplorerIVAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\ExplorerVAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\ZedKillerIVAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\SurvivorIIAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\SurvivorIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\SurvivorIVAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\CompletionistAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\BlockBreakerIVAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\MasterOfAllThingsAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\MasterProspectorAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\CrafterIIIAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\MasterExplorerAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\MasterCrafterAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\ZedKillerVAchievement.cs" />
+    <Compile Include="CustomAchievements\4%29 Brutal\DemolitionistIAchievement.cs" />
+    <Compile Include="Interfaces\IAchievementReward.cs" />
+    <Compile Include="Managers\AchievementModeRules.cs" />
+    <Compile Include="Managers\AchievementResetHelper.cs" />
+    <Compile Include="Interfaces\ILocalStatAdjust.cs" />
+    <Compile Include="Managers\PlayerStatReflectionHelper.cs" />
+    <Compile Include="UI\AchievementArt.cs" />
+    <Compile Include="UI\AchievementUIPatches.cs" />
+    <Compile Include="CustomAchievements\1%29 Easy\CraftWoodBlockAchievement.cs" />
+    <Compile Include="CustomAchievements\5%29 Insane\SurvivorVAchievement.cs" />
+    <Compile Include="Embedded\EmbeddedExporter.cs" />
+    <Compile Include="Managers\ExtendedAchievementManager.cs" />
+    <Compile Include="MoreAchievements.cs" />
+    <Compile Include="Patching\GamePatches.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Embedded\EmbeddedResolver.cs" />
+    <Compile Include="Startup\AchievementUIConfig.cs" />
+    <Compile Include="Startup\MAConfig.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoaderExtensions\ModLoaderExtensions.csproj">
+      <Project>{1a6e69b6-4cea-4237-87de-483f6ead7df5}</Project>
+      <Name>ModLoaderExtensions</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoader\ModLoader.csproj">
+      <Project>{9ee7a8ec-3c1b-4299-b737-052f5ebc55d8}</Project>
+      <Name>ModLoader</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_ALIEN_ENCOUNTER.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_CRAFTED_1.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_CRAFTED_100.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_CRAFTED_1000.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_CRAFT_TNT.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_1.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_100.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_196.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_28.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_365.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DAYS_7.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DEPTH_20.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DEPTH_40.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_1000.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_200.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_2300.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_3000.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_3600.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_50.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_DISTANCE_5000.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_GRENADE_KILL.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_GUIDED_MISSILE_KILL.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_LASER_KILLS.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TIME_PLAYED_1.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TIME_PLAYED_10.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TIME_PLAYED_100.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TNT_KILL.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TOTAL_KILLS_1.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TOTAL_KILLS_100.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_TOTAL_KILLS_1000.jpg" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Steam\ACH_UNDEAD_DRAGON_KILLED.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\0Harmony.dll" />
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_BLOCKS_DUG_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_CRAFT_IRON_PICKAXE.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_CRAFT_TORCH_10.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_CRAFT_WOODBLOCK.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_PLACE_CRATES_10.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_PLACE_GLASS_10.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_PLACE_SPAWN_BASIC.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_PLACE_TELEPORTER.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_STRUCT_BLOCKS_USED_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_TORCH_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Easy\ACH_TOTAL_KILLS_50.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_ASST_TIMEHELD_10_MIN.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_CRAFTED_250.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_CRAFT_ALL_AXES.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_CRAFT_ALL_PICKAXES.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_CRAFT_ALL_SPADES.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_CRAFT_AMMO_250.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_DAYS_14_CUSTOM.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_DEPTH_62.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_DISTANCE_2000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_DRAGON_GUIDED_5.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_DRAGON_KILL_5.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_GRENADE_KILLS_25.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_LASER_KILLS_10.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_LASER_KILLS_50.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_LUMBERJACK_250_WOOD.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_SHARPSHOOTER_I.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_SKELETONS_50.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_SPELUNKER_250_ROCK.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_STRUCT_BLOCKS_USED_1000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_TNT_KILLS_25.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_TORCH_1000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_TOTAL_KILLS_250.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_TRIGGER_HAPPY_I.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Normal\ACH_ZOMBIES_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_ALIEN_STALKER_10.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_ASST_TIMEHELD_60_MIN.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_BLOCKS_DUG_5000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_CRAFTED_2000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_DRAGON_GUIDED_50.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_DRAGON_KILL_25.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_DRAGON_KILL_50.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_LASER_KILLS_250.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_MASS_KILLER_2000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_MASTER_TOOLSMITH.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_MAXDIST_10000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_MAXDIST_20000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_SKELETONS_250.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_STRUCT_BLOCKS_USED_10000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_TNT_KILLS_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Hard\ACH_ZOMBIES_500.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_BLOCKS_DUG_25000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_CRAFTED_10000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_DAYS_120_CUSTOM.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_DAYS_30_CUSTOM.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_DAYS_60_CUSTOM.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_DRAGONS_100.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_EXPLOSIVE_KILLS_1000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_MASS_KILLER_10000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_MASS_KILLER_50000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_MAXDIST_40000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Brutal\ACH_MAXDIST_46340.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_BLOCKS_DUG_50000.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_COMPLETE_ALL.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_CRAFT_EVERY_ITEM.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_DAYS_730.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_MAXDIST_65536.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_MINE_EVERY_BLOCK.png" />
+    <EmbeddedResource Include="MoreAchievements\CustomIcons\Custom\Insane\ACH_TIMEHELD_ALLITEMS_1_MIN.png" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

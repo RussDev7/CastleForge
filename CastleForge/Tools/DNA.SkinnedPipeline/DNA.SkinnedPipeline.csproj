@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{5944835D-F09D-4490-8D62-33C3763D444B}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>DNA.SkinnedPipeline</RootNamespace>
+    <AssemblyName>DNA.SkinnedPipeline</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="DNA.Common">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\CMZModSuite\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Content.Pipeline">
+      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Writers\AnimationClipWriter.cs" />
+    <Compile Include="Writers\SkeletonWriter.cs" />
+    <Compile Include="Processors\SkinedModelProcessor.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="FbxToXnb_Drop_Skinned.bat">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- ===================================================================================== -->
+  <!-- CMZModSuite Deploy (keeps normal bin output AND copies into Build\Release\!Mods)       -->
+  <!-- DNA.SkinnedPipeline -> !Mods\TexturePacks\_FbxToXnb\SkinedModelProcessor\              -->
+  <!-- FbxToXnb_Drop_Skinned.bat -> !Mods\TexturePacks\_FbxToXnb\                             -->
+  <!-- ===================================================================================== -->
+  <PropertyGroup>
+    <!-- Root: ...\Build\<Configuration>\!Mods\TexturePacks\_FbxToXnb\ -->
+    <CMZModsRootDir Condition="'$(SolutionDir)' != ''">$(SolutionDir)Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsRootDir>
+    <!-- Fallback when building the .csproj directly (no SolutionDir).
+         Your project lives under ...\TOOLS\DNA.SKINNEDPIPELINE, so root is typically two levels up. -->
+    <CMZModsRootDir Condition="'$(SolutionDir)' == ''">$(MSBuildProjectDirectory)\..\..\Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsRootDir>
+    <!-- Output folder for this pipeline assembly -->
+    <CMZSkinnedProcDir>$(CMZModsRootDir)SkinedModelProcessor\</CMZSkinnedProcDir>
+  </PropertyGroup>
+  <Target Name="DeployToCmzMods_SkinnedPipeline" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <Message Importance="High" Text="Deploying $(MSBuildProjectName) -&gt; $(CMZSkinnedProcDir)" />
+    <MakeDir Directories="$(CMZModsRootDir)" />
+    <MakeDir Directories="$(CMZSkinnedProcDir)" />
+    <!-- Copy only root output files from TargetDir (dll + deps). No subfolders. -->
+    <ItemGroup>
+      <_DeployFiles Include="$(TargetDir)*.*" Exclude="$(TargetDir)*.pdb;$(TargetDir)*.xml;$(TargetDir)*.vshost.*;$(TargetDir)FbxToXnb_Drop_Skinned.bat" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DeployFiles)" DestinationFolder="$(CMZSkinnedProcDir)" SkipUnchangedFiles="true" />
+    <!-- Copy the drop .bat next to the .cs files into the _FbxToXnb root -->
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\FbxToXnb_Drop_Skinned.bat" DestinationFolder="$(CMZModsRootDir)" SkipUnchangedFiles="true" Condition="Exists('$(MSBuildProjectDirectory)\FbxToXnb_Drop_Skinned.bat')" />
+  </Target>
+</Project>

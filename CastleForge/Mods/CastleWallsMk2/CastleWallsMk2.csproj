@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <ProjectGuid>{7766DF4B-9523-4EA6-BC8C-371526B819EB}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>CastleWallsMk2</RootNamespace>
+    <AssemblyName>CastleWallsMk2</AssemblyName>
+    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\!Mods\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\!Mods\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ErrorReport>prompt</ErrorReport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>..\..\..\ReferenceAssemblies\Patching\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="CastleMinerZ">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="DNA.Common">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="DNA.Steam">
+      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Steam.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="ImGui.NET">
+      <HintPath>..\..\..\ReferenceAssemblies\UI\ImGui.NET.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Game, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Graphics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Graphics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.Xna.Framework.Xact, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="PacketDotNet">
+      <HintPath>..\..\..\ReferenceAssemblies\Networking\PacketDotNet.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SharpPcap">
+      <HintPath>..\..\..\ReferenceAssemblies\Networking\SharpPcap.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.4.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\ReferenceAssemblies\RuntimeSupport\System.Numerics.Vectors.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CastleWallsMk2.cs" />
+    <Compile Include="CodeInjecter\ExampleScripts.cs" />
+    <Compile Include="CodeInjecter\MainThread.cs" />
+    <Compile Include="CodeInjecter\ScriptEngine.cs" />
+    <Compile Include="Embedded\EmbeddedExporter.cs" />
+    <Compile Include="ESP\BlockEspRenderer.cs" />
+    <Compile Include="Logging\FeedbackRouter.cs" />
+    <Compile Include="MiscFunctions\LanternRingScanner.cs" />
+    <Compile Include="ModBridges\CMZDialogBridge.cs" />
+    <Compile Include="ModBridges\MessageBridge.cs" />
+    <Compile Include="ModBridges\NetCallsBridge.cs" />
+    <Compile Include="ModExtensions\BlacklistExtensions.cs" />
+    <Compile Include="ModExtensions\HomesExtensions.cs" />
+    <Compile Include="ImGui\DrawVertDeclaration.cs" />
+    <Compile Include="UI\IGMainUI.cs" />
+    <Compile Include="ImGui\ImGuiXnaRenderer.cs" />
+    <Compile Include="ImGui\OverlayController.cs" />
+    <Compile Include="ModBridges\ConsoleLogStreamer.cs" />
+    <Compile Include="ModExtensions\AimbotExtensions.cs" />
+    <Compile Include="ModBridges\CooldownBridge.cs" />
+    <Compile Include="ModExtensions\GraphicsDeviceExtensions.cs" />
+    <Compile Include="ModBridges\ConsoleLogBridge.cs" />
+    <Compile Include="ModExtensions\WeaponExtensions.cs" />
+    <Compile Include="Networking\PlayerEnforcement\ForcedDisconnectRuntime.cs" />
+    <Compile Include="Networking\NetCapture\NpcapInstaller.cs" />
+    <Compile Include="Networking\NetCapture\NpcapRuntime.cs" />
+    <Compile Include="Networking\NetCapture\GeoIpCache.cs" />
+    <Compile Include="Networking\NetCapture\IpGeoResult.cs" />
+    <Compile Include="Networking\NetCapture\IpResolver.cs" />
+    <Compile Include="Networking\NetCapture\PortSnapshot.cs" />
+    <Compile Include="Networking\PlayerEnforcement\PersistentBanStore.cs" />
+    <Compile Include="Networking\PlayerEnforcement\PlayerEnforcementConfig.cs" />
+    <Compile Include="Networking\ServerCommands\ServerCommands.cs" />
+    <Compile Include="Networking\ServerHistory\ServerHistory.cs" />
+    <Compile Include="Patching\GamePatches.cs" />
+    <Compile Include="Patching\NetCallsMessagePatches.cs" />
+    <Compile Include="Patching\UsernameRandomizer.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Embedded\EmbeddedResolver.cs" />
+    <Compile Include="Startup\ModConfig.cs" />
+    <Compile Include="Utils\CMZStrings.cs" />
+    <Compile Include="Utils\CryptoRng.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\0Harmony.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\System.Numerics.Vectors.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\ImGui.NET.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\System.Runtime.CompilerServices.Unsafe.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoaderExtensions\ModLoaderExtensions.csproj">
+      <Project>{1a6e69b6-4cea-4237-87de-483f6ead7df5}</Project>
+      <Name>ModLoaderExtensions</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoader\ModLoader.csproj">
+      <Project>{9ee7a8ec-3c1b-4299-b737-052f5ebc55d8}</Project>
+      <Name>ModLoader</Name>
+      <Private>False</Private>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="CastleWallsMk2\UsernameList.txt" />
+    <EmbeddedResource Include="Embedded\cimgui.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\PacketDotNet.dll" />
+    <EmbeddedResource Include="Embedded\SharpPcap.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\System.Text.Encoding.CodePages.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\System.Memory.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\npcap-1.87.exe" />
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

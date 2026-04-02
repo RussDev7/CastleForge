@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <!-- Root build output folder. -->
+    <BuildOutputRoot>$(MSBuildThisFileDirectory)Build\</BuildOutputRoot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Default build config/platform when nothing else sets them. -->
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x86</Platform>
+  </PropertyGroup>
+</Project>
