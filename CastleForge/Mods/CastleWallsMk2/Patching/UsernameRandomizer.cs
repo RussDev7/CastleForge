@@ -162,7 +162,7 @@ namespace CastleWallsMk2
         /// </summary>
 
         // Re-roll internal network identifiers via reflection to appear as a "new" peer.
-        private static void RandomizeID(byte? id = null)
+        public static void RandomizeID(byte? id = null)
         {
             Assembly.GetAssembly(typeof(NetworkGamer)).GetType("DNA.Net.GamerServices.NetworkGamer").GetField("_alternateAddress", BindingFlags.Instance | BindingFlags.NonPublic)
                 .SetValue(CastleMinerZGame.Instance.MyNetworkGamer, Convert.ToUInt64(GenerateRandomNumberInclusive(1, int.MaxValue)));

@@ -64,6 +64,9 @@
       <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="ModLoader">
+      <HintPath>..\..\..\Build\$(Configuration)\ModLoader.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Windows.Forms" />

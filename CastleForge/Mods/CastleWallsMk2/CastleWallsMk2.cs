@@ -22,7 +22,6 @@ using DNA.CastleMinerZ;
 using DNA.Drawing.UI;
 using ModLoaderExt;
 using DNA.Drawing;
-using System.Linq;
 using System.Text;
 using DNA.Timers;
 using HarmonyLib;
@@ -403,18 +402,10 @@ namespace CastleWallsMk2
 
                     try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
                     try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag    = name; } catch (Exception) { }
-                    try { RandomizeID();                                            } catch (Exception) { }
+                 // try { UsernameRandomizer.RandomizeID();                         } catch (Exception) { }
                 } catch { }
                 SendLog($"Set Name: '{name}'");
             };
-
-            void RandomizeID(byte? id = null)
-            {
-                Assembly.GetAssembly(typeof(NetworkGamer)).GetType("DNA.Net.GamerServices.NetworkGamer").GetField("_alternateAddress", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .SetValue(CastleMinerZGame.Instance.MyNetworkGamer, Convert.ToUInt64(GenerateRandomNumberInclusive(1, int.MaxValue)));
-                Assembly.GetAssembly(typeof(NetworkGamer)).GetType("DNA.Net.GamerServices.NetworkGamer").GetField("_globalId", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .SetValue(CastleMinerZGame.Instance.MyNetworkGamer, (id != null) ? id : new byte?((byte)GenerateRandomNumberInclusive(0, 255)));
-            }
             #endregion
 
             /// === [Target] ===
