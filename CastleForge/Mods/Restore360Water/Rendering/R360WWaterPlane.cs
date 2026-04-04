@@ -100,13 +100,13 @@ namespace Restore360Water
         /// </summary>
         public R360WWaterPlane(GraphicsDevice gd, ContentManager gameContent)
         {
-            Instance = this;
+            Instance        = this;
             _graphicsDevice = gd;
-            _gameContent = gameContent;
+            _gameContent    = gameContent;
 
             BuildBuffers(gd);
-            EnsureResources(gd);
-            Collidee = false;
+            EnsureResources(gd, allowReflectionRecreate: true);
+            Collidee     = false;
             DrawPriority = 1000;
         }
         #endregion
@@ -215,13 +215,17 @@ namespace Restore360Water
             if (BlockTerrain.Instance == null || !R360W_Settings.CurrentBiomeEnabled)
                 return;
 
-            EnsureResources(device);
+            bool drawingReflection = CastleMinerZGame.Instance?.DrawingReflection == true;
+
+            // Never recreate/dispose the reflection RT during the reflection pass itself.
+            EnsureResources(device, allowReflectionRecreate: !drawingReflection);
+
             if (_effect == null || _reflectionTexture == null || _normalMap == null)
                 return;
 
-            if (CastleMinerZGame.Instance.DrawingReflection)
+            if (drawingReflection)
             {
-                _effect.Parameters["Reflection"].SetValue(view);
+                _effect.Parameters["Reflection"]?.SetValue(view);
                 return;
             }
 
@@ -234,8 +238,8 @@ namespace Restore360Water
             _effect.Parameters["SunLightColor"].SetValue(BlockTerrain.Instance.SunSpecular.ToVector3() * (float)Math.Pow(pl.X, 10.0));
             _effect.Parameters["TorchLightColor"].SetValue(BlockTerrain.Instance.TorchColor.ToVector3() * pl.Y);
 
-            float yScale = CurrentBandDepth / 128f;
-            Matrix world = Matrix.CreateScale(1f, yScale, 1f);
+            float yScale  = CurrentBandDepth / 128f;
+            Matrix world  = Matrix.CreateScale(1f, yScale, 1f);
             Vector3 basev = IntVector3.ToVector3(BlockTerrain.Instance._worldMin);
             basev.Y = R360W_Settings.CurrentWaterMaxY;
             world *= Matrix.CreateTranslation(basev);
@@ -245,24 +249,24 @@ namespace Restore360Water
             _effect.Parameters["ReflectionTexture"].SetValue(_reflectionTexture);
             _effect.Parameters["WaterColor"].SetValue(BlockTerrain.Instance.GetActualWaterColor());
 
-            BlendState oldBlend = device.BlendState;
+            BlendState oldBlend       = device.BlendState;
             RasterizerState oldRaster = device.RasterizerState;
 
             bool useUnderwaterTechnique =
-                R360W_Settings.UseVanillaUnderwaterEngine &&
-                R360W_Settings.CurrentBiomeEnabled &&
+                R360W_Settings.UseVanillaUnderwaterEngine                         &&
+                R360W_Settings.CurrentBiomeEnabled                                &&
                 BlockTerrain.Instance.EyePos.Y <= R360W_Settings.CurrentWaterMaxY &&
                 BlockTerrain.Instance.EyePos.Y >= R360W_Settings.CurrentWaterMinY;
 
             if (!useUnderwaterTechnique)
             {
                 _effect.CurrentTechnique = _effect.Techniques[0];
-                device.BlendState = BlendState.AlphaBlend;
+                device.BlendState        = BlendState.AlphaBlend;
             }
             else
             {
                 _effect.CurrentTechnique = _effect.Techniques[1];
-                device.BlendState = BlendState.Opaque;
+                device.BlendState        = BlendState.Opaque;
             }
 
             device.DepthStencilState = DepthStencilState.DepthRead;
@@ -293,7 +297,7 @@ namespace Restore360Water
         /// - Recreates the normal map if it became disposed.
         /// - Uses a generated fallback normal map if the mod texture cannot be loaded.
         /// </summary>
-        private void EnsureResources(GraphicsDevice device)
+        private void EnsureResources(GraphicsDevice device, bool allowReflectionRecreate)
         {
             var gd = device ?? _graphicsDevice ?? CastleMinerZGame.Instance?.GraphicsDevice;
             if (gd == null)
@@ -311,7 +315,7 @@ namespace Restore360Water
                 }
             }
 
-            EnsureReflectionTarget(gd);
+            EnsureReflectionTarget(gd, allowReflectionRecreate);
 
             if (IsDisposed(_normalMap))
                 _normalMap = null;
@@ -344,32 +348,56 @@ namespace Restore360Water
         /// - Recreates the render target when screen dimensions change.
         /// - Clears the target once after recreation.
         /// </summary>
-        private void EnsureReflectionTarget(GraphicsDevice gd)
+        private void EnsureReflectionTarget(GraphicsDevice gd, bool allowReflectionRecreate)
         {
-            int width = Math.Max(1, Screen.Adjuster.ScreenRect.Width);
-            int height = Math.Max(1, Screen.Adjuster.ScreenRect.Height);
+            int width  = Math.Max(1, gd.PresentationParameters.BackBufferWidth);
+            int height = Math.Max(1, gd.PresentationParameters.BackBufferHeight);
 
-            bool recreate = _reflectionTexture == null ||
-                            IsDisposed(_reflectionTexture) ||
-                            _reflectionTexture.Width != width ||
-                            _reflectionTexture.Height != height;
+            bool recreate =
+                _reflectionTexture == null         ||
+                IsDisposed(_reflectionTexture)     ||
+                _reflectionTexture.Width  != width ||
+                _reflectionTexture.Height != height;
 
-            if (!recreate)
+            if (!recreate || !allowReflectionRecreate)
                 return;
 
-            try { _reflectionTexture?.Dispose(); } catch { }
+            RenderTarget2D oldTarget = _reflectionTexture;
+            RenderTarget2D newTarget = null;
 
-            _reflectionTexture = new RenderTarget2D(gd, width, height, true, SurfaceFormat.Color, DepthFormat.Depth16);
             try
             {
-                gd.SetRenderTarget(_reflectionTexture);
+                newTarget = new RenderTarget2D(gd, width, height, true, SurfaceFormat.Color, DepthFormat.Depth16);
+
+                gd.SetRenderTarget(newTarget);
                 gd.Clear(Color.Black);
+                gd.SetRenderTarget(null);
+
+                _reflectionTexture = newTarget;
+
+                // Retarget any existing reflection CameraView before the old RT is disposed.
+                GamePatches.SyncReflectionViewTarget(_reflectionTexture);
             }
-            catch { }
+            catch
+            {
+                try { newTarget?.Dispose(); } catch { }
+                throw;
+            }
             finally
             {
                 try { gd.SetRenderTarget(null); } catch { }
             }
+
+            try { oldTarget?.Dispose(); } catch { }
+        }
+
+        /// <summary>
+        /// Ensures the reflection render target exists and is recreated when needed.
+        /// This is intended for safe setup/update paths outside the active reflection draw pass.
+        /// </summary>
+        public void EnsureReflectionTargetReady(GraphicsDevice gd)
+        {
+            EnsureReflectionTarget(gd, allowReflectionRecreate: true);
         }
         #endregion
 

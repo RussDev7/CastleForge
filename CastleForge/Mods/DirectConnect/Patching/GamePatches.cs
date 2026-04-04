@@ -574,7 +574,7 @@ namespace DirectConnect
                     // Avoid a one-frame layout mismatch.
                     PlaceButtons(__instance);
 
-                    Log("Bottom-right buttons injected.");
+                    // Log("Bottom-right buttons injected.");
                 }
                 catch (Exception ex)
                 {
@@ -736,7 +736,7 @@ namespace DirectConnect
                         _lastAddress = text;
                         SaveLastAddressToDisk(_lastAddress);
 
-                        Log("Parsed -> " + ip + ":" + port);
+                        Log($"Parsed -> {ip}:{port}.");
 
                         var session = CreateDirectAvailableSession(ip, port);
                         if (session == null)
@@ -753,7 +753,7 @@ namespace DirectConnect
                 }
                 catch (Exception ex)
                 {
-                    Log("Button click error: " + ex);
+                    Log($"Button click error: {ex}.");
                     CastleMinerZGame.Instance.FrontEnd.ShowUIDialog("Connection Error", ex.Message, false);
                 }
             }
@@ -826,12 +826,12 @@ namespace DirectConnect
                     });
 
                     var ans = obj as AvailableNetworkSession;
-                    Log("Created direct session for " + ip + ":" + port);
+                    Log($"Created direct session for {ip}:{port}.");
                     return ans;
                 }
                 catch (Exception ex)
                 {
-                    Log("CreateDirectAvailableSession error: " + ex);
+                    Log($"CreateDirectAvailableSession error: {ex}.");
                     return null;
                 }
             }
@@ -1036,7 +1036,7 @@ namespace DirectConnect
 
                     _lastAddress = (File.ReadAllText(_lastAddressFile) ?? "").Trim();
 
-                    Log($"Loaded last direct-connect address: '{_lastAddress}'.");
+                    // Log($"Loaded last direct-connect address: '{_lastAddress}'.");
                 }
                 catch (Exception ex)
                 {
@@ -1587,7 +1587,7 @@ namespace DirectConnect
             [HarmonyPostfix]
             private static void Postfix(bool success, string message)
             {
-                Log($"JoinCallback -> success={success}, msg={message}.");
+                // Log($"JoinCallback -> success={success}, msg={message}.");
 
                 // Only keep this line if you also add the JoinSignal helper below.
                 JoinSignal.Complete(success, message);

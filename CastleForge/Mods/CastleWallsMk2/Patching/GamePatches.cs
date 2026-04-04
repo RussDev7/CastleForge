@@ -7760,8 +7760,8 @@ namespace CastleWallsMk2
                 if (game == null || game.CurrentNetworkSession == null)
                     return false;
 
-                if (game.PVPState == CastleMinerZGame.PVPEnum.Off)
-                    return false;
+                // Only allow thorns when PvP is enabled.
+                // if (game.PVPState == CastleMinerZGame.PVPEnum.Off) return false;
 
                 return true;
             }

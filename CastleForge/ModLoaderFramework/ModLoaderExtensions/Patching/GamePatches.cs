@@ -9,6 +9,7 @@ using Microsoft.Xna.Framework.Graphics;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework.Input;
 using DNA.CastleMinerZ.Inventory;
+using DNA.CastleMinerZ.Net.Steam;
 using System.Collections.Generic;
 using DNA.Drawing.UI.Controls;
 using Microsoft.Xna.Framework;
@@ -37,7 +38,9 @@ using DNA;
 
 using static ModLoaderExt.GamePatches.ImpersonationGuard;
 using static ModLoaderExt.GamePatches.GamerTagFixer;
-using static ModLoader.LogSystem;       // For Log(...).
+using static ModLoader.LogSystem;
+using DNA.Net.Lidgren;
+using DNA.Distribution.Steam;       // For Log(...).
 
 namespace ModLoaderExt
 {
@@ -2339,6 +2342,476 @@ namespace ModLoaderExt
         }
         #endregion
 
+        #region Defensive Networking Hardening - Steam Host GID Repair / Compatibility Layer
+
+        /*
+        NOTES / PURPOSE
+        - This block hardens the Steam networking join flow against malformed or modded hosts that do not
+          follow vanilla CastleMiner Z assumptions about the host using gamer ID 0.
+        - Vanilla logic assumes:
+            1) the host appears as gamer ID 0 during client join,
+            2) direct-to-host packets can safely target the host's visible gamer ID,
+            3) fallback gameplay/server lookups can rely on ID 0 or TerrainServerID resolving normally.
+        - When a hostile/modded host breaks those assumptions, clients can get stuck in:
+            - infinite loading loops,
+            - dropped bootstrap/world-info messages,
+            - null host references during broadcast/direct-send paths.
+        - These patches repair those assumptions at the compatibility layer instead of changing core game logic.
+        */
+
+        #region State / Session Tracking
+
+        /// <summary>
+        /// Remembers the expected host identity for the current Steam join attempt.
+        /// Used to repair the host mapping if the remote host advertises a non-vanilla gamer ID.
+        /// </summary>
+        private sealed class PendingSteamHostJoinInfo
+        {
+            public ulong  HostSteamId;
+            public string HostGamertag;
+        }
+
+        /// <summary>
+        /// Per-provider storage of the expected host during the join handshake.
+        /// The entry is populated in StartClient and consumed during client system-message handling.
+        /// </summary>
+        private static readonly ConditionalWeakTable<SteamNetworkSessionProvider, PendingSteamHostJoinInfo>
+            _pendingSteamHostJoinInfo = new ConditionalWeakTable<SteamNetworkSessionProvider, PendingSteamHostJoinInfo>();
+
+        #endregion
+
+        #region Shared Reflection Handles / Helpers
+
+        /// <summary>
+        /// Backing field for the Steam API instance used by the provider.
+        /// Required so we can build and send rewritten packets in the direct-send compatibility path.
+        /// </summary>
+        private static readonly FieldInfo SteamApiField =
+            AccessTools.Field(typeof(SteamNetworkSessionProvider), "_steamAPI");
+
+        /// <summary>
+        /// Backing field for the provider's local player gamer ID.
+        /// Needed when manually constructing direct packets so the sender ID remains correct.
+        /// </summary>
+        private static readonly FieldInfo LocalPlayerGidField =
+            AccessTools.Field(typeof(NetworkSessionProvider), "_localPlayerGID");
+
+        /// <summary>
+        /// Maps XNA-style SendDataOptions to the underlying Steam/Lidgren delivery method.
+        /// Used by the rewritten direct-send host compatibility path.
+        /// </summary>
+        private static NetDeliveryMethod GetSteamDeliveryMethod(SendDataOptions options)
+        {
+            switch (options)
+            {
+                case SendDataOptions.None:
+                    return NetDeliveryMethod.Unreliable;
+
+                case SendDataOptions.Reliable:
+                    return NetDeliveryMethod.ReliableUnordered;
+
+                case SendDataOptions.InOrder:
+                    return NetDeliveryMethod.UnreliableSequenced;
+
+                case SendDataOptions.ReliableInOrder:
+                    return NetDeliveryMethod.ReliableOrdered;
+
+                default:
+                    return NetDeliveryMethod.Unknown;
+            }
+        }
+
+        /// <summary>
+        /// Returns true when a client-side direct send to the current host must be rewritten to wire ID 0.
+        /// This is only needed for malformed hosts whose visible host gamer object is non-zero, but whose
+        /// receiving logic still expects direct packets addressed to host ID 0.
+        /// </summary>
+        private static bool ShouldRewriteHostDirectSend(SteamNetworkSessionProvider provider, NetworkGamer recipient)
+        {
+            if (provider == null || recipient == null)
+                return false;
+
+            // Host itself does not need this.
+            if (provider.IsHost)
+                return false;
+
+            var host = provider.Host;
+            if (host == null)
+                return false;
+
+            // Only rewrite direct sends to the current host.
+            if (!ReferenceEquals(recipient, host))
+                return false;
+
+            // If visible host ID is already 0, vanilla is fine.
+            if (recipient.Id == 0)
+                return false;
+
+            // Must have a real Steam connection.
+            if (recipient.AlternateAddress == 0UL)
+                return false;
+
+            return true;
+        }
+        #endregion
+
+        #region Join Handshake - Remember Expected Host
+
+        /// <summary>
+        /// Captures the expected host SteamID / gamertag before the Steam client join completes.
+        /// Vanilla later assumes the host peer arrives as gamer ID 0; this cached identity lets us
+        /// recover the real host even if that assumption is violated.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), nameof(SteamNetworkSessionProvider.StartClient))]
+        internal static class SteamNetworkSessionProvider_StartClient_RememberExpectedHost
+        {
+            static void Postfix(SteamNetworkSessionProvider __instance, NetworkSessionStaticProvider.BeginJoinSessionState sqs)
+            {
+                if (__instance == null || sqs?.AvailableSession == null)
+                    return;
+
+                try { _pendingSteamHostJoinInfo.Remove(__instance); }
+                catch { }
+
+                _pendingSteamHostJoinInfo.Add(__instance, new PendingSteamHostJoinInfo
+                {
+                    HostSteamId  = sqs.AvailableSession.HostSteamID,
+                    HostGamertag = sqs.AvailableSession.HostGamertag ?? string.Empty
+                });
+
+                // Log($"[SteamHostIdGuard] Cached expected host: '{sqs.AvailableSession.HostGamertag}' ({sqs.AvailableSession.HostSteamID}).");
+            }
+        }
+        #endregion
+
+        #region Join Handshake - Repair Broken Host Mapping
+
+        /// <summary>
+        /// Repairs malformed Steam join responses where the actual host was not advertised as gamer ID 0.
+        /// Vanilla creates the host as a proxy in that case, leaving _host null and causing later client
+        /// broadcast / direct-send paths to fail or dereference a bad host.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), "HandleClientSystemMessages")]
+        internal static class SteamNetworkSessionProvider_HandleClientSystemMessages_HostIdRepair
+        {
+            /// <summary>
+            /// Backing field for the session provider's host gamer reference.
+            /// </summary>
+            private static readonly FieldInfo HostField =
+                AccessTools.Field(typeof(NetworkSessionProvider), "_host");
+
+            /// <summary>
+            /// Backing field for a gamer's alternate network address (Steam ID in this case).
+            /// </summary>
+            private static readonly FieldInfo AlternateAddressField =
+                AccessTools.Field(typeof(NetworkGamer), "_alternateAddress");
+
+            /// <summary>
+            /// Backing field for the gamer's host-status flag.
+            /// </summary>
+            private static readonly FieldInfo IsHostField =
+                AccessTools.Field(typeof(NetworkGamer), "_isHost");
+
+            static void Postfix(SteamNetworkSessionProvider __instance, SteamNetBuffer msg)
+            {
+                try
+                {
+                    if (__instance == null || __instance.IsHost)
+                        return;
+
+                    // Vanilla already worked; nothing to repair.
+                    if (__instance.Host != null)
+                        return;
+
+                    if (!_pendingSteamHostJoinInfo.TryGetValue(__instance, out var expected) || expected == null)
+                        return;
+
+                    var remotes = __instance.RemoteGamers;
+                    if (remotes == null || remotes.Count == 0)
+                        return;
+
+                    NetworkGamer hostProxy = null;
+
+                    // First choice:
+                    // Match the gamertag advertised by the session browser / available-session record.
+                    if (!string.IsNullOrWhiteSpace(expected.HostGamertag))
+                    {
+                        for (int i = 0; i < remotes.Count; i++)
+                        {
+                            var ng = remotes[i];
+                            if (ng == null)
+                                continue;
+
+                            if (string.Equals(ng.Gamertag, expected.HostGamertag, StringComparison.OrdinalIgnoreCase))
+                            {
+                                hostProxy = ng;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback:
+                    // If only one remote exists, it must be the host.
+                    if (hostProxy == null && remotes.Count == 1)
+                        hostProxy = remotes[0];
+
+                    if (hostProxy == null)
+                    {
+                        Log($"[SteamHostIdGuard] Could not identify malformed host peer. Sender={msg?.SenderId ?? 0UL} Remotes={remotes.Count}.");
+                        return;
+                    }
+
+                    // If the host came in as a proxy because their visible GID was not 0,
+                    // convert that proxy into the real host in-place.
+                    if (hostProxy.NetProxyObject || hostProxy.AlternateAddress == 0UL)
+                    {
+                        ulong hostSteamId = expected.HostSteamId != 0UL
+                            ? expected.HostSteamId
+                            : (msg?.SenderId ?? 0UL);
+
+                        hostProxy.NetProxyObject      = false;
+                        hostProxy.NetConnectionObject = null;
+
+                        AlternateAddressField?.SetValue(hostProxy, hostSteamId);
+                        IsHostField?.SetValue(hostProxy, true);
+                        HostField?.SetValue(__instance, hostProxy);
+
+                        Log($"[SteamHostIdGuard] Repaired host mapping. Host '{hostProxy.Gamertag}' used GID {hostProxy.Id} instead of 0; rebound to SteamID {hostSteamId}.");
+                    }
+
+                    try { _pendingSteamHostJoinInfo.Remove(__instance); }
+                    catch { }
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, "SteamHostIdGuard");
+                }
+            }
+        }
+        #endregion
+
+        #region Broadcast Safety Nets
+
+        /// <summary>
+        /// Final safety net for broadcast calls using the byte[] overload.
+        /// If a malformed/broken session still leaves the client without a valid host mapping,
+        /// drop the broadcast instead of entering an exception spam / infinite loading loop.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), nameof(SteamNetworkSessionProvider.BroadcastRemoteData),
+            new[] { typeof(byte[]), typeof(SendDataOptions) })]
+        internal static class SteamNetworkSessionProvider_BroadcastRemoteData_SafeGuard_A
+        {
+            static bool Prefix(SteamNetworkSessionProvider __instance)
+            {
+                var host = __instance?.Host;
+                if (host != null && host.AlternateAddress != 0UL)
+                    return true;
+
+                Log("[SteamHostIdGuard] Dropped client broadcast (byte[]) because host mapping is invalid.");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Final safety net for broadcast calls using the offset/length overload.
+        /// Mirrors the logic above so both broadcast entry points are protected.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), nameof(SteamNetworkSessionProvider.BroadcastRemoteData),
+            new[] { typeof(byte[]), typeof(int), typeof(int), typeof(SendDataOptions) })]
+        internal static class SteamNetworkSessionProvider_BroadcastRemoteData_SafeGuard_B
+        {
+            static bool Prefix(SteamNetworkSessionProvider __instance)
+            {
+                var host = __instance?.Host;
+                if (host != null && host.AlternateAddress != 0UL)
+                    return true;
+
+                Log("[SteamHostIdGuard] Dropped client broadcast (byte[], offset, length) because host mapping is invalid.");
+                return false;
+            }
+        }
+        #endregion
+
+        #region Direct Send Compatibility - Force Wire Recipient ID 0 For Broken Hosts
+
+        /// <summary>
+        /// Rewrites direct sends to the current host when the visible host object uses a non-zero GID,
+        /// but the malformed remote still expects incoming direct packets addressed to wire recipient ID 0.
+        /// This overload handles the basic byte[] send path.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), nameof(SteamNetworkSessionProvider.SendRemoteData),
+            new[] { typeof(byte[]), typeof(SendDataOptions), typeof(NetworkGamer) })]
+        internal static class SteamNetworkSessionProvider_SendRemoteData_HostWireIdFix_A
+        {
+            static bool Prefix(
+                SteamNetworkSessionProvider __instance,
+                byte[] data,
+                SendDataOptions options,
+                NetworkGamer recipient)
+            {
+                if (!ShouldRewriteHostDirectSend(__instance, recipient))
+                    return true;
+
+                try
+                {
+                    if (!(SteamApiField.GetValue(__instance) is SteamWorks steamApi))
+                        return true;
+
+                    ulong netConnection = recipient.AlternateAddress;
+                    if (netConnection == 0UL)
+                        return true;
+
+                    byte localPlayerGid = (byte)LocalPlayerGidField.GetValue(__instance);
+
+                    SteamNetBuffer msg = steamApi.AllocSteamNetBuffer();
+                    NetDeliveryMethod flags = GetSteamDeliveryMethod(options);
+
+                    // Direct packet format on channel 0:
+                    // [recipientId][senderId][payload...]
+                    //
+                    // Force recipientId = 0 because the malformed host still expects
+                    // its local host gamer on wire ID 0, even though the repaired
+                    // host object is visible client-side as a non-zero GID.
+                    msg.Write((byte)0);
+                    msg.Write(localPlayerGid);
+                    msg.WriteArray(data);
+
+                    steamApi.SendPacket(msg, netConnection, flags, 0);
+
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, "SteamHostIdGuard.SendRemoteData.HostWireIdFix_A");
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Same compatibility rewrite as the byte[] overload above, but for the offset/length send path.
+        /// Keeps both direct-send overloads behaviorally aligned.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), nameof(SteamNetworkSessionProvider.SendRemoteData),
+            new[] { typeof(byte[]), typeof(int), typeof(int), typeof(SendDataOptions), typeof(NetworkGamer) })]
+        internal static class SteamNetworkSessionProvider_SendRemoteData_HostWireIdFix_B
+        {
+            static bool Prefix(
+                SteamNetworkSessionProvider __instance,
+                byte[] data,
+                int offset,
+                int length,
+                SendDataOptions options,
+                NetworkGamer recipient)
+            {
+                if (!ShouldRewriteHostDirectSend(__instance, recipient))
+                    return true;
+
+                try
+                {
+                    if (!(SteamApiField.GetValue(__instance) is SteamWorks steamApi))
+                        return true;
+
+                    ulong netConnection = recipient.AlternateAddress;
+                    if (netConnection == 0UL)
+                        return true;
+
+                    byte localPlayerGid = (byte)LocalPlayerGidField.GetValue(__instance);
+
+                    SteamNetBuffer msg = steamApi.AllocSteamNetBuffer();
+                    NetDeliveryMethod flags = GetSteamDeliveryMethod(options);
+
+                    msg.Write((byte)0);
+                    msg.Write(localPlayerGid);
+                    msg.WriteArray(data, offset, length);
+
+                    steamApi.SendPacket(msg, netConnection, flags, 0);
+
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, "SteamHostIdGuard.SendRemoteData.HostWireIdFix_B");
+                    return true;
+                }
+            }
+        }
+        #endregion
+
+        #region Legacy Host ID 0 Compatibility
+
+        /// <summary>
+        /// Some malformed/modded hosts change their visible gamer ID away from 0,
+        /// but still send packets stamped internally with sender ID 0.
+        ///
+        /// On the client, that causes incoming host packets to be dropped because
+        /// FindGamerById(0) returns null even though CurrentNetworkSession.Host has
+        /// already been repaired to the real host object.
+        ///
+        /// This patch aliases legacy ID 0 to the current session host whenever:
+        /// - the original lookup for ID 0 failed,
+        /// - the session already has a known host,
+        /// - and that repaired host's real visible ID is not 0.
+        /// </summary>
+        [HarmonyPatch(typeof(NetworkSessionProvider), nameof(NetworkSessionProvider.FindGamerById))]
+        internal static class NetworkSessionProvider_FindGamerById_HostZeroCompat
+        {
+            static void Postfix(NetworkSessionProvider __instance, byte gamerId, ref NetworkGamer __result)
+            {
+                // Vanilla lookup already worked.
+                if (__result != null)
+                    return;
+
+                // We only alias the legacy "host == 0" case.
+                if (gamerId != 0 || __instance == null)
+                    return;
+
+                var host = __instance.Host;
+                if (host == null || host.HasLeftSession)
+                    return;
+
+                // If the host is already actually ID 0, nothing to fix.
+                if (host.Id == 0)
+                    return;
+
+                __result = host;
+            }
+        }
+        #endregion
+
+        #region Gameplay Fallback - Resolve Host When Terrain / Server IDs Are Stale
+
+        /// <summary>
+        /// Gameplay code often routes server/terrain traffic through TerrainServerID.
+        /// During malformed joins, that ID can remain 0 or temporarily stale even though the
+        /// network host object has already been repaired.
+        ///
+        /// This patch falls back to CurrentNetworkSession.Host when a direct ID lookup fails,
+        /// keeping bootstrap traffic like world-info, terrain-server, and startup messages
+        /// from going nowhere.
+        /// </summary>
+        [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.GetGamerFromID))]
+        internal static class CastleMinerZGame_GetGamerFromID_HostFallback
+        {
+            static void Postfix(CastleMinerZGame __instance, byte id, ref NetworkGamer __result)
+            {
+                if (__result != null || __instance?.CurrentNetworkSession == null)
+                    return;
+
+                var host = __instance.CurrentNetworkSession.Host;
+                if (host == null || host.HasLeftSession)
+                    return;
+
+                if (id == 0 || id == __instance.TerrainServerID)
+                {
+                    __result = host;
+                }
+            }
+        }
+        #endregion
+
+        #endregion
+
         #region Gamertag Integrity (Anti-Spoof / Anti-Impersonation)
 
         /// <summary>
@@ -2443,6 +2916,51 @@ namespace ModLoaderExt
             }
 
             /// <summary>
+            /// Returns the sender's normal safe displayed name, clamped for chat.
+            /// </summary>
+            internal static string GetDisplayedName(NetworkGamer g)
+            {
+                if (g == null)
+                    return "?";
+
+                string shown = GamerTagFixer.Sanitize(g, g.Gamertag ?? string.Empty);
+                shown = ChatNameClamp.ClampWithEllipsis(shown, ChatNameClamp.MaxNameChars);
+                return shown;
+            }
+
+            /// <summary>
+            /// Builds a local-only rewrite for cases where the sender's actual session name
+            /// and the chat-prefix name do not match, but the claimed name is not another real player.
+            /// Example:
+            ///   sender display = "Player1"
+            ///   incoming line  = "Player3: hello"
+            /// becomes:
+            ///   "Player1: [Player3]: hello"
+            /// </summary>
+            internal static string BuildAliasRewrite(NetworkGamer sender, string claimedName, string msg)
+            {
+                string safeSender = GetDisplayedName(sender);
+
+                string safeClaimed = IncomingMessageSanitizer.SanitizeText(
+                    claimedName ?? string.Empty,
+                    GamertagSanitizerConfig.MaxNameLen);
+
+                safeClaimed = safeClaimed.Trim();
+                safeClaimed = ChatNameClamp.ClampWithEllipsis(safeClaimed, ChatNameClamp.MaxNameChars);
+
+                string prefix = $"{safeSender}: [{safeClaimed}]";
+
+                if (string.IsNullOrWhiteSpace(msg))
+                    return prefix;
+
+                int budget = GamertagSanitizerConfig.MaxChatLineLen - (prefix.Length + 2); // ": "
+                if (budget < 0) budget = 0;
+
+                string safeMsg = IncomingMessageSanitizer.SanitizeText(msg, budget);
+                return $"{prefix}: {safeMsg}";
+            }
+
+            /// <summary>
             /// Returns true if the target is one of this client's LocalGamers (split-screen included).
             /// </summary>
             internal static bool IsLocalTarget(NetworkSession sess,
@@ -2498,8 +3016,15 @@ namespace ModLoaderExt
 
                 // Find which gamer that name belongs to (based on displayed/sanitized name).
                 var target = FindTargetByDisplayedName(sess, claimed);
+
+                // If the claimed name does NOT belong to another real player, treat it as an alias/self-rename
+                // and rewrite the line locally instead of letting the normal prefixer produce:
+                //   "Player1 NewPlayer3: msg"
                 if (target == null)
-                    return false;
+                {
+                    btm.Message = BuildAliasRewrite(sender, claimed, msg);
+                    return true;
+                }
 
                 // If sender IS target, it's fine.
                 if (ReferenceEquals(sender, target))
@@ -3181,45 +3706,86 @@ namespace ModLoaderExt
             internal static int MaxChatLineLen => GamertagSanitizerConfig.MaxChatLineLen; // includes name + message
 
             /// <summary>
-            /// Ensures a BroadcastTextMessage line is safe and consistently prefixed with the sender's safe name.
+            /// Ensures a BroadcastTextMessage line is safe and consistently formatted.
+            /// 
+            /// Behavior:
+            /// - If NoImpersonationEnabled == false:
+            ///     Preserve an incoming "ClaimedName: message" line exactly as the sender intended
+            ///     (after sanitization), even if ClaimedName != sender's real/current gamertag.
+            /// - If NoImpersonationEnabled == true:
+            ///     Fall back to the normal sender-safe-name prefix behavior unless the impersonation
+            ///     guard already handled the line earlier.
             /// </summary>
             internal static void SanitizeBroadcastLine(BroadcastTextMessage btm)
             {
-                if (btm == null) return;
+                if (btm == null)
+                    return;
 
                 NetworkGamer sender = btm.Sender;
                 string rawLine = btm.Message ?? string.Empty;
 
-                // 1) Sanitize the *line text* (removes \n, control, etc.)
+                // 1) Sanitize the incoming line first.
                 string cleanedLine = SanitizeText(rawLine, MaxChatLineLen);
 
-                // 2) Build a "safe name" exactly like gamertags (=> "[id]" if empty after trim)
-                // NOTE: This does NOT rely on the message already containing a good name.
                 if (sender != null)
                 {
-                    string safeName = GamerTagFixer.Sanitize(sender, sender.Gamertag ?? string.Empty);
-                    safeName = ChatNameClamp.ClampWithEllipsis(safeName, ChatNameClamp.MaxNameChars);
+                    string safeSenderName = GamerTagFixer.Sanitize(sender, sender.Gamertag ?? string.Empty);
+                    safeSenderName = ChatNameClamp.ClampWithEllipsis(safeSenderName, ChatNameClamp.MaxNameChars);
 
-                    // 3) If the line doesn't already start with the safe name, prefix it.
-                    if (!StartsWithName(cleanedLine, safeName))
+                    // If anti-impersonation is OFF, and the incoming line already looks like:
+                    //   "SomeName: message"
+                    // then preserve that claimed name instead of prepending the sender's real/current name.
+                    //
+                    // This allows:
+                    //   Player3: hello
+                    // to stay:
+                    //   Player3: hello
+                    //
+                    // instead of becoming:
+                    //   Player1 Player3: hello
+                    if (!ImpersonationConfig.NoImpersonationEnabled)
                     {
-                        // Trim leading whitespace so ": msg" doesn't become " : msg".
+                        if (ImpersonationGuard.TryParseClaim(cleanedLine.TrimStart(), out string claimed, out string msg))
+                        {
+                            // If the claimed name differs from the sender's real/current displayed name,
+                            // preserve the claimed name exactly (sanitized/clamped).
+                            if (!string.Equals(claimed, safeSenderName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string safeClaimed = SanitizeText(claimed ?? string.Empty, GamertagSanitizerConfig.MaxNameLen);
+                                safeClaimed = safeClaimed.Trim();
+                                safeClaimed = ChatNameClamp.ClampWithEllipsis(safeClaimed, ChatNameClamp.MaxNameChars);
+
+                                int budget = MaxChatLineLen - (safeClaimed.Length + 2); // ": "
+                                if (budget < 0) budget = 0;
+
+                                string safeMsg = SanitizeText(msg ?? string.Empty, budget);
+
+                                btm.Message = string.IsNullOrWhiteSpace(safeMsg)
+                                    ? $"{safeClaimed}:"
+                                    : $"{safeClaimed}: {safeMsg}";
+                                return;
+                            }
+                        }
+                    }
+
+                    // Original behavior:
+                    // If the line doesn't already start with the sender's safe/current name, prefix it.
+                    if (!StartsWithName(cleanedLine, safeSenderName))
+                    {
                         string tail = (cleanedLine ?? string.Empty).TrimStart();
 
-                        // No space if the tail begins with punctuation like ':' so "[id]: msg".
                         bool noSpace =
                             tail.Length > 0 && (tail[0] == ':' || tail[0] == '>' || tail[0] == '-');
 
                         string sep = noSpace ? "" : " ";
 
-                        // Keep total length under MaxChatLineLen.
-                        int budget = MaxChatLineLen - (safeName.Length + sep.Length);
+                        int budget = MaxChatLineLen - (safeSenderName.Length + sep.Length);
                         if (budget < 0) budget = 0;
 
                         if (tail.Length > budget)
                             tail = tail.Substring(0, budget).TrimEnd();
 
-                        cleanedLine = safeName + sep + tail;
+                        cleanedLine = safeSenderName + sep + tail;
                     }
                 }
 
@@ -3837,7 +4403,7 @@ namespace ModLoaderExt
                         // Invalid payload: Ignore the message entirely.
                         // We've already advanced the stream so subsequent messages remain aligned.
 
-                        SendFeedback($"[NetGuard] Dropped ShotgunShotMessage with non-shotgun (ItemID={ItemID}).");
+                        // SendFeedback($"[NetGuard] Dropped ShotgunShotMessage with non-shotgun (ItemID={ItemID}).");
                         return false; // Skip original; message has no effect.
                     }
 

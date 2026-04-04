@@ -582,21 +582,27 @@ namespace Restore360Water
 
                 bool sceneChanged = !ReferenceEquals(_lastSceneScreen, gs);
                 bool stateChanged =
-                    force ||
-                    !_runtimeStateInitialized ||
-                    _lastWaterWorldState != waterWorldActive ||
-                    _appliedBiomeEnabled != biomeEnabled ||
-                    _appliedReflectionEnabled != R360W_Settings.EnableReflection ||
-                    _appliedVanillaUnderwaterEnabled != R360W_Settings.UseVanillaUnderwaterEngine ||
+                    force                                                                                ||
+                    !_runtimeStateInitialized                                                            ||
+                    _lastWaterWorldState              != waterWorldActive                                ||
+                    _appliedBiomeEnabled              != biomeEnabled                                    ||
+                    _appliedReflectionEnabled         != R360W_Settings.EnableReflection                 ||
+                    _appliedVanillaUnderwaterEnabled  != R360W_Settings.UseVanillaUnderwaterEngine       ||
                     _appliedUseNativeBiomeWaterValues != R360W_Settings.CurrentUseNativeBiomeWaterValues ||
-                    !SameText(_appliedBiomeName, R360W_Settings.CurrentBiomeName) ||
-                    !FloatsNear(_appliedMinY, R360W_Settings.CurrentWaterMinY) ||
-                    !FloatsNear(_appliedMaxY, R360W_Settings.CurrentWaterMaxY) ||
-                    !FloatsNear(_appliedWaterLevel, desiredWaterLevel) ||
+                    !SameText(_appliedBiomeName, R360W_Settings.CurrentBiomeName)                        ||
+                    !FloatsNear(_appliedMinY, R360W_Settings.CurrentWaterMinY)                           ||
+                    !FloatsNear(_appliedMaxY, R360W_Settings.CurrentWaterMaxY)                           ||
+                    !FloatsNear(_appliedWaterLevel, desiredWaterLevel)                                   ||
                     sceneChanged;
 
                 if (!stateChanged)
+                {
+                    // Still keep reflection scene wiring healthy across window resize/maximize.
+                    if (gs != null && R360W_Settings.Enabled && R360W_Settings.AttachWaterPlane && R360W_Settings.EnableReflection)
+                        EnsureWaterSceneAttached(gs);
+
                     return;
+                }
 
                 // Terrain state.
                 if (terrain != null)
@@ -804,6 +810,9 @@ namespace Restore360Water
                     return;
                 }
 
+                // Ensure the RT is valid before any reflection view draws.
+                R360WWaterPlane.Instance.EnsureReflectionTargetReady(CastleMinerZGame.Instance?.GraphicsDevice);
+
                 ReflectionCamera reflectionCamera = null;
                 for (int i = 0; i < gameScreen.mainScene.Children.Count; i++)
                 {
@@ -822,25 +831,34 @@ namespace Restore360Water
                 if (sceneScreen == null)
                     return;
 
-                bool alreadyAdded = false;
+                CameraView existingReflectionView = null;
+                bool       alreadyAdded           = false;
                 for (int i = 0; i < sceneScreen.Views.Count; i++)
                 {
                     if (!(sceneScreen.Views[i] is CameraView cv)) continue;
                     if (object.ReferenceEquals(cv.Camera, reflectionCamera))
                     {
-                        alreadyAdded = true;
+                        existingReflectionView = cv;
+                        alreadyAdded           = true;
                         break;
                     }
                 }
 
                 if (!alreadyAdded)
                 {
-                    CameraView reflectionView = new CameraView(CastleMinerZGame.Instance,
-                                                        R360WWaterPlane.Instance.ReflectionTexture,
-                                                        reflectionCamera,
-                                                        GameScreen.FilterWorldGeo);
+                    CameraView reflectionView = new CameraView(
+                        CastleMinerZGame.Instance,
+                        R360WWaterPlane.Instance.ReflectionTexture,
+                        reflectionCamera,
+                        GameScreen.FilterWorldGeo);
+
                     AttachPreDrawReflection(gameScreen, reflectionView);
                     sceneScreen.Views.Insert(0, reflectionView);
+                }
+                else
+                {
+                    if (!ReferenceEquals(existingReflectionView.Target, R360WWaterPlane.Instance.ReflectionTexture))
+                        existingReflectionView.SetDestinationTarget(R360WWaterPlane.Instance.ReflectionTexture);
                 }
             }
             catch (Exception ex)
@@ -849,6 +867,42 @@ namespace Restore360Water
             }
         }
 
+        /// <summary>
+        /// Rebinds any existing reflection camera views to the current reflection render target.
+        /// This keeps reflection rendering valid after the target is recreated, such as during resize/maximize.
+        /// </summary>
+        public static void SyncReflectionViewTarget(RenderTarget2D target)
+        {
+            try
+            {
+                if (target == null)
+                    return;
+
+                GameScreen gs = CastleMinerZGame.Instance?.GameScreen;
+                if (gs == null)
+                    return;
+
+                SceneScreen sceneScreen = GetSceneScreen(gs);
+                if (sceneScreen == null)
+                    return;
+
+                for (int i = 0; i < sceneScreen.Views.Count; i++)
+                {
+                    if (!(sceneScreen.Views[i] is CameraView cv))
+                        continue;
+
+                    if (!(cv.Camera is ReflectionCamera))
+                        continue;
+
+                    if (!ReferenceEquals(cv.Target, target))
+                        cv.SetDestinationTarget(target);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed syncing reflection view target: {ex.Message}.");
+            }
+        }
         #endregion
 
         #region Reflection / Screen Helpers

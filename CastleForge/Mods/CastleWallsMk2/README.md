@@ -46,7 +46,7 @@ CastleWallsMk2 is one of the largest and most feature-dense mods in the CastleFo
 
 This mod is best described as a **power overlay for advanced players, hosts, testers, modders, and server operators**.
 
-![CastleWallsMk2Preview](Images/CastleWallsMk2Preview.gif)
+![Preview](_Images/Preview.gif)
 
 > Inspired by the original **CastleWalls** by **cNoEvil**, with the UI design paying homage to the original bare-bones version.
 
@@ -100,8 +100,7 @@ This mod embeds and extracts a number of support components, including:
 - **Toggle free-fly camera:** `F6`
 - **Reload config:** `Ctrl+Shift+R`
 
-> **Image placeholder — Installation / first launch**  
-> Suggested path: `docs/images/mods/castlewallsmk2/installation.png`
+![Installation](_Images/Installation.png)
 
 ---
 
@@ -159,8 +158,7 @@ The main config file is:
 - the mod can hide or show the overlay automatically on launch
 - the config hot-reload binding makes iteration faster when tuning the UI or capture settings
 
-> **Image placeholder — Config / settings screenshot**  
-> Suggested path: `docs/images/mods/castlewallsmk2/config.png`
+![Installation](_Images/Config.png)
 
 ---
 
@@ -192,8 +190,7 @@ The next sections break down each tab in detail.
 
 The Main tab is the heart of the mod. It combines self-targeted tools, world/visual tools, combat modifiers, moderation utilities, teleporting, spawning, item-giving, and action buttons.
 
-> **Image placeholder — Main tab overview**  
-> Suggested path: `docs/images/mods/castlewallsmk2/main-tab.png`
+![Installation](_Images/MainTab.png)
 
 ### Main tab at a glance
 
@@ -468,8 +465,7 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 
 The Editors tab contains four specialized editors: **Player**, **World**, **Enemies**, and **Dragon**.
 
-> **Image placeholder — Editors tab overview**  
-> Suggested path: `docs/images/mods/castlewallsmk2/editors-overview.png`
+![Installation](_Images/EditorsOverview.png)
 
 ### Player editor
 
@@ -497,8 +493,7 @@ Inventory save slots are persisted to:
 !Mods/CastleWallsMk2/CastleWallsMk2.UserData.ini
 ```
 
-> **Image placeholder — Player editor**  
-> Suggested path: `docs/images/mods/castlewallsmk2/editor-player.png`
+![Installation](_Images/EditorsPlayer.png)
 
 ### World editor
 
@@ -537,8 +532,7 @@ This tab edits the live `WorldInfo` object for the current world and gives you a
 - save writes back to `world.info`
 - non-host multiplayer edits may remain local-only unless separately synchronized
 
-> **Image placeholder — World editor**  
-> Suggested path: `docs/images/mods/castlewallsmk2/editor-world.png`
+![Installation](_Images/EditorsWorld.png)
 
 ### Enemy editor
 
@@ -568,8 +562,7 @@ A live editor for spawned enemies.
   - AABB bounds
   - rotation via Euler conversion helpers
 
-> **Image placeholder — Enemy editor**  
-> Suggested path: `docs/images/mods/castlewallsmk2/editor-enemy.png`
+![Installation](_Images/EditorsEnemy.png)
 
 ### Dragon editor
 
@@ -586,8 +579,7 @@ A live editor for both the server-side dragon entity and the client-rendered dra
 - editable client transform and server intent values
 - editable animation, clip speed, visibility, velocity, altitude, target angles, shots left, loiters left, timers, and scaling
 
-> **Image placeholder — Dragon editor**  
-> Suggested path: `docs/images/mods/castlewallsmk2/editor-dragon.png`
+![Installation](_Images/EditorsDragon.png)
 
 ---
 
@@ -622,8 +614,7 @@ The Code-Injector tab is a built-in C# execution environment for advanced users.
 
 This makes CastleWallsMk2 unusually useful for **testing ideas live before turning them into full mods**.
 
-> **Image placeholder — Code Injector**  
-> Suggested path: `docs/images/mods/castlewallsmk2/code-injector.png`
+![Installation](_Images/CodeInjector.png)
 
 ---
 
@@ -650,8 +641,7 @@ The Network-Sniffer tab passively captures CastleMiner Z / Steam UDP traffic and
 - diagnosing session traffic
 - collecting host/server IP information for history tools
 
-> **Image placeholder — Network Sniffer**  
-> Suggested path: `docs/images/mods/castlewallsmk2/network-sniffer.png`
+![Installation](_Images/NetworkSniffer.png)
 
 ---
 
@@ -686,8 +676,7 @@ This tab is split into **Calls** and **Rules**.
 
 This is effectively a **message-level diagnostics and blocking console** for networking.
 
-> **Image placeholder — Network Calls**  
-> Suggested path: `docs/images/mods/castlewallsmk2/network-calls.png`
+![Installation](_Images/NetworkCalls.png)
 
 ---
 
@@ -729,8 +718,7 @@ This tab configures **public chat commands** that remote players can use through
 - optionally hide handled command messages from public chat
 - optionally announce state changes / replies depending on configuration
 
-> **Image placeholder — Server Commands**  
-> Suggested path: `docs/images/mods/castlewallsmk2/server-commands.png`
+![Installation](_Images/ServerCommands.png)
 
 ---
 
@@ -764,8 +752,7 @@ The Server-History tab maintains a persistent record of hosts you have joined.
 !Mods/CastleWallsMk2/CastleWallsMk2.ServerHistory.ini
 ```
 
-> **Image placeholder — Server History**  
-> Suggested path: `docs/images/mods/castlewallsmk2/server-history.png`
+![Installation](_Images/ServerHistory.png)
 
 ---
 
@@ -802,8 +789,7 @@ This is one of the strongest host/moderation-oriented sections in the mod.
 - deny text for hard bans is persisted and supports multiline storage
 - both SteamID-backed and Gamertag-backed bans are supported by the store
 
-> **Image placeholder — Player Enforcement**  
-> Suggested path: `docs/images/mods/castlewallsmk2/player-enforcement.png`
+![Installation](_Images/PlayerEnforcement.png)
 
 ---
 
@@ -832,8 +818,7 @@ When enabled by config, rolling logs are written under:
 !Mods/CastleWallsMk2/!Logs
 ```
 
-> **Image placeholder — Log tab**  
-> Suggested path: `docs/images/mods/castlewallsmk2/log-tab.png`
+![Installation](_Images/LogTab.png)
 
 ---
 

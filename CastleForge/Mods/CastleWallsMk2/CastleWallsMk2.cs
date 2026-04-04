@@ -2226,12 +2226,12 @@ namespace CastleWallsMk2
             {
                 _forceRespawnEnabled = enabled;
 
-                /*
-                string label =
-                        (_forceRespawnTargetMode == PlayerTargetMode.None)       ? "(None)"        :
-                        (_forceRespawnTargetMode == PlayerTargetMode.AllPlayers) ? "(All Players)" :
-                        (IdMatchUtils.IdToGamertag(_forceRespawnTargetNetids));
-                */
+                // Reset mode & ids when un-checked.
+                if (!enabled)
+                {
+                    _forceRespawnTargetMode   = PlayerTargetMode.None;
+                    _forceRespawnTargetNetids = new byte[0];
+                }
 
                 if (enabled)
                     SendLog($"Force Respawn: {enabled}");

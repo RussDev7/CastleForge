@@ -314,9 +314,9 @@ namespace WorldEdit
         {
             try
             {
-                // Send blank messages to chat to clear chat publically.
+                // Send blank messages to chat to clear chat publicly.
                 for (int i = 0; i < 10; i++)
-                    DNA.CastleMinerZ.Net.BroadcastTextMessage.Send(DNA.CastleMinerZ.CastleMinerZGame.Instance?.MyNetworkGamer, ""); // SendFeedback("");
+                    DNA.CastleMinerZ.Net.BroadcastTextMessage.Send(DNA.CastleMinerZ.CastleMinerZGame.Instance?.MyNetworkGamer, " "); // SendFeedback("");
             }
             catch (Exception ex)
             {
@@ -3874,7 +3874,7 @@ namespace WorldEdit
             {
                 // int treeAreaSquared = int.TryParse(args[0], out int a) ? a : 10;
                 int treeDensity = int.TryParse(args[0], out int d) ? d : 20;
-                int treeMaxHeight = args.Length > 1 && int.TryParse(args[1], out int h) ? h : 8;
+                int treeMaxHeight = args.Length > 1 && int.TryParse(args[1], out int h) ? h : -1;
                 int snowRadius = args.Length > 2 && int.TryParse(args[2], out int s) ? Math.Abs(s) : -1;
 
                 // Define location data.
@@ -3941,7 +3941,7 @@ namespace WorldEdit
         {
             try
             {
-                int treeMaxHeight = args.Length > 0 && int.TryParse(args[0], out int h) ? h : 8;
+                int treeMaxHeight = args.Length > 0 && int.TryParse(args[0], out int h) ? h : -1;
 
                 // MakeTree(int worldX, int worldZ, int maxHeight).
                 var region = MakeTree((int)_pointToLocation1.X, (int)_pointToLocation1.Z, treeMaxHeight);
@@ -6597,6 +6597,10 @@ namespace WorldEdit
             if (!IsGameWindowActive())
                 return;
 
+            // If the in-game menu is open, do nothing.
+            if (IsInGameMenuOpen())
+                return;
+
             // If the crafting menu is open, do nothing.
             if (IsCraftingMenuOpen())
                 return;
@@ -6646,6 +6650,10 @@ namespace WorldEdit
 
             // If the game does not have focus, do nothing.
             if (!IsGameWindowActive())
+                return;
+
+            // If the in-game menu is open, do nothing.
+            if (IsInGameMenuOpen())
                 return;
 
             // If the crafting menu is open, do nothing.
@@ -6793,6 +6801,10 @@ namespace WorldEdit
             if (!IsGameWindowActive())
                 return;
 
+            // If the in-game menu is open, do nothing.
+            if (IsInGameMenuOpen())
+                return;
+
             // If the crafting menu is open, do nothing.
             if (IsCraftingMenuOpen())
                 return;
@@ -6877,6 +6889,10 @@ namespace WorldEdit
 
             // If the game does not have focus, do nothing.
             if (!IsGameWindowActive())
+                return;
+
+            // If the in-game menu is open, do nothing.
+            if (IsInGameMenuOpen())
                 return;
 
             // If the crafting menu is open, do nothing.

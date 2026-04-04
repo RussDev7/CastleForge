@@ -201,8 +201,12 @@ namespace WorldEdit
             // Implement a feature to validate the cursor location.
             public static bool IsValidCursorLocation() => DNA.CastleMinerZ.UI.InGameHUD.Instance?.ConstructionProbe.AbleToBuild ?? false;
 
+            // Implement a feature to check if the in-game menu/screen is open.
+            public static bool IsInGameMenuOpen() => DNA.CastleMinerZ.CastleMinerZGame.Instance?.GameScreen?._uiGroup?.CurrentScreen is DNA.CastleMinerZ.UI.InGameMenu;
+
             // Implement a feature to check if the crafting menu/screen is open.
             public static bool IsCraftingMenuOpen() => DNA.CastleMinerZ.CastleMinerZGame.Instance?.GameScreen?._uiGroup?.CurrentScreen is DNA.CastleMinerZ.UI.CraftingScreen;
+
             // Implement a feature to check if the chat console is open.
             public static bool IsChatOpen() => DNA.CastleMinerZ.CastleMinerZGame.Instance?.GameScreen?._uiGroup?.CurrentScreen is DNA.CastleMinerZ.UI.PlainChatInputScreen; // .IsChatting can throw.
 
@@ -5256,8 +5260,10 @@ namespace WorldEdit
                 if (GetBlockFromLocation(treeTopPosition) != LeavesID)
                 {
                     int trunkHeight = 0;
-                    // Randomly select the height of the tree between 4 and maxHeight.
-                    int treeHeight = GenerateRandomNumber(4, maxHeight);
+                    // Randomly select the height of the tree between 5 (stock) and maxHeight.
+                    int treeHeight = (maxHeight <= 0)
+                        ? GenerateRandomNumber(5, 8) // Stock-like fallback band.
+                        : GenerateRandomNumber(5, Math.Max(5, maxHeight));
 
                     // Build the trunk of the tree by placing log blocks.
                     for (int i = 0; i < treeHeight; i++)
