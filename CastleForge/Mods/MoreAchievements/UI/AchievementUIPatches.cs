@@ -1648,7 +1648,8 @@ namespace MoreAchievements
         {
             public string Title;       // Title line, typically the achievement name.
             public string Description; // Description or "how to unlock" text.
-            public string ApiName;     // API/Steam name, used for icon lookups and custom/vanilla hinting.
+            public string ApiName;     // API/Steam name, used for icon lookups.
+            public bool   IsCustom;    // True when this toast came from one of our custom achievements.
             public float  Age;         // Current age of this toast in seconds.
             public float  Lifetime;    // Total lifetime of this toast in seconds before it expires.
         }
@@ -1667,6 +1668,20 @@ namespace MoreAchievements
         /// Lock used to synchronize access to <see cref="_toasts"/> and <see cref="_instance"/>.
         /// </summary>
         private static readonly object _lock = new object();
+
+        /// <summary>
+        /// True if the given achievement belongs to the extended manager's custom set.
+        /// This is used by the toast overlay so it does not have to guess custom-vs-steam
+        /// from the API name prefix.
+        /// </summary>
+        private static bool IsCustomAchievement(AchievementManager<CastleMinerZPlayerStats>.Achievement achievement)
+        {
+            var gm = CastleMinerZGame.Instance;
+            if (gm?.AcheivmentManager is ExtendedAchievementManager ext && achievement != null)
+                return ext.CustomAchievements.Contains(achievement);
+
+            return false;
+        }
 
         /// <summary>
         /// Enqueue a toast for the given achievement. Creates/pushes the
@@ -1692,6 +1707,7 @@ namespace MoreAchievements
                     Title = ach.Name ?? "", // fallback
                     Description = ach.HowToUnlock ?? "",
                     ApiName = ach.APIName ?? "",
+                    IsCustom = IsCustomAchievement(ach),
                     Age = 0f,
                     Lifetime = 5.0f
                 });
@@ -1718,7 +1734,8 @@ namespace MoreAchievements
         private Rectangle _lastVp;
 
         /// <summary>
-        /// Cache of loaded icon textures keyed by API name (case-insensitive).
+        /// Cache of loaded icon textures keyed by "C:" / "S:" + API name so custom
+        /// and steam lookups with the same API name cannot collide.
         /// </summary>
         private readonly Dictionary<string, Texture2D> _icons =
             new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
@@ -1890,9 +1907,10 @@ namespace MoreAchievements
                 int iconSize = height - 20;
                 var iconRect = new Rectangle(panel.Left + 10, panel.Top + (panel.Height - iconSize) / 2, iconSize, iconSize);
 
-                // Determine hint: true = Custom, false = Steam
-                bool isCustomHint = !string.IsNullOrEmpty(t.ApiName) &&
-                                    !t.ApiName.StartsWith("ACH_", StringComparison.OrdinalIgnoreCase);
+                // Use the actual achievement membership captured at enqueue time.
+                // Custom achievements in this mod still use ACH_* API names, so prefix-based
+                // guessing can misclassify them and send lookups to the wrong folder first.
+                bool isCustomHint = t.IsCustom;
 
                 Texture2D iconTex = null;
                 if (!string.IsNullOrEmpty(t.ApiName))
@@ -2054,7 +2072,9 @@ namespace MoreAchievements
             if (string.IsNullOrEmpty(apiName) || gd == null)
                 return null;
 
-            if (_icons.TryGetValue(apiName, out var cached))
+            string cacheKey = (isCustomHint ? "C:" : "S:") + apiName;
+
+            if (_icons.TryGetValue(cacheKey, out var cached) && cached != null && !cached.IsDisposed)
                 return cached;
 
             string path = FindIconPath(apiName, isCustomHint);
@@ -2066,7 +2086,7 @@ namespace MoreAchievements
                 using (var s = System.IO.File.OpenRead(path))
                 {
                     var tex = Texture2D.FromStream(gd, s);
-                    _icons[apiName] = tex;
+                    _icons[cacheKey] = tex;
                     return tex;
                 }
             }

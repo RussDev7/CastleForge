@@ -1357,10 +1357,14 @@ namespace CastleWallsMk2
 
             #endregion
 
-            if (ImGui.BeginChild("player_toggles_scroll",
-                                 new Vector2(0, childH),
-                                 ImGuiChildFlags.Borders
-                                 /*, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse */ ))
+            bool childOpen = ImGui.BeginChild(
+                "player_toggles_scroll",
+                new Vector2(0, childH),
+                ImGuiChildFlags.Borders
+                /*, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse */
+            );
+
+            if (childOpen)
             {
                 #region (Padding)
 
@@ -1788,10 +1792,14 @@ namespace CastleWallsMk2
 
             #endregion
 
-            if (ImGui.BeginChild("target_scroll",
-                     new Vector2(0, targetChildH),
-                     ImGuiChildFlags.None,
-                     ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+            bool childOpen = ImGui.BeginChild(
+                "target_scroll",
+                new Vector2(0, targetChildH),
+                ImGuiChildFlags.None,
+                ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
+            );
+
+            if (childOpen)
             {
                 #region (Padding)
 
@@ -2262,14 +2270,16 @@ namespace CastleWallsMk2
                     #endregion
 
                     if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
-                    ImGui.PopStyleVar();
                     ImGui.EndTable();
 
                 }
-                ImGui.EndChild();
+                // Always pop whichever CellPadding style is currently active:
+                // - If BeginTable failed, this pops the original zero-padding push.
+                // - If BeginTable succeeded and later swapped padding, this pops the replacement push.
+                ImGui.PopStyleVar();
             }
+            ImGui.EndChild();    // MUST always be called.
             ImGui.PopStyleVar(); // WindowPadding.
-
             ImGui.EndGroup();
         }
 
@@ -2408,9 +2418,13 @@ namespace CastleWallsMk2
             ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing,   new Vector2(style.ItemSpacing.X, 0f));
 
             // Scrollable list region.
-            if (ImGui.BeginChild("playerlist_scroll",
-                                 new Vector2(0, childH),
-                                 ImGuiChildFlags.Borders /* , ImGuiWindowFlags.AlwaysVerticalScrollbar */ ))
+            bool childOpen = ImGui.BeginChild(
+                "playerlist_scroll",
+                new Vector2(0, childH),
+                ImGuiChildFlags.Borders /* , ImGuiWindowFlags.AlwaysVerticalScrollbar */
+            );
+
+            if (childOpen)
             {
                 // Slightly increase the font size for all children in this frame.
                 ImGui.SetWindowFontScale(1.10f); // 1.0 = default.
@@ -12189,7 +12203,7 @@ namespace CastleWallsMk2
         }
         #endregion
 
-        #region Helpers: Size Tracking & Splitter
+        #region Helpers: Window Placement / Size Tracking / Splitter
 
         // Title shows version + FPS + current visibility toggle text.
         // NOTE: We append a stable ID after "###" in Draw() so the window identity never changes

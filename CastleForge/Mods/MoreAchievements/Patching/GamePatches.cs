@@ -1113,6 +1113,8 @@ namespace MoreAchievements
             /// <summary>
             /// Find a HUD icon in either CustomIcons\Custom or CustomIcons\Steam
             /// matching the given API name (e.g. "ACH_DAYS_730.png").
+            /// Searches the preferred folder first, then the fallback folder,
+            /// and supports files stored in nested difficulty sub-folders.
             /// </summary>
             private static string FindHudIconPath(string apiName, bool isCustom)
             {
@@ -1120,17 +1122,40 @@ namespace MoreAchievements
                     return null;
 
                 var baseRoot = GetIconsRootBase();
-                var subFolder = isCustom ? "Custom" : "Steam";
-                var folder = Path.Combine(baseRoot, subFolder);
+                var primaryFolder   = Path.Combine(baseRoot, isCustom ? "Custom" : "Steam");
+                var secondaryFolder = Path.Combine(baseRoot, isCustom ? "Steam" : "Custom");
 
-                if (!Directory.Exists(folder))
-                    return null;
-
-                foreach (var ext in s_iconExts)
+                foreach (var folder in new[] { primaryFolder, secondaryFolder })
                 {
-                    var p = Path.Combine(folder, apiName + ext);
-                    if (File.Exists(p))
-                        return p;
+                    if (!Directory.Exists(folder))
+                        continue;
+
+                    // 1) Preserve the old fast path: root-only lookup.
+                    foreach (var ext in s_iconExts)
+                    {
+                        var p = Path.Combine(folder, apiName + ext);
+                        if (File.Exists(p))
+                            return p;
+                    }
+
+                    // 2) Also search nested folders such as Custom\Easy, Custom\Hard, etc.
+                    foreach (var ext in s_iconExts)
+                    {
+                        try
+                        {
+                            var match = Directory.EnumerateFiles(
+                                folder,
+                                apiName + ext,
+                                SearchOption.AllDirectories).FirstOrDefault();
+
+                            if (!string.IsNullOrEmpty(match))
+                                return match;
+                        }
+                        catch
+                        {
+                            // Ignore IO issues and keep searching other folders/extensions.
+                        }
+                    }
                 }
 
                 return null;

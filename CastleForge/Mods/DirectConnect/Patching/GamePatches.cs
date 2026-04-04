@@ -256,6 +256,11 @@ namespace DirectConnect
             #region UI Fields
 
             /// <summary>
+            /// Custom button used to launch a second CastleMiner Z instance.
+            /// </summary>
+            private static FrameButtonControl _launchSecondCmzButton;
+
+            /// <summary>
             /// Custom button used to launch the external dedicated server executable.
             /// </summary>
             private static FrameButtonControl _launchDedicatedButton;
@@ -442,11 +447,12 @@ namespace DirectConnect
             }
 
             /// <summary>
-            /// Anchors both custom buttons at the bottom-right of the current screen.
+            /// Anchors all custom buttons at the bottom-right of the current screen.
             ///
             /// Layout:
-            /// - Launch Dedicated (top)
-            /// - Direct Connect  (bottom)
+            /// - Launch Second CMZ (top)
+            /// - Launch Dedicated  (middle)
+            /// - Direct Connect    (bottom)
             ///
             /// Notes:
             /// - Runs repeatedly during update to survive screen scaling / resolution changes.
@@ -454,24 +460,27 @@ namespace DirectConnect
             /// </summary>
             private static void PlaceButtons(ChooseOnlineGameScreen screen)
             {
-                if (screen == null || _launchDedicatedButton == null || _directConnectButton == null)
+                if (screen                 == null ||
+                    _launchSecondCmzButton == null ||
+                    _launchDedicatedButton == null ||
+                    _directConnectButton   == null)
                     return;
 
                 if (!(_fiSelect?.GetValue(screen) is FrameButtonControl select) ||
                     !(_fiRefresh?.GetValue(screen) is FrameButtonControl refresh))
                     return;
 
+                StyleLikeStock(_launchSecondCmzButton, select, refresh);
                 StyleLikeStock(_launchDedicatedButton, select, refresh);
-                StyleLikeStock(_directConnectButton, select, refresh);
+                StyleLikeStock(_directConnectButton,   select, refresh);
 
                 Rectangle r = Screen.Adjuster.ScreenRect;
 
-                int gap = ButtonGapPX();
+                int gap     = ButtonGapPX();
                 int marginX = MarginXPX();
                 int marginY = MarginYPX();
 
-                // FrameButtonControl.Size is already scaled.
-                int width = _directConnectButton.Size.Width;
+                int width  = _directConnectButton.Size.Width;
                 int height = _directConnectButton.Size.Height;
 
                 int x = r.Right - width - marginX;
@@ -480,9 +489,13 @@ namespace DirectConnect
                 int yDirect = r.Bottom - height - marginY;
                 _directConnectButton.LocalPosition = new Point(x, yDirect);
 
-                // Top button = Launch Dedicated
-                int yLaunch = yDirect - height - gap;
-                _launchDedicatedButton.LocalPosition = new Point(x, yLaunch);
+                // Middle button = Launch Dedicated
+                int yLaunchDedicated = yDirect - height - gap;
+                _launchDedicatedButton.LocalPosition = new Point(x, yLaunchDedicated);
+
+                // Top button = Launch Second CMZ
+                int yLaunchSecond = yLaunchDedicated - height - gap;
+                _launchSecondCmzButton.LocalPosition = new Point(x, yLaunchSecond);
             }
             #endregion
 
@@ -505,6 +518,16 @@ namespace DirectConnect
             {
                 try
                 {
+                    if (_launchSecondCmzButton == null)
+                    {
+                        _launchSecondCmzButton = new FrameButtonControl
+                        {
+                            Text = "Launch Second CMZ",
+                            Font = CastleMinerZGame.Instance._medFont
+                        };
+                        _launchSecondCmzButton.Pressed += LaunchSecondCmzButton_Pressed;
+                    }
+
                     if (_launchDedicatedButton == null)
                     {
                         _launchDedicatedButton = new FrameButtonControl
@@ -524,6 +547,9 @@ namespace DirectConnect
                         };
                         _directConnectButton.Pressed += DirectConnectButton_Pressed;
                     }
+
+                    if (!__instance.Controls.Contains(_launchSecondCmzButton))
+                        __instance.Controls.Add(_launchSecondCmzButton);
 
                     if (!__instance.Controls.Contains(_launchDedicatedButton))
                         __instance.Controls.Add(_launchDedicatedButton);
@@ -633,6 +659,50 @@ namespace DirectConnect
             #endregion
 
             #region Button Handlers
+
+            /// <summary>
+            /// Handles clicks for the "Launch Second CMZ" button.
+            ///
+            /// Purpose:
+            /// - Launches a second instance of the currently running CastleMiner Z executable.
+            ///
+            /// Notes:
+            /// - If Steam or the game enforces single-instance behavior, the launch may still be blocked externally.
+            /// </summary>
+            private static void LaunchSecondCmzButton_Pressed(object sender, EventArgs e)
+            {
+                try
+                {
+                    string exePath = FindCurrentGameExe();
+
+                    if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                    {
+                        CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
+                            "Launch Second CMZ",
+                            "CastleMinerZ.exe could not be found.",
+                            false);
+                        return;
+                    }
+
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = exePath,
+                        WorkingDirectory = Path.GetDirectoryName(exePath),
+                        UseShellExecute = false
+                    };
+
+                    Process.Start(psi);
+
+                    Log($"Launched second CMZ instance: {exePath}.");
+                }
+                catch (Exception ex)
+                {
+                    CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
+                        "Launch Second CMZ",
+                        ex.Message,
+                        false);
+                }
+            }
 
             /// <summary>
             /// Handles clicks for the "Launch Dedicated" button.
@@ -834,6 +904,30 @@ namespace DirectConnect
                     Log($"CreateDirectAvailableSession error: {ex}.");
                     return null;
                 }
+            }
+            #endregion
+
+            #region Launch Helpers
+
+            /// <summary>
+            /// Finds the currently running CastleMinerZ executable so a second instance can be launched.
+            /// </summary>
+            private static string FindCurrentGameExe()
+            {
+                try
+                {
+                    using (Process p = Process.GetCurrentProcess())
+                    {
+                        if (!string.IsNullOrWhiteSpace(p.MainModule?.FileName))
+                            return p.MainModule.FileName;
+                    }
+                }
+                catch
+                {
+                }
+
+                string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CastleMinerZ.exe");
+                return File.Exists(fallback) ? fallback : null;
             }
             #endregion
 

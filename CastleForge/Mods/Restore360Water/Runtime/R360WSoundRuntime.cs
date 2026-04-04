@@ -126,11 +126,11 @@ namespace Restore360Water
                 if (R360W_Settings.EnableWaterSwim)  Load(R360W_Settings.WaterSwimFile);
 
                 _initialized = true;
-                Log("[Restore360Water] Sound runtime initialized.");
+                Log("Sound runtime initialized.");
             }
             catch (Exception ex)
             {
-                Log($"[Restore360Water] Sound init failed: {ex.Message}.");
+                Log($"Sound init failed: {ex.Message}.");
             }
         }
 
@@ -177,7 +177,7 @@ namespace Restore360Water
             }
             catch (Exception ex)
             {
-                Log($"[Restore360Water] Sound dispose failed: {ex.Message}.");
+                Log($"Sound dispose failed: {ex.Message}.");
             }
         }
         #endregion
@@ -301,11 +301,11 @@ namespace Restore360Water
                 }
                 catch (Exception ex)
                 {
-                    Log($"[Restore360Water] Failed creating swim loop instance: {ex.Message}.");
+                    Log($"Failed creating swim loop instance: {ex.Message}.");
                 }
             }
 
-            Log($"[Restore360Water] Loaded sound: {fileName}.");
+            Log($"Loaded sound: {fileName}.");
         }
 
         /// <summary>
@@ -340,7 +340,7 @@ namespace Restore360Water
             }
             catch (Exception ex)
             {
-                Log($"[Restore360Water] Failed to play {fileName}: {ex.Message}.");
+                Log($"Failed to play {fileName}: {ex.Message}.");
             }
         }
 
@@ -406,7 +406,7 @@ namespace Restore360Water
             }
             catch (Exception ex)
             {
-                Log($"[Restore360Water] Failed starting swim loop: {ex.Message}.");
+                Log($"Failed starting swim loop: {ex.Message}.");
             }
         }
 
@@ -452,7 +452,7 @@ namespace Restore360Water
             }
             catch (Exception ex)
             {
-                Log($"[Restore360Water] Failed stopping swim loop: {ex.Message}.");
+                Log($"Failed stopping swim loop: {ex.Message}.");
             }
         }
         #endregion

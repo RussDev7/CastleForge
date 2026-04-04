@@ -13,6 +13,7 @@ using DNA.CastleMinerZ.Net.Steam;
 using System.Collections.Generic;
 using DNA.Drawing.UI.Controls;
 using Microsoft.Xna.Framework;
+using DNA.Distribution.Steam;
 using System.Reflection.Emit;
 using DNA.Net.GamerServices;
 using DNA.CastleMinerZ.Net;
@@ -22,6 +23,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
 using DNA.CastleMinerZ;
+using DNA.Net.Lidgren;
 using DNA.Drawing.UI;
 using DNA.Drawing;
 using System.Linq;
@@ -38,9 +40,7 @@ using DNA;
 
 using static ModLoaderExt.GamePatches.ImpersonationGuard;
 using static ModLoaderExt.GamePatches.GamerTagFixer;
-using static ModLoader.LogSystem;
-using DNA.Net.Lidgren;
-using DNA.Distribution.Steam;       // For Log(...).
+using static ModLoader.LogSystem;       // For Log(...).
 
 namespace ModLoaderExt
 {
@@ -1168,6 +1168,90 @@ namespace ModLoaderExt
                 return null; // Swallow this specific draw-time null ref.
             }
         }
+        #endregion
+
+        /// <summary>
+        /// SAFE INVENTORY ITEM ATLAS RECOVERY
+        /// Hardens InventoryItem's static 2D icon atlas lifecycle against stale or disposed
+        /// RenderTarget2D instances that can survive across reload paths and later fail when
+        /// FinishInitialization(...) tries to bind them again.
+        ///
+        /// Behavior:
+        /// - Detects disposed or otherwise invalid cached atlas render targets before vanilla reuse.
+        /// - Clears stale atlas references so vanilla rebuilds them cleanly.
+        /// - Prevents non-fatal atlas reuse crashes caused by dead RenderTarget2D instances.
+        /// </summary>
+        #region Safe Inventory Item Atlas Recovery
+
+        #region Safe InventoryItem.FinishInitialization - Rebuild Disposed Atlases
+
+        [HarmonyPatch(typeof(InventoryItem), nameof(InventoryItem.FinishInitialization))]
+        internal static class InventoryItem_FinishInitialization_DisposedAtlasGuard
+        {
+            private static readonly FieldInfo F_2DImages =
+                AccessTools.Field(typeof(InventoryItem), "_2DImages");
+
+            private static readonly FieldInfo F_2DImagesLarge =
+                AccessTools.Field(typeof(InventoryItem), "_2DImagesLarge");
+
+            /// <summary>
+            /// Runs before InventoryItem.FinishInitialization(...) and clears stale atlas
+            /// render targets if they were already disposed, forcing vanilla to recreate them.
+            /// </summary>
+            [HarmonyPriority(HarmonyLib.Priority.First)]
+            [HarmonyPrefix]
+            private static void Prefix()
+            {
+                var small = F_2DImages?.GetValue(null) as RenderTarget2D;
+                var large = F_2DImagesLarge?.GetValue(null) as RenderTarget2D;
+
+                bool smallBad = IsDead(small);
+                bool largeBad = IsDead(large);
+
+                if (!smallBad && !largeBad)
+                    return;
+
+                try { if (small != null && !small.IsDisposed) small.Dispose(); } catch { }
+                try { if (large != null && !large.IsDisposed) large.Dispose(); } catch { }
+
+                try { F_2DImages?.SetValue(null, null); } catch { }
+                try { F_2DImagesLarge?.SetValue(null, null); } catch { }
+            }
+
+            /// <summary>
+            /// Returns true when the atlas render target exists but is no longer valid for reuse.
+            /// </summary>
+            private static bool IsDead(RenderTarget2D rt)
+            {
+                if (rt == null)
+                    return false;
+
+                try
+                {
+                    if (rt.IsDisposed)
+                        return true;
+
+                    var gd = rt.GraphicsDevice;
+                    if (gd == null)
+                        return true;
+
+                    _ = rt.Width;
+                    _ = rt.Height;
+
+                    return false;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return true;
+                }
+                catch
+                {
+                    return true;
+                }
+            }
+        }
+        #endregion
+
         #endregion
 
         #endregion

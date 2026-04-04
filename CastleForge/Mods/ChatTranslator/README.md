@@ -24,59 +24,14 @@ It also includes:
 
 ---
 
-## Image Placeholders
-
-### Hero / Showcase Banner
-![Preview](_Images/Preview.gif)
+### Auto Mode Example
+![AutoTranslate](_Images/AutoTranslate.gif)
 
 ### Manual Mode Example
 ![ManualMode](_Images/ManualMode.gif)
 
-### Auto Mode Example
-![AutoTranslate](_Images/AutoTranslate.gif)
-
-### Command Reference / Status Example
-
-<details>
-<summary><strong>Spoiler — example commands to show in the screenshot</strong></summary>
-
-```text
-/tstatus
-/baselang en
-/lang es
-/tclear
-/toff
-```
-
-</details>
-
-### Config Example
-
-<details>
-<summary><strong>Spoiler — default config to show in the screenshot</strong></summary>
-
-```ini
-# ChatTranslator - Configuration
-# Use ISO language codes like en, es, de, ru, zh, fr, etc.
-# Lines starting with ';' or '#' are comments.
-
-[Languages]
-; Your own baseline language (what you type/read in).
-BaseLanguage          = en
-
-; Optional default remote language when manual mode is used.
-; Leave empty to start with translation off.
-DefaultRemoteLanguage = 
-
-[Hotkeys]
-; Reload this config while in-game:
-ReloadConfig          = Ctrl+Shift+R
-```
-
-</details>
-
 ### Translation Log Example
-**Image Placeholder:** A screenshot of a live translation log file showing timestamped translated lines.
+![TranslatedLines](_Images/TranslatedLines.png)
 
 ---
 
@@ -556,18 +511,3 @@ On startup the mod:
 **ChatTranslator** is a compact but polished communication mod built for multilingual CastleMiner Z sessions. It keeps the interface simple for players while still offering a surprisingly flexible workflow for manual translation, auto-detected translation, one-off translated sends, config hot reloads, and live session logging.
 
 If you want a README that sells the mod honestly, this one’s strength is clear: **it makes mixed-language multiplayer conversations dramatically easier without forcing players out of the game.**
-
----
-
-## Suggested README Placement
-
-For your repo layout, this file fits here:
-
-```text
-CastleForge/
-└─ CastleForge/
-   └─ Mods/
-      └─ ChatTranslator/
-         └─ README.md
-```
-
