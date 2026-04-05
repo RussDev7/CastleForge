@@ -17,7 +17,10 @@ It does **not** add menus, hotkeys, chat commands, or gameplay systems. Its enti
 - avoid flicker/black overlay frames,
 - and do it in a way that preserves the game's expected screen-stack behavior.
 
-![Preview](_Images/Preview.png)
+<p align="center">
+  <img src="_Images/FastBootDemoWith.gif" alt="Without FastBoot" width="49%" />
+  <img src="_Images/FastBootDemoWithout.gif" alt="With FastBoot" width="49%" />
+</p>
 
 ---
 

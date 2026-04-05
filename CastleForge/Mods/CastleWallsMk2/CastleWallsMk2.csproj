@@ -72,13 +72,6 @@
       <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="ModLoader">
-      <HintPath>..\..\..\Build\$(Configuration)\ModLoader.dll</HintPath>
-    </Reference>
-    <Reference Include="ModLoaderExtensions, Version=1.0.0.0, Culture=neutral, processorArchitecture=x86">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\Build\$(Configuration)\!Mods\ModLoaderExtensions.dll</HintPath>
-    </Reference>
     <Reference Include="PacketDotNet">
       <HintPath>..\..\..\ReferenceAssemblies\Networking\PacketDotNet.dll</HintPath>
       <Private>False</Private>
@@ -175,6 +168,18 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Embedded\npcap-1.87.exe" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoaderExtensions\ModLoaderExtensions.csproj">
+      <Project>{1a6e69b6-4cea-4237-87de-483f6ead7df5}</Project>
+      <Name>ModLoaderExtensions</Name>
+      <Private>False</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ModLoaderFramework\ModLoader\ModLoader.csproj">
+      <Project>{9ee7a8ec-3c1b-4299-b737-052f5ebc55d8}</Project>
+      <Name>ModLoader</Name>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

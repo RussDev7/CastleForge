@@ -14,6 +14,12 @@ namespace ModLoader
     /// Minimal designer-lite form that displays temporary mod loading progress.
     /// Used by <see cref="ModLoadProgressWindow"/> while mods are being discovered
     /// and started on the loader thread.
+    ///
+    /// Window-behavior notes:
+    /// - Styled as a passive helper/tool window instead of a normal app window.
+    /// - Shown without activation so it does not steal focus from the game.
+    /// - Uses tool-window / no-activate extended styles to reduce interference
+    ///   with fullscreen startup and taskbar / Alt+Tab behavior.
     /// </summary>
     internal partial class ModLoadProgressForm : Form
     {
@@ -21,6 +27,35 @@ namespace ModLoader
         private Label       _countLabel;
         private Label       _itemLabel;
         private ProgressBar _progressBar;
+
+        /// <summary>
+        /// Native extended style that marks this form as a small helper/tool window
+        /// rather than a normal primary application window.
+        /// </summary>
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+
+        /// <summary>
+        /// Native extended style that prevents this form from activating when shown.
+        /// This helps avoid stealing focus or disturbing the game's startup window state.
+        /// </summary>
+        private const int WS_EX_NOACTIVATE = 0x08000000;
+
+        /// <summary>
+        /// Applies passive helper-window styles before the native HWND is created.
+        ///
+        /// This reduces the chance of the progress UI interfering with fullscreen
+        /// startup or causing Windows to treat it like a competing top-level window.
+        /// </summary>
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_TOOLWINDOW;
+                cp.ExStyle |= WS_EX_NOACTIVATE;
+                return cp;
+            }
+        }
 
         /// <summary>
         /// Initializes the temporary mod loading progress form.

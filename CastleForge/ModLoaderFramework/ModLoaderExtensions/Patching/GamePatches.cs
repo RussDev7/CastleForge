@@ -1314,12 +1314,14 @@ namespace ModLoaderExt
             #region FloodGuard - Runtime State + Timing Helpers (Config-Backed)
 
             // Config backed states.
+            private static bool FLOOD_GUARD_ENABLED            => FloodGuard_Settings.FloodGuardEnabled;
             private static int  PER_SENDER_MAX_PACKETS_PER_SEC => FloodGuard_Settings.PerSenderMaxPacketsPerSec;
             private static int  BLACKHOLE_MS                   => FloodGuard_Settings.BlackholeMs;
             private static bool DO_NOT_EXEMPT_HOST             => FloodGuard_Settings.DoNotExemptHost;
             private static int  ALLOWLIST_MAX_PACKETS_PER_SEC  => FloodGuard_Settings.AllowlistMaxPacketsPerSec;
-            private static int PICKUP_TOUCH_BURST              => FloodGuard_Settings.PickupTouchBurst;
-            private static int PICKUP_TOUCH_REFILL_MS          => FloodGuard_Settings.PickupTouchRefillMs;
+            private static bool PICKUP_THROTTLE_ENABLED        => FloodGuard_Settings.PickupThrottleEnabled;
+            private static int  PICKUP_TOUCH_BURST             => FloodGuard_Settings.PickupTouchBurst;
+            private static int  PICKUP_TOUCH_REFILL_MS         => FloodGuard_Settings.PickupTouchRefillMs;
 
             private sealed class SenderState
             {
@@ -1429,6 +1431,9 @@ namespace ModLoaderExt
             /// </summary>
             private static bool ShouldEnqueue(LocalNetworkGamer local, byte[] data, int offset, int length, NetworkGamer sender)
             {
+                if (!FLOOD_GUARD_ENABLED)
+                    return true;
+
                 if (local == null || sender == null)
                     return true;
 
@@ -1826,6 +1831,9 @@ namespace ModLoaderExt
                 [HarmonyPrefix]
                 private static bool Prefix(PickupEntity pickup)
                 {
+                    if (!PICKUP_THROTTLE_ENABLED)
+                        return true; // Let vanilla PlayerTouchedPickup run untouched.
+
                     if (pickup == null)
                         return false; // Nothing to do; skip original.
 

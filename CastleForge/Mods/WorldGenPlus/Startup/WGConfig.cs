@@ -67,11 +67,6 @@ namespace WorldGenPlus
         /// </summary>
         public int SurfaceMode = (int)WorldGenPlusBuilder.SurfaceGenMode.VanillaRings;
 
-        /// <summary>
-        /// Full biome type name used when <see cref="SurfaceMode"/> is set to Single.
-        /// </summary>
-        public string SingleSurfaceBiome = "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome";
-
         #endregion
 
         #region [Rings]
@@ -146,6 +141,15 @@ namespace WorldGenPlus
         /// Optional: add discovered custom biome types into the ring-random bag (weight=1).
         /// </summary>
         public bool AutoIncludeCustomBiomesForRandomRings = false;
+
+        #endregion
+
+        #region [SingleBiome]
+
+        /// <summary>
+        /// Full biome type name used when <see cref="SurfaceMode"/> is set to Single.
+        /// </summary>
+        public string SingleSurfaceBiome = "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome";
 
         #endregion
 
@@ -399,8 +403,7 @@ namespace WorldGenPlus
                 #region [Surface]
 
                 SurfaceMode = Clamp(ini.GetInt("Surface", "Mode", (int)WorldGenPlusBuilder.SurfaceGenMode.VanillaRings), 0, 3),
-                SingleSurfaceBiome = (ini.GetString("Surface", "SingleSurfaceBiome", "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome") ?? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome").Trim(),
-
+                
                 #endregion
 
                 #region [Rings]
@@ -423,9 +426,15 @@ namespace WorldGenPlus
 
                 #endregion
 
+                #region [SingleBiome]
+
+                SingleSurfaceBiome = (ini.GetString("SingleBiome", "SingleSurfaceBiome", "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome") ?? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome").Trim(),
+
+                #endregion
+
                 #region [Overlays]
 
-                EnableCrashSites         = ini.GetBool("Overlays", "CrashSites", true),
+                EnableCrashSites = ini.GetBool("Overlays", "CrashSites", true),
                 EnableCaves              = ini.GetBool("Overlays", "Caves", true),
                 EnableOre                = ini.GetBool("Overlays", "Ore", true),
                 EnableBiomeOverlayGuards = ini.GetBool("Overlays", "BiomeGuards", true),
@@ -891,24 +900,6 @@ namespace WorldGenPlus
         /// <summary>Static facade for <see cref="SurfaceMode"/> with clamping.</summary>
         public static int SurfaceModeValue { get { EnsureLoaded(); return _current.SurfaceMode; } set { EnsureLoaded(); _current.SurfaceMode = Clamp(value, 0, 3); } }
 
-        /// <summary>Static facade for <see cref="SingleSurfaceBiome"/> with null/blank fallback.</summary>
-        public static string SingleSurfaceBiomeValue
-        {
-            get
-            {
-                EnsureLoaded();
-                return string.IsNullOrWhiteSpace(_current.SingleSurfaceBiome)
-                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
-                    : _current.SingleSurfaceBiome;
-            }
-            set
-            {
-                EnsureLoaded();
-                _current.SingleSurfaceBiome = string.IsNullOrWhiteSpace(value)
-                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
-                    : value.Trim();
-            }
-        }
         #endregion
 
         #region [Rings]
@@ -1079,6 +1070,28 @@ namespace WorldGenPlus
         }
         #endregion
 
+        #region [SingleBiome]
+
+        /// <summary>Static facade for <see cref="SingleSurfaceBiome"/> with null/blank fallback.</summary>
+        public static string SingleSurfaceBiomeValue
+        {
+            get
+            {
+                EnsureLoaded();
+                return string.IsNullOrWhiteSpace(_current.SingleSurfaceBiome)
+                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
+                    : _current.SingleSurfaceBiome;
+            }
+            set
+            {
+                EnsureLoaded();
+                _current.SingleSurfaceBiome = string.IsNullOrWhiteSpace(value)
+                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
+                    : value.Trim();
+            }
+        }
+        #endregion
+
         #region [RandomRegions]
 
         public static bool AutoIncludeCustomBiomesForRandomRegionsValue { get { EnsureLoaded(); return _current.AutoIncludeCustomBiomesForRandomRegions; } set { EnsureLoaded(); _current.AutoIncludeCustomBiomesForRandomRegions = value; } }
@@ -1207,10 +1220,7 @@ namespace WorldGenPlus
 
                 #region [Surface]
 
-                SurfaceMode        = (WorldGenPlusBuilder.SurfaceGenMode)Clamp(_current.SurfaceMode, 0, 3),
-                SingleSurfaceBiome = string.IsNullOrWhiteSpace(_current.SingleSurfaceBiome)
-                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
-                    : _current.SingleSurfaceBiome,
+                SurfaceMode = (WorldGenPlusBuilder.SurfaceGenMode)Clamp(_current.SurfaceMode, 0, 3),
 
                 #endregion
 
@@ -1237,6 +1247,14 @@ namespace WorldGenPlus
                 RandomRingBiomeChoices = new List<string>(
                     _current.RandomRingBiomeChoices ?? new List<string>(DefaultRandomRingBiomeChoices())
                 ),
+                #endregion
+
+                #region [SingleBiome]
+
+                SingleSurfaceBiome = string.IsNullOrWhiteSpace(_current.SingleSurfaceBiome)
+                    ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
+                    : _current.SingleSurfaceBiome,
+
                 #endregion
 
                 #region [RandomRegions]
@@ -1430,9 +1448,6 @@ namespace WorldGenPlus
             #region [Surface]
 
             SurfaceMode = (int)s.SurfaceMode;
-            SingleSurfaceBiome = string.IsNullOrWhiteSpace(s.SingleSurfaceBiome)
-                ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
-                : s.SingleSurfaceBiome;
 
             #endregion
 
@@ -1460,6 +1475,14 @@ namespace WorldGenPlus
             RandomRingBiomeChoices  = (s.RandomRingBiomeChoices != null)
                 ? new List<string>(s.RandomRingBiomeChoices)
                 : new List<string>(DefaultRandomRingBiomeChoices());
+
+            #endregion
+
+            #region [SingleBiome]
+
+            SingleSurfaceBiome = string.IsNullOrWhiteSpace(s.SingleSurfaceBiome)
+                ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome"
+                : s.SingleSurfaceBiome;
 
             #endregion
 
@@ -1645,8 +1668,7 @@ namespace WorldGenPlus
 
             #region [Surface]
 
-            SurfaceMode        = (int)WorldGenPlusBuilder.SurfaceGenMode.VanillaRings;
-            SingleSurfaceBiome = "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome";
+            SurfaceMode = (int)WorldGenPlusBuilder.SurfaceGenMode.VanillaRings;
 
             #endregion
 
@@ -1672,6 +1694,12 @@ namespace WorldGenPlus
             RandomRingsVaryByPeriod               = true;
             AutoIncludeCustomBiomesForRandomRings = false;
             RandomRingBiomeChoices                = new List<string>(DefaultRandomRingBiomeChoices());
+
+            #endregion
+
+            #region [SingleBiome]
+
+            SingleSurfaceBiome = "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome";
 
             #endregion
 
@@ -1904,8 +1932,6 @@ namespace WorldGenPlus
                 ";   2 = Single Biomes (one biome everywhere)",
                 ";   3 = Random Regions (minecraft-like blobs)",
                 "Mode              = " + cfg.SurfaceMode.ToString(CultureInfo.InvariantCulture),
-                "; Full biome type name used ONLY when Mode=2 (Single).",
-                "SingleSurfaceBiome = " + (string.IsNullOrWhiteSpace(cfg.SingleSurfaceBiome) ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome" : cfg.SingleSurfaceBiome),
                 "; Region cell size in blocks (only used when Mode=3). Bigger = bigger biomes.",
                 "RegionCellSize    = " + cfg.RegionCellSize.ToString(CultureInfo.InvariantCulture),
                 "; Blend width at region borders in blocks (0 = hard edges).",
@@ -1962,6 +1988,12 @@ namespace WorldGenPlus
             var bag = (cfg.RandomSurfaceBiomeChoices == null || cfg.RandomSurfaceBiomeChoices.Count == 0)
                 ? new List<string>(DefaultRandomSurfaceBiomeChoices())
                 : cfg.RandomSurfaceBiomeChoices;
+
+            lines.Add("");
+            lines.Add("[SingleBiome]");
+            lines.Add("; Full biome type name used ONLY when Mode=2 (Single).");
+            lines.Add("SingleSurfaceBiome      = " + (string.IsNullOrWhiteSpace(cfg.SingleSurfaceBiome) ? "DNA.CastleMinerZ.Terrain.WorldBuilders.ClassicBiome" : cfg.SingleSurfaceBiome));
+            lines.Add("");
 
             lines.Add("[RandomRegions]");
             lines.Add("; Biome bag used ONLY when Surface.Mode = 3 (Random Regions).");
@@ -2222,7 +2254,6 @@ namespace WorldGenPlus
         #region [Surface]
 
         public WorldGenPlusBuilder.SurfaceGenMode SurfaceMode;
-        public string SingleSurfaceBiome;
 
         #endregion
 
@@ -2247,6 +2278,12 @@ namespace WorldGenPlus
 
         public bool RandomRingsVaryByPeriod;
         public List<string> RandomRingBiomeChoices = new List<string>();
+
+        #endregion
+
+        #region [SingleBiome]
+
+        public string SingleSurfaceBiome;
 
         #endregion
 

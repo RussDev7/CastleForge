@@ -38,7 +38,8 @@ namespace ModLoaderExt
     internal static class FloodGuard_Settings
     {
         // [FloodGuard].
-
+        
+        public static volatile bool FloodGuardEnabled         = true;
         public static volatile int  PerSenderMaxPacketsPerSec = 256;
         public static volatile int  BlackholeMs               = 30000;
         public static volatile bool DoNotExemptHost           = true;
@@ -59,6 +60,7 @@ namespace ModLoaderExt
         // Limits how many pickups the LOCAL client requests per second when sweeping large piles.
         // Burst:    Instant "grab" budget before throttling kicks in.
         // RefillMs: Refill rate (1 token per X ms). Example: 5 => (1000ms / 5ms) ~200/sec sustained.
+        public static volatile bool PickupThrottleEnabled     = true;
         public static volatile int PickupTouchBurst           = 25;
         public static volatile int PickupTouchRefillMs        = 5;
     }
@@ -150,6 +152,7 @@ namespace ModLoaderExt
         public bool HideMenuAd = true;
 
         // [FloodGuard].
+        public bool FloodGuardEnabled         = true;
         public int  PerSenderMaxPacketsPerSec = 256;
         public int  BlackholeMs               = 30000;
         public bool DoNotExemptHost           = true;
@@ -162,8 +165,9 @@ namespace ModLoaderExt
         };
 
         // [PickupThrottle].
-        public int PickupTouchBurst    = 25;
-        public int PickupTouchRefillMs = 1;
+        public bool PickupThrottleEnabled = true;
+        public int  PickupTouchBurst      = 25;
+        public int  PickupTouchRefillMs   = 1;
 
         // [ChatProtections].
         public bool GamertagSanitizerEnabled        = true;
@@ -207,6 +211,8 @@ namespace ModLoaderExt
                     "HideMenuAd                = true",
                     "",
                     "[FloodGuard]",
+                    "; Master toggle for inbound flood protection / blackhole logic.",
+                    "Enabled                   = true",
                     "; Per-sender inbound packet cap (1 second window).",
                     "; Don't set this too low unless you're OK dropping legit bursts.",
                     "PerSenderMaxPacketsPerSec = 256",
@@ -224,6 +230,8 @@ namespace ModLoaderExt
                     "AllowMessageTypes         = DNA.CastleMinerZ.Net.BroadcastTextMessage",
                     "",
                     "[PickupThrottle]",
+                    "; Master toggle for local pickup request throttling.",
+                    "Enabled             = true",
                     "; Client-side throttle for pickup requests (RequestPickupMessage).",
                     "; Burst:    Instant requests allowed before throttling.",
                     "; RefillMs: Refill rate (1 token per X ms). Example: 5 => (1000ms / 5ms) ~200/sec sustained.",
@@ -272,6 +280,7 @@ namespace ModLoaderExt
                 HideMenuAd = ini.GetBool("Ads", "HideMenuAd", true),
 
                 // [FloodGuard].
+                FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", true),
                 PerSenderMaxPacketsPerSec = Clamp(ini.GetInt("FloodGuard", "PerSenderMaxPacketsPerSec", 256), 1, 50000),
                 BlackholeMs               = Clamp(ini.GetInt("FloodGuard", "BlackholeMs", 30000), 0, 600000),
                 DoNotExemptHost           = ini.GetBool("FloodGuard", "DoNotExemptHost", true),
@@ -282,8 +291,9 @@ namespace ModLoaderExt
                                                                    "DNA.CastleMinerZ.Net.BroadcastTextMessage")),
 
                 // [PickupThrottle].
-                PickupTouchBurst    = Clamp(ini.GetInt("PickupThrottle", "PickupTouchBurst", 25), 1, 5000),
-                PickupTouchRefillMs = Clamp(ini.GetInt("PickupThrottle", "PickupTouchRefillMs", 5), 1, 60000),
+                PickupThrottleEnabled = ini.GetBool("PickupThrottle", "Enabled", true),
+                PickupTouchBurst      = Clamp(ini.GetInt("PickupThrottle", "PickupTouchBurst", 25), 1, 5000),
+                PickupTouchRefillMs   = Clamp(ini.GetInt("PickupThrottle", "PickupTouchRefillMs", 5), 1, 60000),
 
                 // [ChatProtections].
                 GamertagSanitizerEnabled        = ini.GetBool("ChatProtections", "GamertagSanitizerEnabled", true),
@@ -335,6 +345,7 @@ namespace ModLoaderExt
             AdsConfig.HideMenuAd = HideMenuAd;
 
             // [FloodGuard].
+            FloodGuard_Settings.FloodGuardEnabled         = FloodGuardEnabled;
             FloodGuard_Settings.PerSenderMaxPacketsPerSec = PerSenderMaxPacketsPerSec;
             FloodGuard_Settings.BlackholeMs               = BlackholeMs;
             FloodGuard_Settings.DoNotExemptHost           = DoNotExemptHost;
@@ -344,8 +355,9 @@ namespace ModLoaderExt
             FloodGuard_Settings.AllowMessageTypes         = AllowMessageTypes ?? Array.Empty<string>();
 
             // [PickupThrottle].
-            FloodGuard_Settings.PickupTouchBurst    = PickupTouchBurst;
-            FloodGuard_Settings.PickupTouchRefillMs = PickupTouchRefillMs;
+            FloodGuard_Settings.PickupThrottleEnabled = PickupThrottleEnabled;
+            FloodGuard_Settings.PickupTouchBurst      = PickupTouchBurst;
+            FloodGuard_Settings.PickupTouchRefillMs   = PickupTouchRefillMs;
 
             // IMPORTANT: allowlist type list changed -> message-id cache must be rebuilt.
             try { GamePatches.Patch_LocalNetworkGamer_FloodGuard.InvalidateAllowlistCache(); } catch { }
@@ -371,19 +383,37 @@ namespace ModLoaderExt
         /// <summary>
         /// Updates FloodGuard numeric/bool keys on disk (preserves comments + unrelated lines).
         /// </summary>
-        public static void UpdateFloodGuardConfig(int perSenderMaxPacketsPerSec, int blackholeMs, bool doNotExemptHost, int allowlistMaxPacketsPerSec)
+        public static void UpdateFloodGuardConfig(bool enabled, int perSenderMaxPacketsPerSec, int blackholeMs, bool doNotExemptHost, int allowlistMaxPacketsPerSec)
         {
             LoadOrCreate();
 
             var lines = new List<string>(File.ReadAllLines(ConfigPath));
 
             /// [FloodGuard]
+            UpsertIniKey(lines, "FloodGuard",          "Enabled",                   enabled ? "true" : "false", 26);
             UpsertIniKey(lines, "FloodGuard",          "PerSenderMaxPacketsPerSec", perSenderMaxPacketsPerSec.ToString(CultureInfo.InvariantCulture), 26);
             UpsertIniKey(lines, "FloodGuard",          "BlackholeMs",               blackholeMs.ToString(CultureInfo.InvariantCulture), 26);
             UpsertIniKey(lines, "FloodGuard",          "DoNotExemptHost",           doNotExemptHost ? "true" : "false", 26);
 
             /// [FloodGuardAllowlist]
             UpsertIniKey(lines, "FloodGuardAllowlist", "AllowlistMaxPacketsPerSec", allowlistMaxPacketsPerSec.ToString(CultureInfo.InvariantCulture), 26);
+
+            File.WriteAllLines(ConfigPath, lines.ToArray());
+        }
+
+        /// <summary>
+        /// Updates PickupThrottle numeric/bool keys on disk (preserves comments + unrelated lines).
+        /// </summary>
+        public static void UpdatePickupThrottleConfig(bool enabled, int burst, int refillMs)
+        {
+            LoadOrCreate();
+
+            var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+            // [PickupThrottle].
+            UpsertIniKey(lines, "PickupThrottle", "Enabled",             enabled ? "true" : "false", 26);
+            UpsertIniKey(lines, "PickupThrottle", "PickupTouchBurst",    burst.ToString(CultureInfo.InvariantCulture), 26);
+            UpsertIniKey(lines, "PickupThrottle", "PickupTouchRefillMs", refillMs.ToString(CultureInfo.InvariantCulture), 26);
 
             File.WriteAllLines(ConfigPath, lines.ToArray());
         }

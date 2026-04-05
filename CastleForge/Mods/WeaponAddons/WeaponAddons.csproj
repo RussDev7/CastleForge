@@ -64,9 +64,6 @@
       <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="ModLoader">
-      <HintPath>..\..\..\Build\$(Configuration)\ModLoader.dll</HintPath>
-    </Reference>
     <Reference Include="NLayer, Version=1.16.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\ReferenceAssemblies\Media\NLayer.dll</HintPath>

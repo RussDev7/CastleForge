@@ -4,19 +4,34 @@ Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
 */
 
+using DNA.CastleMinerZ.Utils.Threading;
+using DNA.CastleMinerZ;
 using System.Threading;
 using System;
 
 namespace ModLoader
 {
     /// <summary>
-    /// Custom AppDomainManager that injects the ModBootstrapComponent into the game's AppDomain.
-    /// Runs on domain initialization and attaches the mod loader component once the game instance is available.
+    /// Custom AppDomainManager that installs assembly resolution early, then waits for
+    /// CastleMinerZGame + TaskDispatcher to become available before attaching the
+    /// ModBootstrapComponent on the game's main thread.
+    ///
+    /// Threading notes:
+    /// - Initializes before the game is fully ready.
+    /// - Uses a background wait only for readiness detection.
+    /// - Marshals the actual component insertion onto the main thread.
+    /// - Prevents duplicate bootstrap attachment.
     /// </summary>
     public class ModDomainManager : AppDomainManager
     {
-        // Called by the CLR when a new AppDomain is created.
-        // Queues an attachment task to wait for the game instance to be ready.
+        private static int _attachQueued;    // Set once a main-thread attach task has been queued.
+        private static int _attachCompleted; // Set once bootstrap attachment has successfully completed.
+
+        /// <summary>
+        /// Called by the CLR when the AppDomain is created.
+        /// Installs assembly resolution, then begins a background readiness wait
+        /// that will safely marshal bootstrap attachment onto the game thread.
+        /// </summary>
         public override void InitializeNewDomain(AppDomainSetup appDomainInfo)
         {
             base.InitializeNewDomain(appDomainInfo);
@@ -26,34 +41,90 @@ namespace ModLoader
             string modsDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "!Mods");
             ModsAssemblyResolver.Install(modsDir);
 
-            // Asynchronously attempt to attach our mod bootstrap to the main game.
-            ThreadPool.QueueUserWorkItem(_ => TryAttach());
+            // Important:
+            // This background thread does NOT attach the component directly.
+            // It only waits for CastleMinerZGame + TaskDispatcher readiness, then queues
+            // the actual Components.Add(...) onto the game's main thread.
+            ThreadPool.QueueUserWorkItem(_ => WaitAndQueueAttach());
         }
 
-        // Attempts to locate the CastleMinerZGame instance and add the ModBootstrapComponent.
-        // Retries up to 100 times, sleeping briefly between attempts.
-        private void TryAttach()
+        /// <summary>
+        /// Waits briefly for both CastleMinerZGame.Instance and TaskDispatcher.Instance
+        /// to exist, then queues a main-thread attach task.
+        /// </summary>
+        private static void WaitAndQueueAttach()
         {
-            for (int i = 0; i < 100; i++)
+            for (int i = 0; i < 300; i++)
             {
+                // Another path may have already finished attachment.
+                if (Interlocked.CompareExchange(ref _attachCompleted, 0, 0) != 0)
+                    return;
+
                 try
                 {
-                    // Obtain the singleton game instance.
-                    var gameInstance = DNA.CastleMinerZ.CastleMinerZGame.Instance;
-                    if (gameInstance != null)
+                    CastleMinerZGame gameInstance = CastleMinerZGame.Instance;
+                    TaskDispatcher   dispatcher   = TaskDispatcher.Instance;
+
+                    if (gameInstance != null && dispatcher != null)
                     {
-                        // Add our bootstrap component into the game's component collection.
-                        gameInstance.Components.Add(new ModBootstrapComponent(gameInstance));
-                        break; // Success: Exit retry loop.
+                        // Another queued / retried path may have already completed.
+                        if (Interlocked.CompareExchange(ref _attachQueued, 1, 0) == 0)
+                        {
+                            dispatcher.AddTaskForMainThread(() =>
+                            {
+                                try
+                                {
+                                    // Another queued/retried path may have already completed.
+                                    if (Interlocked.CompareExchange(ref _attachCompleted, 0, 0) != 0)
+                                        return;
+
+                                    // Defensive duplicate guard:
+                                    // If bootstrap is already present, mark completion and stop.
+                                    if (HasBootstrapComponent(gameInstance))
+                                    {
+                                        Interlocked.Exchange(ref _attachCompleted, 1);
+                                        return;
+                                    }
+
+                                    // Main-thread-safe bootstrap insertion.
+                                    gameInstance.Components.Add(new ModBootstrapComponent(gameInstance));
+                                    Interlocked.Exchange(ref _attachCompleted, 1);
+                                }
+                                catch (Exception)
+                                {
+                                    // Allow a retry if something transient failed before completion.
+                                    // This clears only the "queued" flag; completion remains unset.
+                                    Interlocked.Exchange(ref _attachQueued, 0);
+                                }
+                            });
+                        }
+
+                        return;
                     }
                 }
                 catch
                 {
-                    // If any reflection or access fails, swallow and retry.
+                    // Very early startup can still be in flux.
+                    // Swallow and retry briefly.
                 }
 
-                Thread.Sleep(100); // Wait briefly before retrying to avoid spinning.
+                Thread.Sleep(50);
             }
+        }
+
+        /// <summary>
+        /// Checks whether the game's component collection already contains a bootstrap component.
+        /// This is only called from the queued main-thread task.
+        /// </summary>
+        private static bool HasBootstrapComponent(CastleMinerZGame gameInstance)
+        {
+            foreach (var component in gameInstance.Components)
+            {
+                if (component is ModBootstrapComponent)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

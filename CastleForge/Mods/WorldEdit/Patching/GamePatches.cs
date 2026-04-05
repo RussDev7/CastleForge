@@ -924,7 +924,7 @@ namespace WorldEdit
                 // Replicate everything *except* the health reset.
                 __instance.LocalPlayer.Dead = false;
                 __instance.LocalPlayer.FPSMode = true;
-                // NOTE: We do NOT set PlayerHealth.
+                __instance.PlayerHealth = 1f; // Keep respawn behavior intact.
 
                 // Return false to skip the original method completely.
                 return false;

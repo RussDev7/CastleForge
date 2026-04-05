@@ -81,6 +81,24 @@ namespace Restore360Water
         /// </summary>
         private Texture2D _normalMap;
 
+        /// <summary>
+        /// Last backbuffer width successfully used to build the reflection target.
+        /// Helps avoid unnecessary reflection target rebuild churn.
+        /// </summary>
+        private int _lastReflectionWidth;
+
+        /// <summary>
+        /// Last backbuffer height successfully used to build the reflection target.
+        /// Helps detect real screen-size changes versus normal frame-to-frame draws.
+        /// </summary>
+        private int _lastReflectionHeight;
+
+        /// <summary>
+        /// Earliest UTC time when reflection target recreation should be retried again
+        /// after a temporary lost-device or disposal failure.
+        /// </summary>
+        private DateTime _nextReflectionRetryUtc = DateTime.MinValue;
+
         #endregion
 
         #region Public Accessors
@@ -218,7 +236,7 @@ namespace Restore360Water
             bool drawingReflection = CastleMinerZGame.Instance?.DrawingReflection == true;
 
             // Never recreate/dispose the reflection RT during the reflection pass itself.
-            EnsureResources(device, allowReflectionRecreate: !drawingReflection);
+            EnsureResources(device, allowReflectionRecreate: false);
 
             if (_effect == null || _reflectionTexture == null || _normalMap == null)
                 return;
@@ -280,8 +298,8 @@ namespace Restore360Water
             device.DrawPrimitives(PrimitiveType.TriangleList, 0, 2);
 
             device.DepthStencilState = DepthStencilState.Default;
-            device.BlendState = oldBlend;
-            device.RasterizerState = oldRaster;
+            device.BlendState        = oldBlend;
+            device.RasterizerState   = oldRaster;
 
             base.Draw(device, gameTime, view, projection);
         }
@@ -289,13 +307,22 @@ namespace Restore360Water
 
         #region Resource Setup / Recovery
 
+        #region Shared Resource Setup
+
         /// <summary>
-        /// Ensures the shader effect, reflection target, and normal map are available.
+        /// Ensures the water shader, reflection target, and normal map are ready for use.
+        ///
+        /// Flow:
+        /// - Resolve the active GraphicsDevice.
+        /// - Lazily load the WaterEffect shader if needed.
+        /// - Refresh disposed texture references.
+        /// - Optionally heal the reflection target only when explicitly allowed.
+        /// - Bind the normal map to the shader when possible.
         ///
         /// Notes:
-        /// - Attempts to use the provided device first, then cached device, then game device.
-        /// - Recreates the normal map if it became disposed.
-        /// - Uses a generated fallback normal map if the mod texture cannot be loaded.
+        /// - This method should stay lightweight during normal draw paths.
+        /// - Reflection target recreation is intentionally gated so draw-time code
+        ///   does not aggressively rebuild GPU resources during unstable device states.
         /// </summary>
         private void EnsureResources(GraphicsDevice device, bool allowReflectionRecreate)
         {
@@ -315,7 +342,11 @@ namespace Restore360Water
                 }
             }
 
-            EnsureReflectionTarget(gd, allowReflectionRecreate);
+            if (IsDisposed(_reflectionTexture))
+                _reflectionTexture = null;
+
+            if (allowReflectionRecreate && NeedsReflectionTargetSync(gd))
+                TryEnsureReflectionTargetReady(gd);
 
             if (IsDisposed(_normalMap))
                 _normalMap = null;
@@ -340,6 +371,90 @@ namespace Restore360Water
             }
             catch { }
         }
+        #endregion
+
+        #region Reflection Target Health / Retry
+
+        /// <summary>
+        /// Returns true when the reflection render target is missing, disposed, or
+        /// no longer matches the current backbuffer size.
+        ///
+        /// Notes:
+        /// - This is a cheap health check used by safe runtime recovery paths.
+        /// - No GPU resources are created here.
+        /// </summary>
+        public bool NeedsReflectionTargetSync(GraphicsDevice gd)
+        {
+            gd = gd ?? _graphicsDevice ?? CastleMinerZGame.Instance?.GraphicsDevice;
+            if (gd == null || gd.PresentationParameters == null)
+                return false;
+
+            int width  = gd.PresentationParameters.BackBufferWidth;
+            int height = gd.PresentationParameters.BackBufferHeight;
+
+            if (width <= 0 || height <= 0)
+                return false;
+
+            if (_reflectionTexture == null || IsDisposed(_reflectionTexture))
+                return true;
+
+            return _reflectionTexture.Width != width || _reflectionTexture.Height != height;
+        }
+
+        /// <summary>
+        /// Attempts to ensure the reflection render target exists and matches the
+        /// current backbuffer size without surfacing temporary device instability
+        /// as repeated hard failures.
+        ///
+        /// Flow:
+        /// - Resolve the active GraphicsDevice.
+        /// - Validate backbuffer dimensions.
+        /// - Respect retry throttling after recent lost-device failures.
+        /// - Attempt reflection target recreation only when needed.
+        /// - Defer retries briefly when the device is temporarily unavailable.
+        ///
+        /// Returns:
+        /// - true when a valid reflection render target is available.
+        /// - false when recovery should be retried on a later stable frame.
+        /// </summary>
+        public bool TryEnsureReflectionTargetReady(GraphicsDevice gd)
+        {
+            gd = gd ?? _graphicsDevice ?? CastleMinerZGame.Instance?.GraphicsDevice;
+            if (gd == null || gd.PresentationParameters == null)
+                return false;
+
+            int width  = gd.PresentationParameters.BackBufferWidth;
+            int height = gd.PresentationParameters.BackBufferHeight;
+
+            if (width <= 0 || height <= 0)
+                return false;
+
+            if (DateTime.UtcNow < _nextReflectionRetryUtc)
+                return _reflectionTexture != null && !IsDisposed(_reflectionTexture);
+
+            try
+            {
+                EnsureReflectionTarget(gd, allowReflectionRecreate: true);
+                _nextReflectionRetryUtc = DateTime.MinValue;
+                return _reflectionTexture != null && !IsDisposed(_reflectionTexture);
+            }
+            catch (DeviceLostException)
+            {
+                _nextReflectionRetryUtc = DateTime.UtcNow.AddMilliseconds(750);
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
+                _nextReflectionRetryUtc = DateTime.UtcNow.AddMilliseconds(750);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _nextReflectionRetryUtc = DateTime.UtcNow.AddSeconds(1);
+                Log($"Reflection target rebuild deferred: {ex.GetType().Name}: {ex.Message}.");
+                return false;
+            }
+        }
 
         /// <summary>
         /// Ensures the reflection render target exists and matches the current screen size.
@@ -350,8 +465,14 @@ namespace Restore360Water
         /// </summary>
         private void EnsureReflectionTarget(GraphicsDevice gd, bool allowReflectionRecreate)
         {
-            int width  = Math.Max(1, gd.PresentationParameters.BackBufferWidth);
-            int height = Math.Max(1, gd.PresentationParameters.BackBufferHeight);
+            if (gd == null || gd.PresentationParameters == null)
+                return;
+
+            int width = gd.PresentationParameters.BackBufferWidth;
+            int height = gd.PresentationParameters.BackBufferHeight;
+
+            if (width <= 0 || height <= 0)
+                return;
 
             bool recreate =
                 _reflectionTexture == null         ||
@@ -367,15 +488,22 @@ namespace Restore360Water
 
             try
             {
-                newTarget = new RenderTarget2D(gd, width, height, true, SurfaceFormat.Color, DepthFormat.Depth16);
+                newTarget = new RenderTarget2D(
+                    gd,
+                    width,
+                    height,
+                    true,
+                    SurfaceFormat.Color,
+                    DepthFormat.Depth16);
 
                 gd.SetRenderTarget(newTarget);
                 gd.Clear(Color.Black);
                 gd.SetRenderTarget(null);
 
-                _reflectionTexture = newTarget;
+                _reflectionTexture    = newTarget;
+                _lastReflectionWidth  = width;
+                _lastReflectionHeight = height;
 
-                // Retarget any existing reflection CameraView before the old RT is disposed.
                 GamePatches.SyncReflectionViewTarget(_reflectionTexture);
             }
             catch
@@ -399,6 +527,8 @@ namespace Restore360Water
         {
             EnsureReflectionTarget(gd, allowReflectionRecreate: true);
         }
+        #endregion
+
         #endregion
 
         #region Disposal Guards

@@ -11,6 +11,7 @@
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Bonus quality-of-life tweaks](#bonus-quality-of-life-tweaks)
 - [Overlay tabs](#overlay-tabs)
 - [Main tab](#main-tab)
 - [Editors tab](#editors-tab)
@@ -145,6 +146,39 @@ The main config file is:
 | `GeoConnectTimeoutMs` | Geo-IP connect timeout | `1500` |
 | `GeoReadTimeoutMs` | Geo-IP read timeout | `1500` |
 | `RemoveMaxWorldHeight` | Removes the vanilla max-height clamp | `true` |
+
+## Bonus quality-of-life tweaks
+
+CastleWallsMk2 also includes a handful of smaller quality-of-life improvements that make the base game feel less restrictive and more convenient during normal play.
+
+#### Included tweaks
+
+- **Improved text input support**
+  - restores **Ctrl+V paste** in text boxes
+  - allows a wider range of printable characters instead of the stricter vanilla input filter
+  - still blocks raw control characters to keep text input safe and clean
+
+- **Teleport stays visible in the vanilla menu**
+  - keeps the **Teleport** option in its normal vanilla slot
+  - prevents it from disappearing in cases where vanilla would normally hide it, such as certain mode/difficulty combinations
+
+- **Removes the PvP restriction from “Teleport To Player”**
+  - keeps the normal **online-only** requirement
+  - removes the extra PvP visibility gate so the option is available more consistently
+
+- **Optional max world height removal**
+  - can remove the vanilla world-height ceiling
+  - controlled through config with `RemoveMaxWorldHeight = true`
+
+- **Config hot-reload shortcut**
+  - supports reloading the mod config in-game without restarting
+  - default hotkey: `Ctrl+Shift+R`
+
+#### Why it matters
+
+These tweaks are not flashy headline features, but they make CastleWallsMk2 smoother to use day to day by improving text entry, reducing menu friction, keeping teleport options available, and making config iteration faster.
+
+![QualityOfLife](_Images/QualityOfLife.png)
 
 ### Theme options
 

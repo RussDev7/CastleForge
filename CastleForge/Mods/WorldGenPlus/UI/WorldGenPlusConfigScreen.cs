@@ -312,26 +312,6 @@ namespace WorldGenPlus
                     WGConfig.Save();
                 }
             });
-
-            _rows.Add(new Row
-            {
-                Key         = "SingleSurfaceBiome",
-                Desc        = "Mode=2 only. Biome used everywhere in Single mode. Left/Right cycles biome type.",
-                GetText     = () => "Single Biome: " + ShortBiome(WGConfig.SingleSurfaceBiomeValue),
-                OnLeftRight = dir =>
-                {
-                    var choices = GetBiomeChoices();
-                    if (choices == null || choices.Length == 0)
-                        return;
-
-                    int cur = IndexOf(choices, WGConfig.SingleSurfaceBiomeValue);
-                    cur = (cur + dir) % choices.Length;
-                    if (cur < 0) cur += choices.Length;
-
-                    WGConfig.SingleSurfaceBiomeValue = choices[cur];
-                    WGConfig.Save();
-                }
-            });
             #endregion
 
             _rows.Add(Spacer());
@@ -576,6 +556,32 @@ namespace WorldGenPlus
                 Desc     = "If ON, each repeated ring period gets new random biomes. If OFF, random picks repeat every period.",
                 GetText  = () => "Ring Random: Vary By Period: " + (WGConfig.RandomRingsVaryByPeriodValue ? "ON" : "OFF"),
                 OnSelect = () => { WGConfig.RandomRingsVaryByPeriodValue = !WGConfig.RandomRingsVaryByPeriodValue; WGConfig.Save(); }
+            });
+            #endregion
+
+            _rows.Add(Spacer());
+            _rows.Add(Header("Single Surface"));
+
+            #region [SingleBiome]
+
+            _rows.Add(new Row
+            {
+                Key         = "SingleSurfaceBiome",
+                Desc        = "Mode=2 only. Biome used everywhere in Single mode. Left/Right cycles biome type.",
+                GetText     = () => "Single Biome: " + ShortBiome(WGConfig.SingleSurfaceBiomeValue),
+                OnLeftRight = dir =>
+                {
+                    var choices = GetBiomeChoices();
+                    if (choices == null || choices.Length == 0)
+                        return;
+
+                    int cur = IndexOf(choices, WGConfig.SingleSurfaceBiomeValue);
+                    cur = (cur + dir) % choices.Length;
+                    if (cur < 0) cur += choices.Length;
+
+                    WGConfig.SingleSurfaceBiomeValue = choices[cur];
+                    WGConfig.Save();
+                }
             });
             #endregion
 

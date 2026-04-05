@@ -597,9 +597,26 @@ namespace Restore360Water
 
                 if (!stateChanged)
                 {
-                    // Still keep reflection scene wiring healthy across window resize/maximize.
-                    if (gs != null && R360W_Settings.Enabled && R360W_Settings.AttachWaterPlane && R360W_Settings.EnableReflection)
-                        EnsureWaterSceneAttached(gs);
+                    if (gs != null && biomeHasWater && R360W_Settings.Enabled && R360W_Settings.AttachWaterPlane)
+                    {
+                        var plane = R360WWaterPlane.Instance;
+
+                        bool planeMissing =
+                            plane == null ||
+                            !ReferenceEquals(plane.Parent, gs.mainScene);
+
+                        if (planeMissing || !_waterSceneAttached)
+                        {
+                            EnsureWaterSceneAttached(gs);
+                        }
+                        else if (R360W_Settings.EnableReflection)
+                        {
+                            GraphicsDevice gd = game?.GraphicsDevice;
+
+                            if (plane != null && plane.NeedsReflectionTargetSync(gd))
+                                plane.TryEnsureReflectionTargetReady(gd);
+                        }
+                    }
 
                     return;
                 }
@@ -795,14 +812,18 @@ namespace Restore360Water
                     return;
 
                 EnsureWaterPlaneExists();
-                if (R360WWaterPlane.Instance == null)
+
+                R360WWaterPlane plane = R360WWaterPlane.Instance;
+                if (plane == null)
                     return;
 
-                if (R360WWaterPlane.Instance.Parent != null && R360WWaterPlane.Instance.Parent != gameScreen.mainScene)
-                    R360WWaterPlane.Instance.RemoveFromParent();
+                if (plane.Parent != null && plane.Parent != gameScreen.mainScene)
+                    plane.RemoveFromParent();
 
-                if (!gameScreen.mainScene.Children.Contains(R360WWaterPlane.Instance))
-                    gameScreen.mainScene.Children.Add(R360WWaterPlane.Instance);
+                if (!gameScreen.mainScene.Children.Contains(plane))
+                    gameScreen.mainScene.Children.Add(plane);
+
+                _waterSceneAttached = ReferenceEquals(plane.Parent, gameScreen.mainScene);
 
                 if (!R360W_Settings.EnableReflection)
                 {
@@ -810,8 +831,16 @@ namespace Restore360Water
                     return;
                 }
 
-                // Ensure the RT is valid before any reflection view draws.
-                R360WWaterPlane.Instance.EnsureReflectionTargetReady(CastleMinerZGame.Instance?.GraphicsDevice);
+                GraphicsDevice gd = CastleMinerZGame.Instance?.GraphicsDevice;
+                if (!plane.TryEnsureReflectionTargetReady(gd))
+                {
+                    // Device is temporarily unavailable. Keep the plane alive and retry later.
+                    return;
+                }
+
+                RenderTarget2D target = plane.ReflectionTexture;
+                if (target == null)
+                    return;
 
                 ReflectionCamera reflectionCamera = null;
                 for (int i = 0; i < gameScreen.mainScene.Children.Count; i++)
@@ -832,14 +861,17 @@ namespace Restore360Water
                     return;
 
                 CameraView existingReflectionView = null;
-                bool       alreadyAdded           = false;
+                bool alreadyAdded = false;
+
                 for (int i = 0; i < sceneScreen.Views.Count; i++)
                 {
-                    if (!(sceneScreen.Views[i] is CameraView cv)) continue;
-                    if (object.ReferenceEquals(cv.Camera, reflectionCamera))
+                    if (!(sceneScreen.Views[i] is CameraView cv))
+                        continue;
+
+                    if (ReferenceEquals(cv.Camera, reflectionCamera))
                     {
                         existingReflectionView = cv;
-                        alreadyAdded           = true;
+                        alreadyAdded = true;
                         break;
                     }
                 }
@@ -848,18 +880,21 @@ namespace Restore360Water
                 {
                     CameraView reflectionView = new CameraView(
                         CastleMinerZGame.Instance,
-                        R360WWaterPlane.Instance.ReflectionTexture,
+                        target,
                         reflectionCamera,
                         GameScreen.FilterWorldGeo);
 
                     AttachPreDrawReflection(gameScreen, reflectionView);
                     sceneScreen.Views.Insert(0, reflectionView);
                 }
-                else
+                else if (!ReferenceEquals(existingReflectionView.Target, target))
                 {
-                    if (!ReferenceEquals(existingReflectionView.Target, R360WWaterPlane.Instance.ReflectionTexture))
-                        existingReflectionView.SetDestinationTarget(R360WWaterPlane.Instance.ReflectionTexture);
+                    existingReflectionView.SetDestinationTarget(target);
                 }
+            }
+            catch (DeviceLostException)
+            {
+                // Temporary D3D9/XNA lost-device state. Let the retry path recover later.
             }
             catch (Exception ex)
             {
@@ -1156,8 +1191,10 @@ namespace Restore360Water
                     // Hard clamp health so underwater death cannot drive HP negative.
                     if (__instance.PlayerHealth < 0f)
                         __instance.PlayerHealth = 0f;
+                    /*
                     else if (__instance.PlayerHealth > 1f)
                         __instance.PlayerHealth = 1f;
+                    */
 
                     // Keep oxygen in a sane range too.
                     if (__instance.PlayerOxygen < 0f)

@@ -27,6 +27,7 @@ using DNA.CastleMinerZ;
 using DNA.Drawing.UI;
 using DNA.Drawing;
 using System.Linq;
+using System.Text;
 using DNA.Timers;
 using HarmonyLib;                       // Harmony patching library.
 using DNA.Input;
@@ -1048,35 +1049,98 @@ namespace CastleWallsMk2
 
         #region QoL Patches
 
-        #region Remove Character Limitations
+        #region Remove Character Limitations + Paste Handling
 
         [HarmonyPatch(typeof(TextEditControl), "OnChar")]
-        internal static class TextEditControl_OnChar_AllowAnyChar
+        internal static class TextEditControl_OnChar_AllowAnyCharPlusPaste
         {
-            // Replace calls to Char.IsLetterOrDigit / IsPunctuation / IsWhiteSpace with "true".
-            // This effectively turns:
-            //   if (c != '\u0016' && (IsLetterOrDigit(c) || IsPunctuation(c) || IsWhiteSpace(c)) && maxLenOk).
-            // into:
-            //   if (c != '\u0016' && (true || true || true) && maxLenOk)  <=>  if (c != '\u0016' && maxLenOk).
+            /// <summary>
+            /// Restores Ctrl+V paste support for TextEditControl while still blocking
+            /// raw control characters from being inserted into the text box.
+            /// </summary>
+            [HarmonyPrefix]
+            static bool Prefix(TextEditControl __instance, char c)
+            {
+                // Ctrl+V arrives through the game's char pipeline as 0x16.
+                if (c != '\u0016')
+                    return true;
+
+                try
+                {
+                    if (!System.Windows.Forms.Clipboard.ContainsText())
+                        return false; // Consume Ctrl+V even if clipboard is empty.
+
+                    string clipboard = System.Windows.Forms.Clipboard.GetText();
+                    if (string.IsNullOrEmpty(clipboard))
+                        return false;
+
+                    // Keep it single-line and remove control junk.
+                    clipboard = clipboard.Replace("\r\n", " ")
+                                         .Replace('\r', ' ')
+                                         .Replace('\n', ' ')
+                                         .Replace('\t', ' ');
+
+                    clipboard = new string(clipboard.Where(ch => !char.IsControl(ch)).ToArray());
+
+                    if (clipboard.Length == 0)
+                        return false;
+
+                    var textBuilder = new StringBuilder(__instance.Text ?? string.Empty);
+                    int curPos      = Math.Max(0, Math.Min(__instance.CursorPos, textBuilder.Length));
+
+                    Rectangle textBounds = __instance.Frame.CenterRegion(__instance.ScreenBounds);
+
+                    foreach (char ch in clipboard)
+                    {
+                        if (__instance.MaxChars >= 0 && textBuilder.Length >= __instance.MaxChars)
+                            break;
+
+                        // Match vanilla behavior: only insert if the rendered text still fits.
+                        var test = new StringBuilder(textBuilder.ToString());
+                        test.Insert(curPos, ch);
+
+                        Vector2 newSize = __instance.Font.MeasureString(test) * __instance.Scale;
+                        if (newSize.X >= textBounds.Width)
+                            break;
+
+                        textBuilder.Insert(curPos, ch);
+                        curPos++;
+                    }
+
+                    __instance.Text      = textBuilder.ToString();
+                    __instance.CursorPos = curPos;
+                }
+                catch
+                {
+                    // Never let paste crash the UI.
+                }
+
+                return false; // We handled Ctrl+V ourselves.
+            }
+
+            /// <summary>
+            /// Broadens TextEditControl input acceptance from the vanilla
+            /// letter/digit/punctuation/whitespace gate to:
+            ///     !char.IsControl(c)
+            /// so printable symbols and wider Unicode text can be entered
+            /// without allowing escape/control characters into the buffer.
+            /// </summary>
+            [HarmonyTranspiler]
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                var code = new List<CodeInstruction>(instructions);
-
-                // Method refs for identification.
                 var isLetterOrDigit = AccessTools.Method(typeof(char), nameof(char.IsLetterOrDigit), new[] { typeof(char) });
                 var isPunctuation   = AccessTools.Method(typeof(char), nameof(char.IsPunctuation),   new[] { typeof(char) });
                 var isWhiteSpace    = AccessTools.Method(typeof(char), nameof(char.IsWhiteSpace),    new[] { typeof(char) });
+                var isControl       = AccessTools.Method(typeof(char), nameof(char.IsControl),       new[] { typeof(char) });
 
-                for (int i = 0; i < code.Count; i++)
+                foreach (var ins in instructions)
                 {
-                    var ins = code[i];
-
                     if (ins.Calls(isLetterOrDigit) || ins.Calls(isPunctuation) || ins.Calls(isWhiteSpace))
                     {
-                        // The IL stack at this point has the 'char' argument for the call.
-                        // Replace the call with: pop (discard arg), ldc.i4.1 (push true).
-                        yield return new CodeInstruction(OpCodes.Pop);      // Discard 'c'.
-                        yield return new CodeInstruction(OpCodes.Ldc_I4_1); // Push 'true'.
+                        // Replace each call with: !char.IsControl(c)
+                        yield return new CodeInstruction(OpCodes.Call, isControl);
+                        yield return new CodeInstruction(OpCodes.Ldc_I4_0);
+                        yield return new CodeInstruction(OpCodes.Ceq);
                         continue;
                     }
 

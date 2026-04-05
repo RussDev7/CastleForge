@@ -229,12 +229,9 @@ This mod also includes important behind-the-scenes work so long-term achievement
 
 </details>
 
-![AchievementStats](_Images/AchievementStats.png)
-![AchievementGrantHard](_Images/AchievementGrantHard.png)
-![CraftallitemsRemaining](_Images/CraftallitemsRemaining.png)
-
-<!-- ![MoreAchievements_Commands.png](Images/MoreAchievements_Commands.png) -->
-> **Image Placeholder:** A chat window screenshot showing `/achievement stats`, `/achievement grant hard`, and one of the completion-helper commands such as `/craftallitems remaining`.
+![AchievementStats](_Images/AchievementStats.gif)
+![AchievementGrantHard](_Images/AchievementGrantHard.gif)
+![CraftallitemsRemaining](_Images/CraftallitemsRemaining.gif)
 
 ## Configuration
 
@@ -338,9 +335,6 @@ ReloadConfig = Ctrl+Shift+R
 
 ![Config](_Images/Config.png)
 
-<!-- ![MoreAchievements_Config.png](Images/MoreAchievements_Config.png) -->
-> **Image Placeholder:** A screenshot of `MoreAchievements.Config.ini` open in a text editor with `CustomUnlockGameModes`, popup settings, and the reload hotkey highlighted.
-
 ## Custom icons and sound overrides
 
 MoreAchievements ships with bundled achievement art and also supports optional overrides/expansion through the extracted mod folder.
@@ -378,9 +372,6 @@ If present and enabled, the mod will prefer that sound over the stock `Award` cu
 ![CustomIcons](_Images/CustomIcons.png)
 ![CustomSounds](_Images/CustomSounds.png)
 
-<!-- ![MoreAchievements_IconsAndSound.png](Images/MoreAchievements_IconsAndSound.png) -->
-> **Image Placeholder:** A split screenshot or diagram showing the `CustomIcons` and `CustomSounds` folders, or a visual grid of several custom icons from each difficulty tier.
-
 ## Full custom achievement catalog
 
 MoreAchievements registers **69 custom achievements** across five difficulty tiers:
@@ -404,9 +395,6 @@ For a total of **100 achievements**!
 
 ![EasyTier](_Images/EasyTier.png)
 
-<!-- ![MoreAchievements_EasyTier.png](Images/MoreAchievements_EasyTier.png) -->
-> **Image Placeholder:** A browser screenshot focused on the Easy section, showing starter milestones and their icons.
-
 | Achievement | API Name | Requirement | Reward |
 |---|---|---|---|
 | First Plank | `ACH_CRAFT_WOODBLOCK` | Craft your first wood block. | +16 WoodBlock, +8 Stick. |
@@ -424,9 +412,6 @@ For a total of **100 achievements**!
 ### Normal (24)
 
 ![NormalTier](_Images/NormalTier.png)
-
-<!-- ![MoreAchievements_NormalTier.png](Images/MoreAchievements_NormalTier.png) -->
-> **Image Placeholder:** A browser screenshot focused on the Normal section, showing midgame combat, crafting, and exploration milestones.
 
 | Achievement | API Name | Requirement | Reward |
 |---|---|---|---|
@@ -459,9 +444,6 @@ For a total of **100 achievements**!
 
 ![HardTier](_Images/HardTier.png)
 
-<!-- ![MoreAchievements_HardTier.png](Images/MoreAchievements_HardTier.png) -->
-> **Image Placeholder:** A browser screenshot focused on the Hard section, showing long-run combat, travel, and crafting milestones.
-
 | Achievement | API Name | Requirement | Reward |
 |---|---|---|---|
 | Heavy Excavator | `ACH_BLOCKS_DUG_5000` | Dig 5,000 blocks of any type. | +1 IronPickAxe, +32 TNT, +16 C4. |
@@ -485,9 +467,6 @@ For a total of **100 achievements**!
 
 ![BrutalTier](_Images/BrutalTier.png)
 
-<!-- ![MoreAchievements_BrutalTier.png](Images/MoreAchievements_BrutalTier.png) -->
-> **Image Placeholder:** A browser screenshot focused on the Brutal section, emphasizing long-distance, high-kill, and long-survival achievements.
-
 | Achievement | API Name | Requirement | Reward |
 |---|---|---|---|
 | Thirty Days Strong | `ACH_DAYS_30_CUSTOM` | Survive a total of 30 in-game days. | +1 GoldPickAxe, +1 GoldSpade, +1 GoldAssultRifle, +512 IronBullets. |
@@ -506,9 +485,6 @@ For a total of **100 achievements**!
 
 ![InsaneTier](_Images/InsaneTier.png)
 
-<!-- ![MoreAchievements_InsaneTier.png](Images/MoreAchievements_InsaneTier.png) -->
-> **Image Placeholder:** A browser screenshot focused on the Insane section, especially the completionist and “master everything” goals.
-
 | Achievement | API Name | Requirement | Reward |
 |---|---|---|---|
 | Edge of the World | `ACH_MAXDIST_65536` | Cross a mysterious land made of lanterns. | +1 LaserDrill, +1 PrecisionLaser, +512 GoldBullets. |
@@ -518,6 +494,50 @@ For a total of **100 achievements**!
 | Completionist | `ACH_COMPLETE_ALL` | Unlock every achievement in CastleMiner Z. | +2 Haunted Chainsaw, +2 PrecisionLaser, +64 BloodStoneBlock, +64 SpaceRockInventory, +64 Slime, +64 Diamond, +128 DiamondWall, +512 GoldBullets. |
 | Hands-On Mastery | `ACH_TIMEHELD_ALLITEMS_1_MIN` | Hold every craftable item for 1 minute each. | +1 BloodstonePickAxe, +1 DiamondSpade, +1 DiamondAxe, +1 BloodStoneKnife, +64 BloodStoneBullets. |
 | Excavation Legend | `ACH_BLOCKS_DUG_50000` | Dig 50,000 blocks of any type. | +128 TNT, +64 C4, +16 GunPowder, +1 BloodStoneLaserSword. |
+
+### Vanilla (31)
+
+![VanillaTier](_Images/VanillaTier.png)
+
+| Category | Details |
+|---|---|
+| Source | Base game / vanilla CastleMiner Z |
+| Game version reviewed | `v1.9.9.8.5` source |
+| Total vanilla achievements | **31** |
+
+| Achievement | API Name | Requirement | Reward |
+|---|---|---|---|
+| Short Timer | `ACH_TIME_PLAYED_1` | Play online for 1 hour. | Platform unlock only. |
+| Veteren MinerZ | `ACH_TIME_PLAYED_10` | Play online for 10 hours. | Platform unlock only. |
+| MinerZ Potato | `ACH_TIME_PLAYED_100` | Play online for 100 hours. | Platform unlock only. |
+| First Contact | `ACH_DISTANCE_50` | Reach a max distance of 50 from the start point. | Platform unlock only. |
+| Leaving Home | `ACH_DISTANCE_200` | Reach a max distance of 200 from the start point. | Platform unlock only. |
+| Desert Crawler | `ACH_DISTANCE_1000` | Reach a max distance of 1000 from the start point. | Platform unlock only. |
+| Mountain Man | `ACH_DISTANCE_2300` | Reach a max distance of 2300 from the start point. | Platform unlock only. |
+| Deep Freeze | `ACH_DISTANCE_3000` | Reach a max distance of 3000 from the start point. | Platform unlock only. |
+| Hell On Earth | `ACH_DISTANCE_3600` | Reach a max distance of 3600 from the start point. | Platform unlock only. |
+| Around the World | `ACH_DISTANCE_5000` | Reach a max distance of 5000 from the start point. | Platform unlock only. |
+| Deep Digger | `ACH_DEPTH_20` | Travel down at least 20 depth. | Platform unlock only. |
+| Welcome To Hell | `ACH_DEPTH_40` | Travel down at least 40 depth. | Platform unlock only. |
+| Survived The Night | `ACH_DAYS_1` | Survive for 1 day. | Platform unlock only. |
+| A Week Later | `ACH_DAYS_7` | Survive for 7 days. | Platform unlock only. |
+| 28 Days Later | `ACH_DAYS_28` | Survive for 28 days. | Platform unlock only. |
+| Survivor | `ACH_DAYS_100` | Survive for 100 days. | Platform unlock only. |
+| 28 Weeks Later | `ACH_DAYS_196` | Survive for 196 days. | Platform unlock only. |
+| Anniversary | `ACH_DAYS_365` | Survive for 365 days. | Platform unlock only. |
+| Tinkerer | `ACH_CRAFTED_1` | Craft 1 item. | Platform unlock only. |
+| Crafter | `ACH_CRAFTED_100` | Craft 100 items. | Platform unlock only. |
+| Master Craftsman | `ACH_CRAFTED_1000` | Craft 1000 items. | Platform unlock only. |
+| Demolition Expert | `ACH_CRAFT_TNT` | Craft TNT at least once. | Platform unlock only. |
+| Self Defense | `ACH_TOTAL_KILLS_1` | Kill 1 enemy. | Platform unlock only. |
+| No Fear | `ACH_TOTAL_KILLS_100` | Kill 100 enemies. | Platform unlock only. |
+| Zombie Slayer | `ACH_TOTAL_KILLS_1000` | Kill 1000 enemies. | Platform unlock only. |
+| Dragon Slayer | `ACH_UNDEAD_DRAGON_KILLED` | Kill the Undead Dragon. | Platform unlock only. |
+| Alien Encounter | `ACH_ALIEN_ENCOUNTER` | Find an alien. | Platform unlock only. |
+| Alien Technology | `ACH_LASER_KILLS` | Kill an enemy with a laser weapon. | Platform unlock only. |
+| Air Defense | `ACH_GUIDED_MISSILE_KILL` | Kill a dragon with a guided missile. | Platform unlock only. |
+| Fire In The Hole | `ACH_TNT_KILL` | Kill an enemy with TNT. | Platform unlock only. |
+| Boom | `ACH_GRENADE_KILL` | Kill an enemy with a grenade. | Platform unlock only. |
 
 </details>
 
