@@ -32,21 +32,23 @@ namespace CastleWallsMk2
 
         public enum   Style { Classic, Light, Dark }
 
-        public Keys   ToggleKey                  { get; set; } = Keys.OemTilde;  // Default: '~'.
-        public Keys   FreeFlyToggleKey           { get; set; } = Keys.F6;        // Default: F6.
-        public string ReloadConfigHotkey         { get; set; } = "Ctrl+Shift+R"; // Default: Ctrl+Shift+R.
-        public bool   ShowMenuOnLaunch           { get; set; } = false;          // Default: Off.
-        public bool   RandomizeUsernameOnLaunch  { get; set; } = false;          // Default: Off.
-        public bool   StreamLogToFile            { get; set; } = true;           // Default: On.
-        public bool   ShowInGameUIFeedback       { get; set; } = true;           // Default: On.
-        public Style  Theme                      { get; set; } = Style.Dark;     // Default: Dark.
-        public float  Scale                      { get; set; } = 1.0f;           // Default: 1.0.
-        public string NetCapturePreferredAdapter { get; set; } = "";             // Note: Partial name match, e.g. "intel", "realtek".
-        public int    NetCapturePreferredIndex   { get; set; } = -1;             // Note: 0..N-1 from the device list, -1 = ignore.
-        public bool   NetCaptureHideOwnIp        { get; set; } = true;           // Default: On.
-        public int    GeoConnectTimeoutMs        { get; set; } = 1500;           // Default: 1.5s.
-        public int    GeoReadTimeoutMs           { get; set; } = 1500;           // Default: 1.5s.
-        public bool   RemoveMaxWorldHeight       { get; set; } = true;           // Default: On.
+        public Keys   ToggleKey                      { get; set; } = Keys.OemTilde;  // Default: '~'.
+        public Keys   FreeFlyToggleKey               { get; set; } = Keys.F6;        // Default: F6.
+        public string ReloadConfigHotkey             { get; set; } = "Ctrl+Shift+R"; // Default: Ctrl+Shift+R.
+        public bool   ShowMenuOnLaunch               { get; set; } = false;          // Default: Off.
+        public bool   RandomizeUsernameOnLaunch      { get; set; } = false;          // Default: Off.
+        public bool   StreamLogToFile                { get; set; } = true;           // Default: On.
+        public bool   ShowInGameUIFeedback           { get; set; } = true;           // Default: On.
+        public Style  Theme                          { get; set; } = Style.Dark;     // Default: Dark.
+        public float  Scale                          { get; set; } = 1.0f;           // Default: 1.0.
+        public string NetCapturePreferredAdapter     { get; set; } = "";             // Note: Partial name match, e.g. "intel", "realtek".
+        public int    NetCapturePreferredIndex       { get; set; } = -1;             // Note: 0..N-1 from the device list, -1 = ignore.
+        public bool   NetCaptureHideOwnIp            { get; set; } = true;           // Default: On.
+        public int    GeoConnectTimeoutMs            { get; set; } = 1500;           // Default: 1.5s.
+        public int    GeoReadTimeoutMs               { get; set; } = 1500;           // Default: 1.5s.
+        public bool   RemoveMaxWorldHeight           { get; set; } = true;           // Default: On.
+        public bool   PreserveTogglesWhenLeavingGame { get; set; } = false;          // Default: Off.
+        public bool   AllowOutOfGameSettingEdits     { get; set; } = false;          // Default: Off.
 
         #endregion
 
@@ -141,6 +143,12 @@ namespace CastleWallsMk2
                 if (dict.TryGetValue("RemoveMaxWorldHeight", out var ffMaxY))
                     cfg.RemoveMaxWorldHeight = string.Equals(ffMaxY, "true", StringComparison.OrdinalIgnoreCase);
 
+                if (dict.TryGetValue("PreserveTogglesWhenLeavingGame", out var keep))
+                    cfg.PreserveTogglesWhenLeavingGame = string.Equals(keep, "true", StringComparison.OrdinalIgnoreCase);
+
+                if (dict.TryGetValue("AllowOutOfGameSettingEdits", out var edit))
+                    cfg.AllowOutOfGameSettingEdits = string.Equals(edit, "true", StringComparison.OrdinalIgnoreCase);
+
                 // --- Theme ---
                 if (dict.TryGetValue("Theme", out var themeStr) &&
                     Enum.TryParse(themeStr, true, out Style parsedTheme))
@@ -226,6 +234,12 @@ namespace CastleWallsMk2
                     $"#   RemoveMaxWorldHeight = true|false",
                     $"#     - true  -> Removes the hard max-Y clamp (74/64) for the local player.",
                     $"#     - false -> Keeps vanilla max world height behavior.",
+                    $"#   PreserveTogglesWhenLeavingGame = true|false",
+                    $"#     - true  -> Keeps toggle states enabled when leaving a world/session.",
+                    $"#     - false -> Resets session/gameplay toggles when returning to menus.",
+                    $"#   AllowOutOfGameSettingEdits = true|false",
+                    $"#     - true  -> Allows editing stored setting values while not in a live game.",
+                    $"#     - false -> Locks gameplay-related setting edits until in-game.",
                     $"#",
                     $"# Saved: {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)}",
                     $"# ================================================================================",
@@ -278,6 +292,12 @@ namespace CastleWallsMk2
                     $"[World]",
                     $"; Remove the hard max-Y world clamp (74/64).",
                     $"RemoveMaxWorldHeight={(RemoveMaxWorldHeight ? "true" : "false")}",
+                    $"",
+                    $"[Session]",
+                    $"; Keep desired toggle states when leaving a world/session.",
+                    $"PreserveTogglesWhenLeavingGame={(PreserveTogglesWhenLeavingGame ? "true" : "false")}",
+                    $"; Allow editing desired settings while not currently in-game.",
+                    $"AllowOutOfGameSettingEdits={(AllowOutOfGameSettingEdits ? "true" : "false")}",
                 };
                 Directory.CreateDirectory(FolderPath);
                 File.WriteAllLines(ConfigPath, lines);

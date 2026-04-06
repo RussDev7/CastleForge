@@ -167,6 +167,7 @@ namespace CastleWallsMk2
         public static bool          _itemVortexTargetsUs;
         public static string        _ghostModeNameBackup;
         private static bool         _showStatsWindow;
+        public static bool          _rapidFireEnabled, _superGunStatsEnabled, _fullBrightEnabled; // Runtime-enabled states used for session teardown/reapply.
 
         public static bool      _godEnabled, _infiniteItemsEnabled, _infiniteDurabilityEnabled, _noKickEnabled, _noEnemiesEnabled, _noConsumeAmmo, _infiClipsEnabled, _flyEnabled,
                                 _noTargetEnabled, _tracersEnabled, _hitboxesEnabled, _playerAimbotEnabled, _dragonAimbotEnabled, _mobAimbotEnabled, _aimbotBulletDropEnabled,
@@ -2691,6 +2692,7 @@ namespace CastleWallsMk2
 
             Callbacks.OnFullBright = enabled =>
             {
+                _fullBrightEnabled = enabled;
                 try
                 {
                     // Toggle the _useFullBrightTiles bool.
@@ -3311,6 +3313,7 @@ namespace CastleWallsMk2
 
             Callbacks.OnSuperGunStats = enabled =>
             {
+                _superGunStatsEnabled = enabled;
                 WeaponExtensions.SetSuperGunStats(enabled);
                 SendLog($"Super Gun Stats: {enabled}");
             };
@@ -3355,6 +3358,7 @@ namespace CastleWallsMk2
 
             Callbacks.OnRapidFire = enabled =>
             {
+                _rapidFireEnabled = enabled;
                 WeaponExtensions.SetRapidFire(enabled);
                 SendLog($"Rapid Fire: {enabled}");
             };
@@ -3625,17 +3629,28 @@ namespace CastleWallsMk2
         /// </summary>
         public override void Tick(InputManager inputManager, GameTime gameTime)
         {
+            // Get the active config snapshot, loading defaults if one has not been cached yet.
+            var cfg = ModConfig.Current ?? ModConfig.LoadOrCreateDefaults();
+
             // Current tick time in milliseconds (used for per-feature delay gates).
             double nowMs = gameTime.TotalGameTime.TotalMilliseconds;
 
+            // Cache whether the player is currently inside an active game session.
             bool inGame = IsInGame();
 
             // Run queued actions on the game thread.
             MainThread.Pump();
 
+            // Reapply session-local runtime hooks once when entering or re-entering a live game.
+            if (inGame && !_wasInGame)
+            {
+                ReapplySessionLocalState();
+            }
+
             // One-time transition: Just LEFT the game -> clean up & disable features.
             if (!inGame && _wasInGame)
             {
+                // Always tear down session-local live hooks.
                 try { WeaponExtensions.SetRapidFire(false);     } catch { }
                 try { WeaponExtensions.SetSuperGunStats(false); } catch { }
 
@@ -3646,78 +3661,78 @@ namespace CastleWallsMk2
                         GameMessageManager.Instance?.UnSubscribe(GameMessageType.LocalPlayerFiredGun, MsgHandler);
                 } catch { }
 
-                // Turn off our runtime toggles so Tick won't try to act.
-                // (only add tick-based / patch-based bools here).
-                #region Runtime Toggles
+                // These are safer to turn off when no world is active.
+                try { BlockEspRenderer.Invalidate();                                                                         } catch { } // Ensure we clear the Block ESP cache.
+                if (GamePatches.XRayConfig.Enabled)                   try { GamePatches.XRayRuntime.SetEnabled(false);       } catch { } // Ensure we turn off the xray mod.
+                if (GamePatches.FullBrightRuntime.UseFullBrightTiles) try { GamePatches.FullBrightRuntime.SetEnabled(false); } catch { } // Ensure we turn off the full-bright mod.
 
-                /* Global */   _noConsumeAmmo
-                /* Tick   */ = _noEnemiesEnabled           = _noTargetEnabled          = _playerAimbotEnabled        = _dragonAimbotEnabled    = _mobAimbotEnabled           = _playerPositionEnabled   =
-                               _rideDragonEnabled          = _forceRespawnEnabled
-                /* Patch  */ = _infiniteItemsEnabled       = _tracersEnabled           = _hitboxesEnabled            = _noKickEnabled          = _vanishEnabled              = _godEnabled              =
-                               _pickupRangeEnabled         = _noGunCooldownEnabled     = _noGunRecoilEnabled         = _xrayEnabled            = _instantMineEnabled         = _rapidToolsEnabled       =
-                               _noMobBlockingEnabled       = _multiColorAmmoEnabled    = _multiColorRNGEnabled       = _shootBlocksEnabled     = _shootHostAmmoEnabled       = _shootGrenadeAmmoEnabled =
-                               _shootRocketAmmoEnabled     = _freezeLasersEnabled      = _extendLaserTimeEnabled     = _infiLaserPathEnabled   = _infiLaserBounceEnabled     = _explosiveLasersEnabled  =
-                               _noTPOnServerRestartEnabled = _corruptOnKickEnabled     = _projectileTuningEnabled    = _freeFlyCameraEnabled   = _noClipEnabled              = _shootBowAmmoEnabled     =
-                               _explodingOresEnabled       = _shootFireballAmmoEnabled = _rocketSpeedEnabled         = _gravityEnabled         = _disableInvRetrievalEnabled = _cameraXyzEnabled        =
-                               _muteEnabled                = _muteWarnOffenderEnabled  = _muteShowMessageEnabled     = _trailEnabled           = _trailPrivateEnabled        = _showerEnabled           =
-                               _dragonCounterEnabled       = _hatEnabled               = _bootsEnabled               = _rapidItemsEnabled      = _disableControlsEnabled     = _itemVortexEnabled       =
-                               _beaconModeEnabled          = _chaosModeEnabled         = _clockDiscordEnabled        = _dragonDiscordEnabled   = _hugEnabled                 = _noLavaVisualsEnabled    =
-                               _reliableFloodEnabled       = _blockEspEnabled          = _blockEspNoTraceEnabled     = _nametagsEnabled        = _infiClipsEnabled           = _spamTextEnabled         =
-                               _spamTextSudoEnabled        = _chaoticAimEnabled        = _disableItemPickupEnabled   = _rapidPlaceEnabled      = _sudoPlayerEnabled          = _doorSpamEnabled         =
-                               _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled           = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled
-                    = false;
+                // Reset states when config allows.
+                if (!cfg.PreserveTogglesWhenLeavingGame)
+                {
+                    // Turn off our runtime toggles so Tick won't try to act.
+                    // (only add tick-based / patch-based bools here).
+                    #region Runtime Toggles
 
-                // Disable TriState ticks.
-                /* Tick   */   _worldTimeState
-                    = TriState.Off;
+                    /* Global */   _noConsumeAmmo
+                    /* Tick   */ = _noEnemiesEnabled           = _noTargetEnabled          = _playerAimbotEnabled        = _dragonAimbotEnabled    = _mobAimbotEnabled           = _playerPositionEnabled   =
+                                   _rideDragonEnabled          = _forceRespawnEnabled
+                    /* Patch  */ = _infiniteItemsEnabled       = _tracersEnabled           = _hitboxesEnabled            = _noKickEnabled          = _vanishEnabled              = _godEnabled              =
+                                   _pickupRangeEnabled         = _noGunCooldownEnabled     = _noGunRecoilEnabled         = _xrayEnabled            = _instantMineEnabled         = _rapidToolsEnabled       =
+                                   _noMobBlockingEnabled       = _multiColorAmmoEnabled    = _multiColorRNGEnabled       = _shootBlocksEnabled     = _shootHostAmmoEnabled       = _shootGrenadeAmmoEnabled =
+                                   _shootRocketAmmoEnabled     = _freezeLasersEnabled      = _extendLaserTimeEnabled     = _infiLaserPathEnabled   = _infiLaserBounceEnabled     = _explosiveLasersEnabled  =
+                                   _noTPOnServerRestartEnabled = _corruptOnKickEnabled     = _projectileTuningEnabled    = _freeFlyCameraEnabled   = _noClipEnabled              = _shootBowAmmoEnabled     =
+                                   _explodingOresEnabled       = _shootFireballAmmoEnabled = _rocketSpeedEnabled         = _gravityEnabled         = _disableInvRetrievalEnabled = _cameraXyzEnabled        =
+                                   _muteEnabled                = _muteWarnOffenderEnabled  = _muteShowMessageEnabled     = _trailEnabled           = _trailPrivateEnabled        = _showerEnabled           =
+                                   _dragonCounterEnabled       = _hatEnabled               = _bootsEnabled               = _rapidItemsEnabled      = _disableControlsEnabled     = _itemVortexEnabled       =
+                                   _beaconModeEnabled          = _chaosModeEnabled         = _clockDiscordEnabled        = _dragonDiscordEnabled   = _hugEnabled                 = _noLavaVisualsEnabled    =
+                                   _reliableFloodEnabled       = _blockEspEnabled          = _blockEspNoTraceEnabled     = _nametagsEnabled        = _infiClipsEnabled           = _spamTextEnabled         =
+                                   _spamTextSudoEnabled        = _chaoticAimEnabled        = _disableItemPickupEnabled   = _rapidPlaceEnabled      = _sudoPlayerEnabled          = _doorSpamEnabled         =
+                                   _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled           = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled
+                        = false;
 
-                // Disable PlayerSelectScope ticks.
-                /* Tick   */   _shootBlockScope = _shootAmmoScope
-                    = PlayerSelectScope.Personal;
+                    // Disable TriState ticks.
+                    /* Tick   */   _worldTimeState
+                        = TriState.Off;
 
-                // Disable VanishSelectScope ticks.
-                /* Tick   */   _vanishScope
-                    = VanishSelectScope.InPlace;
+                    // Disable PlayerSelectScope ticks.
+                    /* Tick   */   _shootBlockScope = _shootAmmoScope
+                        = PlayerSelectScope.Personal;
 
-                // Disable PlayerTargetMode ticks.
-                /* Tick   */   _forceRespawnTargetMode  = _muteTargetMode          = _disableControlsTargetMode = _trailTargetMode      = _rapidItemsTargetMode = _showerTargetMode   =
-                               _hugTargetMode           = _reliableFloodTargetMode = _spamTextTargetMode        = _itemVortexTargetMode = _sudoPlayerTargetMode = _doorSpamTargetMode
-                    = PlayerTargetMode.None;
+                    // Disable VanishSelectScope ticks.
+                    /* Tick   */   _vanishScope
+                        = VanishSelectScope.InPlace;
 
-                // Reset NetworkIds ticks.
-                /* Tick   */   _forceRespawnTargetNetids  = _muteTargetNetids       = _disableControlsTargetNetids = _trailTargetNetids = _rapidItemsTargetNetids = _showerTargetNetids =
-                               _reliableFloodTargetNetids = _itemVortexTargetNetids = _doorSpamTargetNetids
-                    = new byte[0];
+                    // Disable PlayerTargetMode ticks.
+                    /* Tick   */   _forceRespawnTargetMode  = _muteTargetMode          = _disableControlsTargetMode = _trailTargetMode      = _rapidItemsTargetMode = _showerTargetMode   =
+                                   _hugTargetMode           = _reliableFloodTargetMode = _spamTextTargetMode        = _itemVortexTargetMode = _sudoPlayerTargetMode = _doorSpamTargetMode
+                        = PlayerTargetMode.None;
 
-                // Reset NetworkId ticks.
-                /* Tick   */   _hugTargetNetid = _spamTextTargetNetid = _sudoPlayerTargetNetid
-                    = (byte)0;
+                    // Reset NetworkIds ticks.
+                    /* Tick   */   _forceRespawnTargetNetids  = _muteTargetNetids       = _disableControlsTargetNetids = _trailTargetNetids = _rapidItemsTargetNetids = _showerTargetNetids =
+                                   _reliableFloodTargetNetids = _itemVortexTargetNetids = _doorSpamTargetNetids
+                        = new byte[0];
 
-                // Reset pickup entity & spawner id counters.
-                /* Tick   */   _globalPickupIdCounter = _globalSpawnerIdCounter
-                    = (int)0;
+                    // Reset NetworkId ticks.
+                    /* Tick   */   _hugTargetNetid = _spamTextTargetNetid = _sudoPlayerTargetNetid
+                        = (byte)0;
 
-                // Reset live vector ticks.
-                /* Tick   */   _hugLocation
-                    = Vector3.Zero;
+                    // Reset pickup entity & spawner id counters.
+                    /* Tick   */   _globalPickupIdCounter = _globalSpawnerIdCounter
+                        = (int)0;
 
-                #endregion
+                    // Reset live vector ticks.
+                    /* Tick   */   _hugLocation
+                        = Vector3.Zero;
 
-                // Ensure we clear the Block ESP cache.
-                try { BlockEspRenderer.Invalidate(); } catch { }
+                    #endregion
+                    
+                    // Clear UI selection data.
+                    // (Optional) Don't populate the players if the UI is hidden.
+                    if (ImGuiXnaRenderer.Visible && !GameIsMinimiMob()) SetPlayers(Array.Empty<NetworkGamer>());
 
-                // Ensure we turn off the xray mod.
-                if (GamePatches.XRayConfig.Enabled) try { GamePatches.XRayRuntime.SetEnabled(false); } catch { }
-
-                // Ensure we turn off the full-bright mod.
-                if (GamePatches.FullBrightRuntime.UseFullBrightTiles) try { GamePatches.FullBrightRuntime.SetEnabled(false); } catch { }
-
-                // Clear UI selection data.
-                // (Optional) Don't populate the players if the UI is hidden.
-                if (ImGuiXnaRenderer.Visible && !GameIsMinimiMob()) SetPlayers(Array.Empty<NetworkGamer>());
-
-                // Untick the UI checkboxes so the panel matches reality.
-                ResetToggleStates();
+                    // Untick the UI checkboxes so the panel matches reality.
+                    ResetToggleStates();
+                }
             }
 
             // If not in a game, skip all per-frame effects.
@@ -3817,6 +3832,43 @@ namespace CastleWallsMk2
             try { WeaponExtensions.Tick(); } catch { }
             _wasInGame = true;
         }
+
+        #region Reapply Session-Local Runtime State
+
+        /// <summary>
+        /// Reapplies session-local runtime features after entering or re-entering an active
+        /// game session. This restores temporary hooks and runtime-only systems that are
+        /// intentionally torn down when leaving a world.
+        /// </summary>
+        private void ReapplySessionLocalState()
+        {
+            // Reapply direct weapon stat hooks.
+            try { if (_rapidFireEnabled) WeaponExtensions.SetRapidFire(true);             } catch { }
+            try { if (_superGunStatsEnabled) WeaponExtensions.SetSuperGunStats(true);     } catch { }
+
+            // Reapply infinite-ammo subscription.
+            try
+            {
+                if (_noConsumeAmmo)
+                {
+                    if (MsgHandler == null)
+                        MsgHandler = new LocalPlayer();
+
+                    GameMessageManager.Instance?.Subscribe(
+                        MsgHandler,
+                        new[] { GameMessageType.LocalPlayerFiredGun });
+                }
+            }
+            catch { }
+
+            // Reapply visual runtime toggles.
+            try { if (_xrayEnabled) GamePatches.XRayRuntime.SetEnabled(true);             } catch { }
+            try { if (_fullBrightEnabled) GamePatches.FullBrightRuntime.SetEnabled(true); } catch { }
+
+            // Clear any stale Block ESP cache after session transition.
+            try { BlockEspRenderer.Invalidate();                                          } catch { }
+        }
+        #endregion
 
         #region TICK: No Enemies
 

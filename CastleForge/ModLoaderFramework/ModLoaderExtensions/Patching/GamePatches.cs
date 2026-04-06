@@ -994,6 +994,230 @@ namespace ModLoaderExt
 
         #endregion
 
+        #region Fullscreen Alt-Tab Terrain Recovery
+
+        /// <summary>
+        /// SAFE FULLSCREEN ALT-TAB TERRAIN RECOVERY
+        /// Vanilla BlockTerrain.GlobalUpdate() commits pending terrain vertex buffers while the
+        /// game is inactive. In exclusive fullscreen, alt-tab / Win-key focus loss can leave the
+        /// graphics device in a transient state while multiplayer block edits continue arriving.
+        ///
+        /// Failure mode:
+        /// - Remote/local block edits queue chunk geometry rebuild work while the client is inactive.
+        /// - Vanilla BuildPendingVertexBuffers() finalizes those chunks during the inactive window.
+        /// - RenderChunk.FinishBuildingBuffers() ultimately builds GPU vertex buffers from pending
+        ///   BlockBuildData; if the device is not fully usable, the chunk can end up committed with
+        ///   no valid geometry.
+        /// - Collision/data remain correct, but the chunk becomes visually invisible until a later
+        ///   nearby world update forces another rebuild.
+        ///
+        /// Fix strategy:
+        /// - Defer BuildPendingVertexBuffers() while the game is inactive in fullscreen.
+        /// - On reactivation, perform one best-effort visible-ring terrain rebuild so any stale or
+        ///   geometry-less chunks around the player are healed immediately.
+        ///
+        /// Notes:
+        /// - This intentionally targets the vanilla fullscreen focus-loss bug you reproduced with
+        ///   zero mods loaded.
+        /// - Windowed / borderless flows are left alone.
+        /// - The recovery pass is best-effort and only runs after we actually deferred work.
+        /// </summary>
+
+        #region Fullscreen Terrain Recovery Helper
+
+        internal static class FullscreenTerrainRecovery
+        {
+            // Reflect BlockTerrain._computeGeometryPool and its Add/Drain methods once so we can
+            // re-queue the visible chunk ring after regaining focus.
+            private static readonly FieldInfo F_ComputeGeometryPool =
+                AccessTools.Field(typeof(DNA.CastleMinerZ.Terrain.BlockTerrain), "_computeGeometryPool");
+
+            private static readonly MethodInfo MI_ComputeGeometryPool_Add;
+            private static readonly MethodInfo MI_ComputeGeometryPool_Drain;
+
+            // Runtime focus / recovery state.
+            private static bool _focusStateInitialized;
+            private static bool _lastIsActive;
+            private static bool _deferredInactiveVertexCommit;
+
+            static FullscreenTerrainRecovery()
+            {
+                try
+                {
+                    Type poolType = F_ComputeGeometryPool?.FieldType;
+                    MI_ComputeGeometryPool_Add   = poolType != null ? AccessTools.Method(poolType, "Add", new[] { typeof(int) }) : null;
+                    MI_ComputeGeometryPool_Drain = poolType != null ? AccessTools.Method(poolType, "Drain", Type.EmptyTypes) : null;
+                }
+                catch
+                {
+                    MI_ComputeGeometryPool_Add   = null;
+                    MI_ComputeGeometryPool_Drain = null;
+                }
+            }
+
+            /// <summary>
+            /// Returns true when pending terrain vertex-buffer commits should be deferred because
+            /// the game is currently inactive in exclusive fullscreen.
+            /// </summary>
+            public static bool ShouldDeferPendingVertexCommit()
+            {
+                CastleMinerZGame game = CastleMinerZGame.Instance;
+                if (game == null)
+                    return false;
+
+                // Keep the fix narrow: only touch the proven bad path.
+                if (!game.IsFullScreen)
+                    return false;
+
+                if (game.IsActive)
+                    return false;
+
+                _deferredInactiveVertexCommit = true;
+                return true;
+            }
+
+            /// <summary>
+            /// Tracks focus transitions and, when needed, performs a one-shot visible-ring terrain
+            /// rebuild after fullscreen focus is regained.
+            /// </summary>
+            public static void OnGameUpdate(CastleMinerZGame game)
+            {
+                if (game == null)
+                    return;
+
+                bool isActive = game.IsActive;
+
+                if (!_focusStateInitialized)
+                {
+                    _focusStateInitialized = true;
+                    _lastIsActive          = isActive;
+                    return;
+                }
+
+                bool reactivated = !_lastIsActive && isActive;
+                _lastIsActive    = isActive;
+
+                if (!reactivated)
+                    return;
+
+                if (!_deferredInactiveVertexCommit)
+                    return;
+
+                try
+                {
+                    TryRecoverVisibleTerrain(game._terrain);
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, "FullscreenTerrainRecovery");
+                }
+                finally
+                {
+                    _deferredInactiveVertexCommit = false;
+                }
+            }
+
+            /// <summary>
+            /// Best-effort terrain healing pass after returning from fullscreen focus loss:
+            /// - Flush any still-pending VB commits now that the game is active again.
+            /// - Re-queue the currently visible ring of chunks for geometry rebuild.
+            /// - Drain and finalize immediately so stale/invisible chunks recover without requiring
+            ///   a nearby player interaction.
+            /// </summary>
+            private static void TryRecoverVisibleTerrain(DNA.CastleMinerZ.Terrain.BlockTerrain terrain)
+            {
+                if (terrain == null || !terrain.IsReady)
+                    return;
+
+                // First, commit anything that was intentionally deferred while inactive.
+                terrain.BuildPendingVertexBuffers();
+
+                object pool = F_ComputeGeometryPool?.GetValue(terrain);
+                if (pool == null || MI_ComputeGeometryPool_Add == null || MI_ComputeGeometryPool_Drain == null)
+                    return;
+
+                IntVector3[] offsets = terrain._radiusOrderOffsets;
+                if (offsets == null || offsets.Length == 0)
+                    return;
+
+                int eyeChunkIndex    = terrain._currentEyeChunkIndex;
+                IntVector3 baseChunk = new IntVector3(eyeChunkIndex % 24, 0, eyeChunkIndex / 24);
+
+                // Avoid duplicate queueing if offsets ever overlap.
+                bool[] queued = new bool[576];
+
+                for (int i = 0; i < offsets.Length; i++)
+                {
+                    IntVector3 iv = new IntVector3(baseChunk.X + offsets[i].X, 0, baseChunk.Z + offsets[i].Z);
+                    if (iv.X < 0 || iv.X >= 24 || iv.Z < 0 || iv.Z >= 24)
+                        continue;
+
+                    int idx = iv.X + iv.Z * 24;
+                    if (queued[idx])
+                        continue;
+
+                    queued[idx] = true;
+                    QueueOne(terrain, pool, idx);
+                }
+
+                // Kick rebuild work now, then finalize the resulting VBs on the active device.
+                MI_ComputeGeometryPool_Drain.Invoke(pool, null);
+                terrain.BuildPendingVertexBuffers();
+            }
+
+            /// <summary>
+            /// Queues one loaded chunk for a geometry rebuild, balancing the engine's later
+            /// _numUsers decrement performed during VB finalization.
+            /// </summary>
+            private static void QueueOne(DNA.CastleMinerZ.Terrain.BlockTerrain terrain, object pool, int idx)
+            {
+                if (terrain._chunks[idx]._action == DNA.CastleMinerZ.Terrain.BlockTerrain.NextChunkAction.WAITING_TO_LOAD)
+                    return;
+
+                terrain._chunks[idx]._numUsers.Increment();
+                MI_ComputeGeometryPool_Add.Invoke(pool, new object[] { idx });
+            }
+        }
+        #endregion
+
+        #region Defer BlockTerrain.BuildPendingVertexBuffers While Inactive Fullscreen
+
+        [HarmonyPatch(typeof(DNA.CastleMinerZ.Terrain.BlockTerrain), nameof(DNA.CastleMinerZ.Terrain.BlockTerrain.BuildPendingVertexBuffers))]
+        internal static class BlockTerrain_BuildPendingVertexBuffers_DeferDuringInactiveFullscreen
+        {
+            /// <summary>
+            /// Prevents terrain vertex-buffer commits from running while the game is inactive in
+            /// exclusive fullscreen. This keeps vanilla from swapping in geometry-less chunks during
+            /// alt-tab / Win-key focus loss.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix()
+            {
+                // Return false -> skip original BuildPendingVertexBuffers() for now.
+                return !FullscreenTerrainRecovery.ShouldDeferPendingVertexCommit();
+            }
+        }
+        #endregion
+
+        #region CastleMinerZGame.Update - Recover Terrain On Focus Regain
+
+        [HarmonyPatch(typeof(CastleMinerZGame), "Update", new[] { typeof(GameTime) })]
+        internal static class CastleMinerZGame_Update_FullscreenTerrainRecovery
+        {
+            /// <summary>
+            /// Watches for the transition from inactive -> active and triggers a one-shot terrain
+            /// recovery pass when we previously deferred fullscreen VB commits.
+            /// </summary>
+            [HarmonyPostfix]
+            private static void Postfix(CastleMinerZGame __instance)
+            {
+                FullscreenTerrainRecovery.OnGameUpdate(__instance);
+            }
+        }
+        #endregion
+
+        #endregion
+
         #region Defensive Hardening & Noise Reduction (Non-Fatal)
 
         /// <summary>

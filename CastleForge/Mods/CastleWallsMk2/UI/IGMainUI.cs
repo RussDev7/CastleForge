@@ -1034,8 +1034,8 @@ namespace CastleWallsMk2
 
         // Note:
         //   The following can be used to disable/enable controls when not in an active game.
-        //   Enable:  if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
-        //   Disable: if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+        //   Enable:  if (!CastleWallsMk2.IsInGame() && !AllowOutOfGameSettingEdits()) ImGui.BeginDisabled();
+        //   Disable: if (!CastleWallsMk2.IsInGame() && !AllowOutOfGameSettingEdits()) ImGui.EndDisabled();
         public static void Draw()
         {
             // Debug.
@@ -1388,7 +1388,11 @@ namespace CastleWallsMk2
                     ImGui.TableSetupColumn("c1", ImGuiTableColumnFlags.WidthStretch, 1f);
                     ImGui.TableSetupColumn("c2", ImGuiTableColumnFlags.WidthStretch, 1f);
 
-                    if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
+                    bool inGame              = CastleWallsMk2.IsInGame();
+                    bool allowOutOfGameEdits = AllowOutOfGameSettingEdits();
+                    bool outOfGameLocked     = !inGame && !allowOutOfGameEdits;
+
+                    if (outOfGameLocked) ImGui.BeginDisabled();
 
                     #region [*] Checkbox Content
 
@@ -1606,21 +1610,21 @@ namespace CastleWallsMk2
                     CB_Slider      ("##bNukerRValue",    ref _blockNukerRangeValue,   Callbacks.OnBlockNukerRangeValue, min: 0, max: 20, enabled: _blockNuker, format: "Range: %d");
 
                     // ===================== [Ghost Mode] =====================
-                    if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                    if (outOfGameLocked) ImGui.EndDisabled();
                     ImGui.AlignTextToFramePadding(); CenterText("[Ghost Mode]", Color.Gold);
 
                     CB_Checkbox    ("Ghost Mode",        ref _ghostMode,              Callbacks.OnGhostMode);
                     CB_Checkbox    (" - Hide Join Msg",  ref _ghostModeHideName,      Callbacks.OnGhostModeHideName, enabled: _ghostMode);
 
-                    if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
+                    if (outOfGameLocked) ImGui.BeginDisabled();
 
                     // ===================== [Test / Debug] =====================
-                    if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                    if (outOfGameLocked) ImGui.EndDisabled();
                     ImGui.AlignTextToFramePadding(); CenterText("[Test / Debug]", Color.Gold);
 
                     CB_Checkbox    ("Trial Mode",        ref _trailMode,              Callbacks.OnTrailMode);
 
-                    if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
+                    if (outOfGameLocked) ImGui.BeginDisabled();
 
                     #endregion
 
@@ -1701,7 +1705,7 @@ namespace CastleWallsMk2
 
                     #endregion
 
-                    if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                    if (outOfGameLocked) ImGui.EndDisabled();
                     ImGui.EndTable();
                 }
                 ImGui.PopStyleVar(); // CellPadding.
@@ -1818,7 +1822,11 @@ namespace CastleWallsMk2
                 ImGui.SetNextItemWidth(0); // Harmless; just keeping API symmetry.
                 if (ImGui.BeginTable("target_container", 1, tflags, new Vector2(0, targetChildH - ImGui.GetStyle().WindowPadding.Y * 2f)))
                 {
-                    if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
+                    bool inGame              = CastleWallsMk2.IsInGame();
+                    bool allowOutOfGameEdits = AllowOutOfGameSettingEdits();
+                    bool outOfGameLocked     = !inGame && !allowOutOfGameEdits;
+
+                    if (outOfGameLocked) ImGui.BeginDisabled();
 
                     ImGui.TableSetupColumn("MainContent", ImGuiTableColumnFlags.WidthStretch, 1f);
                     ImGui.TableNextColumn();
@@ -2247,7 +2255,7 @@ namespace CastleWallsMk2
                         CellButton("Clear Projectiles",    () => Callbacks.OnClearProjectiles?.Invoke());
                     });
 
-                    ActionSectionCustom("cNoEvil", disabled: false, draw: Cell =>
+                    ActionSectionCustom("cNoEvil", disabled: false, useHeader: false, draw: Cell =>
                     {
                         Cell(() => { if (ImGui.Button("cNoEvil (Cave Lighter)", new Vector2(-1, 0))) Callbacks.OnCaveLighter?.Invoke(); });
                         Cell(() => { CB_Slider("##caveLighterMaxDistance", ref _caveLighterMaxDistanceValue, Callbacks.OnCaveLighterMaxDistanceValue, min: 1, max: 150, format: "Max Distance: %d"); });
@@ -2255,21 +2263,55 @@ namespace CastleWallsMk2
 
                     ActionSection("Debug", disabled: false, draw: CellButton =>
                     {
-                        if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                        if (outOfGameLocked) ImGui.EndDisabled();
 
                         CellButton("Show Demo Window",     () => _showDemoWindow = true);
                         CellButton("Show Stats Window",    () => Callbacks.OnStatsWindow?.Invoke());
 
-                        if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled();
+                        if (outOfGameLocked) ImGui.BeginDisabled();
 
                         // Generate more buttons to visualize the scrollbar.
                         // for (int b = 0; b < 20; b++) CellButton($"{b}", null);
+                    });
+
+                    ActionSectionCustom("Session Settings", disabled: false, draw: Cell =>
+                    {
+                        if (outOfGameLocked) ImGui.EndDisabled();
+                        var cfg = ModConfig.Current ?? ModConfig.LoadOrCreateDefaults();
+
+                        Cell(() =>
+                        {
+                            bool value = cfg.PreserveTogglesWhenLeavingGame;
+                            if (ImGui.Checkbox("Preserve toggles", ref value))
+                            {
+                                cfg.PreserveTogglesWhenLeavingGame = value;
+                                cfg.Save();
+                            }
+
+                            if (ImGui.IsItemHovered())
+                                ImGui.SetTooltip("Keeps toggle states enabled when leaving a world/session.");
+                        });
+
+                        Cell(() =>
+                        {
+                            bool value = cfg.AllowOutOfGameSettingEdits;
+                            if (ImGui.Checkbox("Out-of-game edits", ref value))
+                            {
+                                cfg.AllowOutOfGameSettingEdits = value;
+                                cfg.Save();
+                            }
+
+                            if (ImGui.IsItemHovered())
+                                ImGui.SetTooltip("Lets you edit stored setting values while not in a live game.");
+                        });
+
+                        if (outOfGameLocked) ImGui.BeginDisabled();
                     });
                     #endregion
 
                     #endregion
 
-                    if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                    if (outOfGameLocked) ImGui.EndDisabled();
                     ImGui.EndTable();
 
                 }
@@ -2297,12 +2339,15 @@ namespace CastleWallsMk2
         /// - Makes adding/removing actions easy (just edit the caller's list).
         /// - Centralizes disabling logic (ex: SelectedGamer required).
         /// </summary>
-        static void ActionSection(string title, bool disabled, Action<Action<string, Action>> draw, bool useFinalSpacing = true)
+        static void ActionSection(string title, bool disabled, Action<Action<string, Action>> draw, bool useHeader = true, bool useFinalSpacing = true)
         {
             // Header.
-            ImGui.PushStyleVar(ImGuiStyleVar.SeparatorTextAlign, new Vector2(0.5f, 0.5f)); // Center.
-            ImGui.SeparatorText(title);
-            ImGui.PopStyleVar();
+            if (useHeader)
+            {
+                ImGui.PushStyleVar(ImGuiStyleVar.SeparatorTextAlign, new Vector2(0.5f, 0.5f)); // Center.
+                ImGui.SeparatorText(title);
+                ImGui.PopStyleVar();
+            }
 
             // Make the internal table ID ("grid") unique per section.
             ImGui.PushID(title);
@@ -2354,8 +2399,16 @@ namespace CastleWallsMk2
         /// - Centralizes disabling logic (ex: SelectedGamer required).
         /// - Reuses the same 2-column layout style as ActionSection while allowing full custom cell rendering.
         /// </summary>
-        static void ActionSectionCustom(string title, bool disabled, Action<Action<Action>> draw, bool useFinalSpacing = true)
+        static void ActionSectionCustom(string title, bool disabled, Action<Action<Action>> draw, bool useHeader = true, bool useFinalSpacing = true)
         {
+            // Header.
+            if (useHeader)
+            {
+                ImGui.PushStyleVar(ImGuiStyleVar.SeparatorTextAlign, new Vector2(0.5f, 0.5f)); // Center.
+                ImGui.SeparatorText(title);
+                ImGui.PopStyleVar();
+            }
+
             ImGui.PushID(title);
 
             if (disabled) ImGui.BeginDisabled();
@@ -11676,7 +11729,7 @@ namespace CastleWallsMk2
 
                 bool send = false;
 
-                //if (!CastleWallsMk2.IsInGame()) ImGui.BeginDisabled(); // Disable when not in-game to avoid accidental submits.
+                //if (!CastleWallsMk2.IsInGame() && !AllowOutOfGameSettingEdits()) ImGui.BeginDisabled(); // Disable when not in-game to avoid accidental submits.
 
                 // INPUT (Enter to send - Up/Down for history).
                 ImGui.TableNextColumn();
@@ -11701,7 +11754,7 @@ namespace CastleWallsMk2
                 if (ImGui.Button("Send", new Vector2(-1, 0)))
                     send = true;
 
-                //if (!CastleWallsMk2.IsInGame()) ImGui.EndDisabled();
+                // if (!CastleWallsMk2.IsInGame() && !AllowOutOfGameSettingEdits()) ImGui.EndDisabled();
 
                 // RAW CHECKBOX (controls username prefix & slash normalization policy).
                 ImGui.TableNextColumn();
@@ -12200,6 +12253,28 @@ namespace CastleWallsMk2
             // Ensure valid selection
             if (_players.Count > 0 && _playerIndex < 0) _playerIndex = 0;
             if (_players.Count == 0) _playerIndex = -1;
+        }
+        #endregion
+
+        #region Helpers: UI State / Out-of-Game Edit Helpers
+
+        /// <summary>
+        /// Returns whether the UI is allowed to edit stored setting values while the player
+        /// is not currently inside an active game world/session.
+        /// </summary>
+        private static bool AllowOutOfGameSettingEdits()
+        {
+            var cfg = ModConfig.Current ?? ModConfig.LoadOrCreateDefaults();
+            return cfg.AllowOutOfGameSettingEdits;
+        }
+
+        /// <summary>
+        /// Returns true when a setting change should update only the stored UI/config value
+        /// for now, and defer any live in-game apply callback until a game session is active.
+        /// </summary>
+        private static bool ShouldDeferLiveApply()
+        {
+            return !CastleWallsMk2.IsInGame() && AllowOutOfGameSettingEdits();
         }
         #endregion
 
