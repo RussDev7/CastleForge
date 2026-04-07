@@ -406,7 +406,7 @@ namespace Restore360Water
         /// Keeps the body small; heavy lifting should be inside R360WConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_Restore360Water
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",

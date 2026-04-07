@@ -88,6 +88,16 @@ namespace PhysicsEngine
         // Pending add flow distance to apply when the add is confirmed.
         private static readonly Dictionary<IntVector3, int> _pendingAddDistance = new Dictionary<IntVector3, int>();
 
+        // Cells participating in the current live simulation run.
+        // This is what MaxOwnedCells should cap.
+        private static readonly HashSet<IntVector3> _activeLava = new HashSet<IntVector3>();
+
+        // Cells temporarily blocked from immediate refill after being mined/removed.
+        private static readonly Dictionary<IntVector3, long> _refillBlockedUntilMs =
+            new Dictionary<IntVector3, long>();
+
+        private static long _simulationClockMs = 0;
+
         #endregion
 
         #region Direction Constants / Timing
@@ -126,6 +136,9 @@ namespace PhysicsEngine
             _pendingRemoveWrites.Clear();
             _pendingAddDistance.Clear();
             _accumulator = TimeSpan.Zero;
+            _activeLava.Clear();
+            _refillBlockedUntilMs.Clear();
+            _simulationClockMs = 0;
         }
 
         /// <summary>
@@ -163,7 +176,9 @@ namespace PhysicsEngine
             if (BlockTerrain.Instance == null || !BlockTerrain.Instance.IsReady)
                 return;
 
-            _accumulator += gameTime.ElapsedGameTime;
+            _accumulator       += gameTime.ElapsedGameTime;
+            _simulationClockMs += (long)gameTime.ElapsedGameTime.TotalMilliseconds;
+            ReleaseExpiredRefillBlocks();
 
             int guard = 0;
             TimeSpan stepInterval = TimeSpan.FromMilliseconds(PhysicsEngine_Settings.StepIntervalMs);
@@ -202,6 +217,7 @@ namespace PhysicsEngine
 
             _ownedLava.Add(worldIndex);
             _flowDistance[worldIndex] = 0;
+            _activeLava.Add(worldIndex);
             Enqueue(worldIndex, 0);
         }
 
@@ -231,6 +247,7 @@ namespace PhysicsEngine
                 if (wasPendingRemove)
                 {
                     _ownedLava.Remove(worldIndex);
+                    _activeLava.Remove(worldIndex);
                     _flowDistance.Remove(worldIndex);
                     EnqueueNeighborsForRecheck(worldIndex);
                     return;
@@ -239,6 +256,7 @@ namespace PhysicsEngine
                 bool removedSource = _sources.Remove(worldIndex);
                 bool removedOwned = _ownedLava.Remove(worldIndex);
 
+                _activeLava.Remove(worldIndex);
                 _flowDistance.Remove(worldIndex);
 
                 if (removedSource)
@@ -251,7 +269,10 @@ namespace PhysicsEngine
                 }
 
                 if (removedSource || removedOwned)
+                {
+                    BlockRefillTemporarily(worldIndex);
                     EnqueueNeighborsForRecheck(worldIndex);
+                }
 
                 return;
             }
@@ -260,6 +281,7 @@ namespace PhysicsEngine
             if (wasPendingAdd)
             {
                 _ownedLava.Add(worldIndex);
+                _activeLava.Add(worldIndex);
 
                 if (!_sources.Contains(worldIndex))
                     _flowDistance[worldIndex] = hadPendingDistance ? pendingDistance : 0;
@@ -272,6 +294,7 @@ namespace PhysicsEngine
             if (_sources.Contains(worldIndex) || _ownedLava.Contains(worldIndex))
             {
                 _ownedLava.Add(worldIndex);
+                _activeLava.Add(worldIndex);
                 Enqueue(worldIndex, GetKnownDistance(worldIndex, 0));
                 return;
             }
@@ -290,7 +313,10 @@ namespace PhysicsEngine
         private static void StepSimulation()
         {
             if (_frontier.Count == 0)
+            {
+                EndSimulationIfIdle();
                 return;
+            }
 
             int evaluations = 0;
             int writes = 0;
@@ -306,6 +332,8 @@ namespace PhysicsEngine
 
                 writes += FlowFromCell(node.Position, currentDistance, writes);
             }
+
+            EndSimulationIfIdle();
         }
 
         /// <summary>
@@ -443,6 +471,101 @@ namespace PhysicsEngine
 
             return writes;
         }
+
+        /// <summary>
+        /// Returns true if the lava simulation still has queued frontier, distance, or pending write work remaining.
+        /// </summary>
+        private static bool HasLiveSimulationWork()
+        {
+            return _frontier.Count            > 0
+                || _queuedDistance.Count      > 0
+                || _pendingAddWrites.Count    > 0
+                || _pendingRemoveWrites.Count > 0;
+        }
+
+        /// <summary>
+        /// Ends the current lava simulation run when idle cleanup is enabled and no active work remains.
+        /// </summary>
+        private static void EndSimulationIfIdle()
+        {
+            if (!PhysicsEngine_Settings.EndSimulationWhenIdle)
+                return;
+
+            if (HasLiveSimulationWork())
+                return;
+
+            _frontier.Clear();
+            _queuedDistance.Clear();
+            _activeLava.Clear();
+
+            if (PhysicsEngine_Settings.DoLogging)
+                Log("Lava simulation ended: frontier empty and no pending writes remain.");
+        }
+        #endregion
+
+        #region Refill Cooldown Helpers
+
+        /// <summary>
+        /// Temporarily blocks a removed lava cell from being refilled immediately,
+        /// unless KeepLavaAlive is enabled or the cooldown is disabled.
+        /// </summary>
+        private static void BlockRefillTemporarily(IntVector3 worldIndex)
+        {
+            if (PhysicsEngine_Settings.KeepLavaAlive)
+                return;
+
+            int delayMs = PhysicsEngine_Settings.RemovedCellRespawnDelayMs;
+            if (delayMs <= 0)
+                return;
+
+            _refillBlockedUntilMs[worldIndex] = _simulationClockMs + delayMs;
+        }
+
+        /// <summary>
+        /// Returns true if the given cell is still within its temporary no-refill cooldown window.
+        /// </summary>
+        private static bool IsRefillBlocked(IntVector3 worldIndex)
+        {
+            if (PhysicsEngine_Settings.KeepLavaAlive)
+                return false;
+
+            return _refillBlockedUntilMs.TryGetValue(worldIndex, out long untilMs)
+                && untilMs > _simulationClockMs;
+        }
+
+        /// <summary>
+        /// Releases any expired refill cooldown entries and rechecks nearby lava so flow can resume naturally.
+        /// </summary>
+        private static void ReleaseExpiredRefillBlocks()
+        {
+            if (_refillBlockedUntilMs.Count == 0)
+                return;
+
+            List<IntVector3> expired = null;
+
+            foreach (var kvp in _refillBlockedUntilMs)
+            {
+                if (kvp.Value <= _simulationClockMs)
+                {
+                    if (expired == null)
+                        expired = new List<IntVector3>();
+
+                    expired.Add(kvp.Key);
+                }
+            }
+
+            if (expired == null)
+                return;
+
+            for (int i = 0; i < expired.Count; i++)
+            {
+                IntVector3 cell = expired[i];
+                _refillBlockedUntilMs.Remove(cell);
+
+                // Wake the nearby lava back up now that refill is allowed again.
+                EnqueueNeighborsForRecheck(cell);
+            }
+        }
         #endregion
 
         #region Flow Helpers
@@ -467,6 +590,7 @@ namespace PhysicsEngine
             if (IsManagedLavaCell(worldIndex))
             {
                 _ownedLava.Add(worldIndex);
+                _activeLava.Add(worldIndex);
 
                 if (!_sources.Contains(worldIndex))
                 {
@@ -481,20 +605,22 @@ namespace PhysicsEngine
                 return true;
             }
 
+            if (IsRefillBlocked(worldIndex))
+                return false;
+
             if (GetEffectiveBlock(worldIndex) != BlockTypeEnum.Empty)
                 return false;
 
-            if (_ownedLava.Count >= PhysicsEngine_Settings.MaxOwnedCells)
+            if (_activeLava.Count >= PhysicsEngine_Settings.MaxOwnedCells)
                 return false;
 
             if (!ApplyLavaBlock(worldIndex, horizontalDistance))
                 return false;
 
-            _ownedLava.Add(worldIndex);
+            _activeLava.Add(worldIndex);
 
-            if (!_sources.Contains(worldIndex))
-                _flowDistance[worldIndex] = horizontalDistance;
-
+            // Let confirmation own the block for real.
+            // Pending distance is already tracked in _pendingAddDistance.
             created = true;
             return true;
         }

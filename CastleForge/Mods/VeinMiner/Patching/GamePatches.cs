@@ -387,7 +387,7 @@ namespace VeinMiner
         /// Keeps the body small; heavy lifting should be inside VMConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_VeinMiner
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",

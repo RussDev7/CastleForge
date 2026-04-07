@@ -142,6 +142,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Embedded\EmbeddedResolver.cs" />
     <Compile Include="Startup\TPConfig.cs" />
+    <Compile Include="UnusedConverters\CMZ360ToPCWorldConverter.cs" />
+    <Compile Include="UnusedConverters\Xwb360SoundExtractor.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Embedded\0Harmony.dll" />

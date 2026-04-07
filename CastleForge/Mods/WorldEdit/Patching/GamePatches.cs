@@ -471,6 +471,8 @@ namespace WorldEdit
 
         #region Increase Placement Range
 
+        // Removed: Moved to QoL mod.
+        /*
         /// <summary>
         /// Replaces the hard-coded "5f" placement range in
         /// InGameHUD.DoConstructionModeUpdate() with a static field
@@ -525,10 +527,13 @@ namespace WorldEdit
                 }
             }
         }
+        */
         #endregion
 
         #region Enable The Chat In Offline Games
 
+        // Removed: Moved to QoL mod.
+        /*
         /// <summary>
         /// Adds a Postfix to OnPlayerInput so that pressing the chat key
         /// in offline mode opens the chat screen, removing the
@@ -648,10 +653,13 @@ namespace WorldEdit
                 }
             }
         }
+        */
         #endregion
 
         #region Display The Targeted Block Name And Id
 
+        // Removed: Moved to QoL mod.
+        /*
         /// <summary>
         /// Completely strips out the default DrawString call in OnDraw,
         /// then draws "BlockName (ID)" instead.
@@ -778,10 +786,13 @@ namespace WorldEdit
                 }
             }
         }
+        */
         #endregion
 
         #region Increase Chat Length
 
+        // Removed: Moved to QoL mod.
+        /*
         /// <summary>
         /// Make PlainChatInputScreen use the game window width instead of the hard-coded 350.
         /// We:
@@ -845,10 +856,13 @@ namespace WorldEdit
                 }
             }
         }
+        */
         #endregion
 
         #region HUD Console Opacity Floor (0.25 Opacity)
 
+        // Removed: Moved to QoL mod.
+        /*
         /// <summary>
         /// Patch target:
         /// - Method: ConsoleElement.OnDraw(GraphicsDevice, SpriteBatch, GameTime, bool).
@@ -896,6 +910,7 @@ namespace WorldEdit
                 }
             }
         }
+        */
         #endregion
 
         #endregion

@@ -410,7 +410,7 @@ namespace ModLoaderExt
         /// Keeps the body small; heavy lifting should be inside MLEConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_ModLoaderExt
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",
@@ -994,6 +994,8 @@ namespace ModLoaderExt
 
         #endregion
 
+        #region Fullscreen / Window-State Recovery
+
         #region Fullscreen Alt-Tab Terrain Recovery
 
         /// <summary>
@@ -1214,6 +1216,8 @@ namespace ModLoaderExt
                 FullscreenTerrainRecovery.OnGameUpdate(__instance);
             }
         }
+        #endregion
+
         #endregion
 
         #endregion

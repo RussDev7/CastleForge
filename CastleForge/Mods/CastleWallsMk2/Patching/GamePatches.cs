@@ -1051,6 +1051,8 @@ namespace CastleWallsMk2
 
         #region Remove Character Limitations + Paste Handling
 
+        // Removed: Moved to QoL mod.
+        /*
         [HarmonyPatch(typeof(TextEditControl), "OnChar")]
         internal static class TextEditControl_OnChar_AllowAnyCharPlusPaste
         {
@@ -1148,6 +1150,92 @@ namespace CastleWallsMk2
                 }
             }
         }
+        */
+        #endregion
+
+        #region Remove Max World Height
+
+        // Removed: Moved to QoL mod.
+        /*
+        [HarmonyPatch(typeof(Player), "OnUpdate")]
+        internal static class Patch_Player_OnUpdate_RemoveMaxWorldHeight
+        {
+            #region Cached Config (Init Once)
+
+            private static bool _removeMaxWorldHeightBootstrapped; // One-time guard.
+            private static bool _removeMaxWorldHeightEnabled;      // Cached flag.
+
+            /// <summary>
+            /// Initialize cached config once per process (or until you manually refresh it).
+            /// </summary>
+            private static void RemoveMaxWorldHeight_InitOnce()
+            {
+                if (_removeMaxWorldHeightBootstrapped) return;
+                _removeMaxWorldHeightBootstrapped = true;
+
+                try
+                {
+                    _removeMaxWorldHeightEnabled = ModConfig.LoadOrCreateDefaults().RemoveMaxWorldHeight;
+                }
+                catch
+                {
+                    // Safe fallback: Behave like vanilla.
+                    _removeMaxWorldHeightEnabled = false;
+                }
+            }
+
+            /// <summary>
+            /// Optional: Call this from your reload hotkey / config reload path to refresh the cached flag.
+            /// </summary>
+            public static void RemoveMaxWorldHeight_RefreshFromConfig()
+            {
+                _removeMaxWorldHeightBootstrapped = false; // Force re-init next time.
+                RemoveMaxWorldHeight_InitOnce();
+            }
+            #endregion
+
+            /// <summary>
+            /// Returns either the vanilla ceiling (74/64) or "no ceiling" depending on cached config.
+            /// Keeps vanilla behavior when disabled, even if the game uses 64f instead of 74f.
+            /// </summary>
+            private static float GetCeilingY(float vanillaCeiling)
+            {
+                RemoveMaxWorldHeight_InitOnce();
+
+                if (_removeMaxWorldHeightEnabled)
+                    return float.MaxValue;
+
+                return vanillaCeiling;
+            }
+
+            private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                var miGetCeiling = AccessTools.Method(
+                    typeof(Patch_Player_OnUpdate_RemoveMaxWorldHeight),
+                    nameof(GetCeilingY)
+                );
+
+                foreach (var ins in instructions)
+                {
+                    // Look for the ceiling constant used by Math.Min(CEILING, newpos.Y).
+                    if (ins.opcode == OpCodes.Ldc_R4 && ins.operand is float f &&
+                        (Math.Abs(f - 74f) < 0.0001f || Math.Abs(f - 64f) < 0.0001f))
+                    {
+                        // Keep the original ceiling literal on the stack...
+                        yield return ins;
+
+                        // ...but route it through config:
+                        // stack: [vanillaCeiling] -> [ceiling].
+                        yield return new CodeInstruction(OpCodes.Call, miGetCeiling);
+
+                        continue;
+                    }
+
+                    yield return ins;
+                }
+            }
+        }
+        */
         #endregion
 
         #region In-Game Menu: Keep Teleport Visible In Vanilla Slot
@@ -1386,88 +1474,6 @@ namespace CastleWallsMk2
         }
         #endregion
 
-        #region Remove Max World Height
-
-        [HarmonyPatch(typeof(Player), "OnUpdate")]
-        internal static class Patch_Player_OnUpdate_RemoveMaxWorldHeight
-        {
-            #region Cached Config (Init Once)
-
-            private static bool _removeMaxWorldHeightBootstrapped; // One-time guard.
-            private static bool _removeMaxWorldHeightEnabled;      // Cached flag.
-
-            /// <summary>
-            /// Initialize cached config once per process (or until you manually refresh it).
-            /// </summary>
-            private static void RemoveMaxWorldHeight_InitOnce()
-            {
-                if (_removeMaxWorldHeightBootstrapped) return;
-                _removeMaxWorldHeightBootstrapped = true;
-
-                try
-                {
-                    _removeMaxWorldHeightEnabled = ModConfig.LoadOrCreateDefaults().RemoveMaxWorldHeight;
-                }
-                catch
-                {
-                    // Safe fallback: Behave like vanilla.
-                    _removeMaxWorldHeightEnabled = false;
-                }
-            }
-
-            /// <summary>
-            /// Optional: Call this from your reload hotkey / config reload path to refresh the cached flag.
-            /// </summary>
-            public static void RemoveMaxWorldHeight_RefreshFromConfig()
-            {
-                _removeMaxWorldHeightBootstrapped = false; // Force re-init next time.
-                RemoveMaxWorldHeight_InitOnce();
-            }
-            #endregion
-
-            /// <summary>
-            /// Returns either the vanilla ceiling (74/64) or "no ceiling" depending on cached config.
-            /// Keeps vanilla behavior when disabled, even if the game uses 64f instead of 74f.
-            /// </summary>
-            private static float GetCeilingY(float vanillaCeiling)
-            {
-                RemoveMaxWorldHeight_InitOnce();
-
-                if (_removeMaxWorldHeightEnabled)
-                    return float.MaxValue;
-
-                return vanillaCeiling;
-            }
-
-            private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-            {
-                var miGetCeiling = AccessTools.Method(
-                    typeof(Patch_Player_OnUpdate_RemoveMaxWorldHeight),
-                    nameof(GetCeilingY)
-                );
-
-                foreach (var ins in instructions)
-                {
-                    // Look for the ceiling constant used by Math.Min(CEILING, newpos.Y).
-                    if (ins.opcode == OpCodes.Ldc_R4 && ins.operand is float f &&
-                        (Math.Abs(f - 74f) < 0.0001f || Math.Abs(f - 64f) < 0.0001f))
-                    {
-                        // Keep the original ceiling literal on the stack...
-                        yield return ins;
-
-                        // ...but route it through config:
-                        // stack: [vanillaCeiling] -> [ceiling].
-                        yield return new CodeInstruction(OpCodes.Call, miGetCeiling);
-
-                        continue;
-                    }
-
-                    yield return ins;
-                }
-            }
-        }
-        #endregion
-
         #endregion
 
         #region Crash Patches (Not Handeled By MLE)
@@ -1651,8 +1657,8 @@ namespace CastleWallsMk2
         ///
         /// USAGE
         /// -----
-        /// WEHotkeys.SetReloadBinding("Ctrl+Shift+F3");
-        /// // ... each frame (via Harmony patch) -> if (WEHotkeys.ReloadPressedThisFrame()) { ModConfig.LoadApply(); ... }
+        /// CWMK2Hotkeys.SetReloadBinding("Ctrl+Shift+F3");
+        /// // ... each frame (via Harmony patch) -> if (CWMK2Hotkeys.ReloadPressedThisFrame()) { ModConfig.LoadApply(); ... }
         ///
         /// EXAMPLES
         /// --------
@@ -1805,7 +1811,7 @@ namespace CastleWallsMk2
         /// Keeps the body small; heavy lifting should be inside ModConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_CWMK2
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",
@@ -1822,7 +1828,7 @@ namespace CastleWallsMk2
                 {
                     // Reload INI and apply runtime statics.
                     ModConfig.LoadOrCreateDefaults();
-                    Patch_Player_OnUpdate_RemoveMaxWorldHeight.RemoveMaxWorldHeight_RefreshFromConfig();
+                    // Patch_Player_OnUpdate_RemoveMaxWorldHeight.RemoveMaxWorldHeight_RefreshFromConfig();
 
                     SendLog($"[CWMK2] Config hot-reloaded from \"{PathShortener.ShortenForLog(ModConfig.ConfigPath)}\".");
                 }

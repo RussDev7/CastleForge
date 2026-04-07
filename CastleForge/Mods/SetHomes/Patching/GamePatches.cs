@@ -383,7 +383,7 @@ namespace SetHomes
         /// Keeps the body small; heavy lifting should be inside SHConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_SetHomes
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",

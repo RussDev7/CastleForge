@@ -385,7 +385,7 @@ namespace WorldEditCUI
         /// Keeps the body small; heavy lifting should be inside WEConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_WorldEditCUI
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",

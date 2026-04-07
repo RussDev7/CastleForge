@@ -27,6 +27,10 @@ namespace PhysicsEngine
         public static int MaxOwnedCells             = 16384;
         public static int MaxHorizontalFlowDistance = 5;
 
+        public static volatile bool KeepLavaAlive             = false;
+        public static volatile bool EndSimulationWhenIdle     = true;
+        public static int           RemovedCellRespawnDelayMs = 2500;
+
         public static volatile bool DoAnnouncement = false;
         public static volatile bool DoLogging      = false;
     }
@@ -43,11 +47,14 @@ namespace PhysicsEngine
         public bool Enabled = true;
 
         // [Simulation].
-        public int StepIntervalMs            = 125;
-        public int MaxCellEvaluationsPerStep = 256;
-        public int MaxBlockWritesPerStep     = 12;
-        public int MaxOwnedCells             = 16384;
-        public int MaxHorizontalFlowDistance = 5;
+        public int StepIntervalMs             = 125;
+        public int MaxCellEvaluationsPerStep  = 256;
+        public int MaxBlockWritesPerStep      = 12;
+        public int MaxOwnedCells              = 16384;
+        public int MaxHorizontalFlowDistance  = 5;
+        public bool KeepLavaAlive             = false;
+        public bool EndSimulationWhenIdle     = true;
+        public int  RemovedCellRespawnDelayMs = 2500;
 
         // [Logging].
         public bool DoAnnouncement = false;
@@ -88,6 +95,12 @@ namespace PhysicsEngine
                     "MaxOwnedCells             = 16384",
                     "; Maximum flat sideways travel from a supported cell.",
                     "MaxHorizontalFlowDistance = 5",
+                    "; If false, mined/removed lava cells are temporarily blocked from immediate refill.",
+                    "KeepLavaAlive             = false",
+                    "; How long a mined lava cell should stay empty before refill is allowed again.",
+                    "RemovedCellRespawnDelayMs = 2500",
+                    "; If true, a lava run is considered finished when no frontier/pending writes remain.",
+                    "EndSimulationWhenIdle     = true",
                     "",
                     "[Logging]",
                     "; Show an in-game announcement to the player.",
@@ -108,11 +121,14 @@ namespace PhysicsEngine
                 Enabled = ini.GetBool("PhysicsEngine", "Enabled", true),
 
                 // [Simulation].
-                StepIntervalMs = Clamp(ini.GetInt("Simulation", "StepIntervalMs", 125), 10, 5000),
+                StepIntervalMs            = Clamp(ini.GetInt("Simulation", "StepIntervalMs", 125), 10, 5000),
                 MaxCellEvaluationsPerStep = Clamp(ini.GetInt("Simulation", "MaxCellEvaluationsPerStep", 256), 1, 65536),
-                MaxBlockWritesPerStep = Clamp(ini.GetInt("Simulation", "MaxBlockWritesPerStep", 12), 1, 2048),
-                MaxOwnedCells = Clamp(ini.GetInt("Simulation", "MaxOwnedCells", 16384), 1, 1000000),
+                MaxBlockWritesPerStep     = Clamp(ini.GetInt("Simulation", "MaxBlockWritesPerStep", 12), 1, 2048),
+                MaxOwnedCells             = Clamp(ini.GetInt("Simulation", "MaxOwnedCells", 16384), 1, 1000000),
                 MaxHorizontalFlowDistance = Clamp(ini.GetInt("Simulation", "MaxHorizontalFlowDistance", 5), 0, 256),
+                KeepLavaAlive             = ini.GetBool("Simulation", "KeepLavaAlive", false),
+                RemovedCellRespawnDelayMs = Clamp(ini.GetInt("Simulation", "RemovedCellRespawnDelayMs", 2500), 0, 600000),
+                EndSimulationWhenIdle     = ini.GetBool("Simulation", "EndSimulationWhenIdle", true),
 
                 // [Logging].
                 DoAnnouncement = ini.GetBool("Logging", "DoAnnouncement", false),
@@ -149,6 +165,9 @@ namespace PhysicsEngine
             PhysicsEngine_Settings.MaxBlockWritesPerStep     = MaxBlockWritesPerStep;
             PhysicsEngine_Settings.MaxOwnedCells             = MaxOwnedCells;
             PhysicsEngine_Settings.MaxHorizontalFlowDistance = MaxHorizontalFlowDistance;
+            PhysicsEngine_Settings.KeepLavaAlive             = KeepLavaAlive;
+            PhysicsEngine_Settings.RemovedCellRespawnDelayMs = RemovedCellRespawnDelayMs;
+            PhysicsEngine_Settings.EndSimulationWhenIdle     = EndSimulationWhenIdle;
 
             PhysicsEngine_Settings.DoAnnouncement = DoAnnouncement;
             PhysicsEngine_Settings.DoLogging      = DoLogging;

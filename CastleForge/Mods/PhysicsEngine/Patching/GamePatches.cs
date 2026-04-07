@@ -389,7 +389,7 @@ namespace PhysicsEngine
         /// Keeps the body small; heavy lifting should be inside PEConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
-        static class Patch_Hotkey_ReloadConfig_WorldEdit
+        static class Patch_Hotkey_ReloadConfig_PhysicsEngine
         {
             static MethodBase TargetMethod() =>
                 AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",
