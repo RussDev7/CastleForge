@@ -137,7 +137,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Embedded\EmbeddedResolver.cs" />
     <Compile Include="Startup\ModConfig.cs" />
-    <Compile Include="Utils\CMZStrings.cs" />
     <Compile Include="Utils\CryptoRng.cs" />
   </ItemGroup>
   <ItemGroup>

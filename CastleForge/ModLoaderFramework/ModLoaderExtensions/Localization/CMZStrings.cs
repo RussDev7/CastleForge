@@ -8,7 +8,7 @@ using System.Globalization;
 using DNA.CastleMinerZ;
 using System.Resources;
 
-namespace CastleWallsMk2
+namespace ModLoaderExt
 {
     #region Localization (CMZ Resource Strings)
 
@@ -19,7 +19,7 @@ namespace CastleWallsMk2
     /// - Provides a lightweight, reflection-friendly way to fetch entries from the game's
     ///   Resources (.resx) without referencing the internal generated Strings class directly.
     /// </summary>
-    internal static class CMZStrings
+    public static class CMZStrings
     {
         private static readonly ResourceManager RM =
             new ResourceManager("DNA.CastleMinerZ.Globalization.Strings", typeof(CastleMinerZGame).Assembly);

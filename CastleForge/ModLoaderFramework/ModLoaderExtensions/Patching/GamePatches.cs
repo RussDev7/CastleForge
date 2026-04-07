@@ -1220,6 +1220,295 @@ namespace ModLoaderExt
 
         #endregion
 
+        #region Fullscreen Inactive Session-End Recovery
+
+        /// <summary>
+        /// SAFE FULLSCREEN INACTIVE SESSION-END RECOVERY
+        /// Vanilla can process kick / disconnect teardown while the client is inactive in exclusive
+        /// fullscreen (for example: Win-key minimize, then host kick/disconnect while hidden).
+        ///
+        /// Failure mode:
+        /// - A KickMessage or SessionEnded callback arrives while the game is inactive.
+        /// - Vanilla immediately calls EndGame(...), rebuilds frontend state, begins terrain reset,
+        ///   and shows the disconnect dialog during the same inactive fullscreen window.
+        /// - When the game is re-shown, the graphics / screen stack can come back in a bad transition
+        ///   state: blue flash, forced return to menu, then a frozen or half-initialized frontend.
+        ///
+        /// Fix strategy:
+        /// - If a local kick / session-ended event arrives while inactive in exclusive fullscreen,
+        ///   capture the pending teardown request instead of executing the full frontend transition.
+        /// - Immediately detach the dead network session so stale callbacks stop flowing.
+        /// - Once focus returns, run the deferred EndGame(...) + dialog flow on an active frame.
+        ///
+        /// Notes:
+        /// - This intentionally keeps the fix narrow to the proven bad fullscreen inactive path.
+        /// - Windowed / already-active flows still use vanilla behavior.
+        /// - The deferred dialog preserves the more specific kick / ban text when available.
+        /// </summary>
+
+        #region Fullscreen Session-End Recovery Helper
+
+        internal static class FullscreenSessionEndRecovery
+        {
+            private static readonly FieldInfo F_WaitForWorldInfo =
+                AccessTools.Field(typeof(CastleMinerZGame), "_waitForWorldInfo");
+
+            private static bool   _focusStateInitialized;
+            private static bool   _lastIsActive;
+            private static bool   _hasPendingFinalize;
+            private static bool   _pendingSaveData;
+            private static bool   _networkDetached;
+            private static string _pendingDialogTitle;
+            private static string _pendingDialogMessage;
+
+            /// <summary>
+            /// Returns true only for the narrow path we want to harden:
+            /// exclusive fullscreen + inactive + currently in a live game screen.
+            /// </summary>
+            private static bool ShouldDefer(CastleMinerZGame game)
+            {
+                if (game == null)
+                    return false;
+
+                if (!game.IsFullScreen)
+                    return false;
+
+                if (game.IsActive)
+                    return false;
+
+                if (game.GameScreen == null)
+                    return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Captures a local kick / ban while inactive fullscreen and consumes the original
+            /// teardown path so it can be safely replayed after focus returns.
+            /// </summary>
+            public static bool TryDeferKick(CastleMinerZGame game, Message message)
+            {
+                if (game?.MyNetworkGamer == null || !(message is KickMessage km))
+                    return false;
+
+                if (km.PlayerID != game.MyNetworkGamer.Id)
+                    return false;
+
+                if (!ShouldDefer(game) && !_hasPendingFinalize)
+                    return false;
+
+                string dialogMessage = km.Banned
+                    ? CMZStrings.Get("You_have_been_banned_by_the_host_of_this_session_")
+                    : CMZStrings.Get("You_have_been_kicked_by_the_host_of_the_session_");
+
+                Queue(game, saveData: true, CMZStrings.Get("Session_Ended"), dialogMessage);
+                TryClearPendingWorldInfo(game);
+                TryDetachNetwork(game);
+                return true;
+            }
+
+            /// <summary>
+            /// Captures a transport-level session-ended callback while inactive fullscreen and
+            /// defers the frontend teardown until the game is active again.
+            /// </summary>
+            public static bool TryDeferSessionEnded(CastleMinerZGame game, NetworkSessionEndReason reason)
+            {
+                if (!ShouldDefer(game) && !_hasPendingFinalize)
+                    return false;
+
+                string dialogMessage = reason == NetworkSessionEndReason.RemovedByHost
+                    ? CMZStrings.Get("You_have_been_kicked_by_the_host_of_the_session_")
+                    : CMZStrings.Get("You_have_been_disconnected_from_the_network_session_");
+
+                Queue(game, saveData: true, CMZStrings.Get("Session_Ended"), dialogMessage);
+                TryDetachNetwork(game);
+                return true;
+            }
+
+            /// <summary>
+            /// Tracks focus transitions and finalizes the deferred session-end flow once the game
+            /// is active again.
+            /// </summary>
+            public static void OnGameUpdate(CastleMinerZGame game)
+            {
+                if (game == null)
+                    return;
+
+                bool isActive = game.IsActive;
+
+                if (!_focusStateInitialized)
+                {
+                    _focusStateInitialized = true;
+                    _lastIsActive          = isActive;
+                    return;
+                }
+
+                bool reactivated = !_lastIsActive && isActive;
+                _lastIsActive = isActive;
+
+                if (!_hasPendingFinalize)
+                    return;
+
+                if (!reactivated)
+                    return;
+
+                FinalizeDeferred(game);
+            }
+
+            /// <summary>
+            /// Stores the pending teardown request. If multiple callbacks arrive for the same
+            /// disconnect window, the more specific kick / ban message wins over a generic
+            /// disconnect message.
+            /// </summary>
+            private static void Queue(CastleMinerZGame game, bool saveData, string title, string message)
+            {
+                if (!_hasPendingFinalize)
+                {
+                    _hasPendingFinalize   = true;
+                    _pendingSaveData      = saveData;
+                    _pendingDialogTitle   = title;
+                    _pendingDialogMessage = message;
+                    return;
+                }
+
+                // Preserve the strongest / most user-friendly message if multiple callbacks stack.
+                if (!string.IsNullOrEmpty(message) &&
+                    string.Equals(_pendingDialogMessage, CMZStrings.Get("You_have_been_disconnected_from_the_network_session_"), StringComparison.Ordinal))
+                {
+                    _pendingDialogTitle   = title;
+                    _pendingDialogMessage = message;
+                }
+            }
+
+            /// <summary>
+            /// Best-effort early detach of the dead network session so no additional stale
+            /// session callbacks keep firing while the game is hidden.
+            /// </summary>
+            private static void TryDetachNetwork(CastleMinerZGame game)
+            {
+                if (_networkDetached || game == null)
+                    return;
+
+                try
+                {
+                    ((DNAGame)game).LeaveGame();
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "FullscreenSessionEndRecovery.LeaveGame");
+                }
+                finally
+                {
+                    _networkDetached = true;
+                }
+            }
+
+            /// <summary>
+            /// Mirrors vanilla kick cleanup by clearing any pending world-info callback state.
+            /// </summary>
+            private static void TryClearPendingWorldInfo(CastleMinerZGame game)
+            {
+                try
+                {
+                    F_WaitForWorldInfo?.SetValue(game, null);
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "FullscreenSessionEndRecovery.ClearWaitForWorldInfo");
+                }
+            }
+
+            /// <summary>
+            /// Replays the deferred vanilla-style teardown once the game is active again.
+            /// </summary>
+            private static void FinalizeDeferred(CastleMinerZGame game)
+            {
+                bool   saveData = _pendingSaveData;
+                string title    = _pendingDialogTitle   ?? CMZStrings.Get("Session_Ended");
+                string message  = _pendingDialogMessage ?? CMZStrings.Get("You_have_been_disconnected_from_the_network_session_");
+
+                _hasPendingFinalize   = false;
+                _pendingSaveData      = false;
+                _pendingDialogTitle   = null;
+                _pendingDialogMessage = null;
+                _networkDetached      = false;
+
+                try
+                {
+                    game.EndGame(saveData);
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "FullscreenSessionEndRecovery.EndGame");
+                }
+
+                try
+                {
+                    game.FrontEnd?.ShowUIDialog(title, message, false);
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "FullscreenSessionEndRecovery.ShowUIDialog");
+                }
+            }
+        }
+        #endregion
+
+        #region CastleMinerZGame._processKickMessage - Defer Kick Teardown During Inactive Fullscreen
+
+        [HarmonyPatch(typeof(CastleMinerZGame), "_processKickMessage", new[] { typeof(Message), typeof(LocalNetworkGamer) })]
+        internal static class CastleMinerZGame_ProcessKickMessage_DeferDuringInactiveFullscreen
+        {
+            /// <summary>
+            /// Defers local kick / ban teardown while the game is inactive in exclusive fullscreen.
+            /// This avoids running the full frontend transition during a hidden device-focus window.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix(CastleMinerZGame __instance, Message message)
+            {
+                // Return false -> consume vanilla kick teardown for now.
+                return !FullscreenSessionEndRecovery.TryDeferKick(__instance, message);
+            }
+        }
+        #endregion
+
+        #region CastleMinerZGame.OnSessionEnded - Defer Session-End Teardown During Inactive Fullscreen
+
+        [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.OnSessionEnded))]
+        internal static class CastleMinerZGame_OnSessionEnded_DeferDuringInactiveFullscreen
+        {
+            /// <summary>
+            /// Defers generic session-ended teardown while the game is inactive in exclusive
+            /// fullscreen, then replays it once focus returns.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix(CastleMinerZGame __instance, NetworkSessionEndReason reason)
+            {
+                // Return false -> skip the original OnSessionEnded(...) for now.
+                return !FullscreenSessionEndRecovery.TryDeferSessionEnded(__instance, reason);
+            }
+        }
+        #endregion
+
+        #region CastleMinerZGame.Update - Finalize Deferred Session-End On Focus Regain
+
+        [HarmonyPatch(typeof(CastleMinerZGame), "Update", new[] { typeof(GameTime) })]
+        internal static class CastleMinerZGame_Update_FullscreenSessionEndRecovery
+        {
+            /// <summary>
+            /// Watches for inactive -> active focus recovery and finalizes any deferred session-end
+            /// teardown once the fullscreen client is safely visible again.
+            /// </summary>
+            [HarmonyPostfix]
+            private static void Postfix(CastleMinerZGame __instance)
+            {
+                FullscreenSessionEndRecovery.OnGameUpdate(__instance);
+            }
+        }
+        #endregion
+
+        #endregion
+
         #endregion
 
         #region Defensive Hardening & Noise Reduction (Non-Fatal)

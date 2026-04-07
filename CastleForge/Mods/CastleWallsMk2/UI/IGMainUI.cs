@@ -19,6 +19,7 @@ using System.Reflection;
 using DNA.CastleMinerZ;
 using System.Threading;
 using System.Numerics;
+using ModLoaderExt;
 using System.Linq;
 using System.Text;
 using HarmonyLib;

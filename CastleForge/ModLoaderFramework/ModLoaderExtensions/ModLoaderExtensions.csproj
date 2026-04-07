@@ -85,6 +85,7 @@
     <Compile Include="ChatCommands\HelpRegistry.cs" />
     <Compile Include="Embedded\EmbeddedExporter.cs" />
     <Compile Include="ExceptionHandeler\ExceptionTap.cs" />
+    <Compile Include="Localization\CMZStrings.cs" />
     <Compile Include="Patching\EntityLimiterSystem.cs" />
     <Compile Include="Patching\GamePatches.cs" />
     <Compile Include="ModLoaderExtensions.cs" />

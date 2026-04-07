@@ -243,8 +243,8 @@ namespace QoLTweaks
         ///
         /// USAGE
         /// -----
-        /// WEHotkeys.SetReloadBinding("Ctrl+Shift+F3");
-        /// // ... each frame (via Harmony patch) -> if (WEHotkeys.ReloadPressedThisFrame()) { ModConfig.LoadApply(); ... }
+        /// QoLHotkeys.SetReloadBinding("Ctrl+Shift+F3");
+        /// // ... each frame (via Harmony patch) -> if (QoLHotkeys.ReloadPressedThisFrame()) { QoLConfig.LoadApply(); ... }
         ///
         /// EXAMPLES
         /// --------
@@ -351,7 +351,7 @@ namespace QoLTweaks
         /// Runtime hotkey manager for "reload config".
         /// <para>Call <see cref="SetReloadBinding(string)"/> after reading INI, then poll <see cref="ReloadPressedThisFrame"/> each HUD tick.</para>
         /// </summary>
-        internal static class CWHotkeys
+        internal static class QoLHotkeys
         {
             private static HotkeyBinding _reload;
             private static bool _hasPrev;
@@ -394,7 +394,7 @@ namespace QoLTweaks
 
         /// <summary>
         /// Listens for the reload hotkey inside InGameHUD.OnPlayerInput so all work executes on the main thread.
-        /// Keeps the body small; heavy lifting should be inside ModConfig.LoadApply().
+        /// Keeps the body small; heavy lifting should be inside QoLConfig.LoadApply().
         /// </summary>
         [HarmonyPatch]
         static class Patch_Hotkey_ReloadConfig_QoLTweaks
@@ -408,7 +408,7 @@ namespace QoLTweaks
             /// </summary>
             static void Postfix(InGameHUD __instance)
             {
-                if (!CWHotkeys.ReloadPressedThisFrame()) return;
+                if (!QoLHotkeys.ReloadPressedThisFrame()) return;
 
                 try
                 {

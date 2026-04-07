@@ -9,6 +9,8 @@ using System.Globalization;
 using System.IO;
 using System;
 
+using static QoLTweaks.GamePatches;
+
 namespace QoLTweaks
 {
     #region Runtime State
@@ -87,6 +89,9 @@ namespace QoLTweaks
         // [QoLLogging].
         public bool  DoLogging                    = false;
 
+        // [Hotkeys].
+        public string ReloadConfigHotkey          = "Ctrl+Shift+R";
+
         public static string ConfigPath =>
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "!Mods", "QoLTweaks", "QoLTweaks.Config.ini");
 
@@ -143,6 +148,10 @@ namespace QoLTweaks
                     "[QoLLogging]",
                     "; Enables optional diagnostic logging for this mod.",
                     "DoLogging                    = false",
+                    "",
+                    "[Hotkeys]",
+                    "; Reload this config while in-game:",
+                    "ReloadConfig                 = Ctrl+Shift+R",
                 });
             }
 
@@ -160,6 +169,7 @@ namespace QoLTweaks
                 EnableAllowAnyCharPlusPaste  = ini.GetBool("TextInput", "EnableAllowAnyCharPlusPaste", true),
                 EnableRemoveMaxWorldHeight   = ini.GetBool("WorldHeight", "EnableRemoveMaxWorldHeight", true),
                 DoLogging                    = ini.GetBool("QoLLogging", "DoLogging", false),
+                ReloadConfigHotkey           = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R"),
             };
             return cfg;
         }
@@ -174,6 +184,7 @@ namespace QoLTweaks
                 var cfg = LoadOrCreate();
                 Active  = cfg;
                 cfg.ApplyToStatics();
+                QoLHotkeys.SetReloadBinding(cfg.ReloadConfigHotkey);
             }
             catch (Exception ex)
             {

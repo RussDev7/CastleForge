@@ -25,9 +25,9 @@ using DNA.CastleMinerZ.UI;
 using System.Reflection;
 using DNA.CastleMinerZ;
 using DNA.Drawing.UI;
+using ModLoaderExt;
 using DNA.Drawing;
 using System.Linq;
-using System.Text;
 using DNA.Timers;
 using HarmonyLib;                       // Harmony patching library.
 using DNA.Input;
