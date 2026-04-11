@@ -413,7 +413,7 @@ namespace QoLTweaks
                 try
                 {
                     // Reload INI and apply runtime statics.
-                    QoLConfig.LoadOrCreate();
+                    QoLConfig.LoadApply();
 
                     SendFeedback($"[QoLT] Config hot-reloaded from \"{PathShortener.ShortenForLog(QoLConfig.ConfigPath)}\".");
                 }

@@ -247,6 +247,22 @@ namespace RegionProtect
         }
 
         /// <summary>
+        /// Host/local helper for actions that happen client-side before the normal
+        /// network message processing path gets a chance to enforce permissions.
+        /// </summary>
+        internal static bool ShouldDenyLocal(IntVector3 blockPos, ProtectAction action, out DenyReason reason)
+        {
+            var g = CastleMinerZGame.Instance;
+
+            string who =
+                g?.LocalPlayer?.Gamer?.Gamertag ??
+                g?.MyNetworkGamer?.Gamertag ??
+                "";
+
+            return ShouldDeny(who, blockPos, action, out reason);
+        }
+
+        /// <summary>
         /// Central permission check. Decides whether a given action at a position should be denied
         /// based on spawn protection and region whitelists.
         /// </summary>

@@ -234,7 +234,7 @@ namespace RegionProtect
                 // SpawnProtection.
                 {
                     var sec = parsed.GetSection("SpawnProtection");
-                    Spawn.Enabled = sec.GetBool("Enabled", true);
+                    Spawn.Enabled = sec.GetBool("Enabled", false);
                     Spawn.Range = Clamp(sec.GetInt("Range", 16), 0, 512);
                     Spawn.AllowedPlayers.Clear();
                     foreach (var p in RegionProtectCore.ParsePlayerCsv(sec.GetString("AllowedPlayers", "")))

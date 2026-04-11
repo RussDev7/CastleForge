@@ -45,6 +45,36 @@ Core categories:
         · EnumName.png
     - Lookups are ID + friendly/enum name-based, cached per item, per active pack.
 
+• Door model skins / geometry
+    - Optional door texture and/or model replacement applied to DoorEntity model families.
+    - Pack layout:
+        · Models\Doors\NormalDoor.png
+        · Models\Doors\IronDoor.png
+        · Models\Doors\DiamondDoor.png
+        · Models\Doors\TechDoor.png
+        · Models\Doors\NormalDoor.xnb
+        · Models\Doors\IronDoor.xnb
+        · Models\Doors\DiamondDoor.xnb
+        · Models\Doors\TechDoor.xnb
+        · Models\Doors\NormalDoor\NormalDoor.xnb
+        · Models\Doors\NormalDoor\Model.xnb
+          (same per-folder pattern for IronDoor / DiamondDoor / TechDoor)
+    - Notes:
+        · PNG = full-sheet door texture replacement.
+        · XNB = door model geometry replacement.
+        · Doors are model-driven, not terrain-atlas-backed blocks.
+        · Keep XNB dependencies beside the model (prefer per-folder layout).
+        · Higher-resolution PNGs (for example 512x512) are allowed if the sheet keeps
+          the same UV layout proportions as vanilla.
+    - Export support:
+        · Door sheets can be exported to:
+            !Mods\TexturePacks\_Export\Models\Doors\
+        · Output filenames:
+            · NormalDoor.png
+            · IronDoor.png
+            · DiamondDoor.png
+            · TechDoor.png
+
 • Item model geometry overrides (held items, XNB Model swap)
     - Optional per-item *geometry* replacement applied by swapping the entity's Model.
     - Pack layout (recommended to avoid dependency name collisions like "texture.xnb"):
@@ -224,6 +254,7 @@ Model authoring & extraction workflow (GLB + bone-name safety)
       can behave badly (extreme scale or failures).
 
 • GLB export coverage (extraction folders)
+    - Models\Doors\Misc\*.glb         (door models)
     - Models\Items\Misc\*.glb         (inventory item models)
     - Models\Player\Misc\Player.glb   (player model, when available)
     - Models\Enemies\Misc\*.glb       (enemy models)
@@ -246,6 +277,9 @@ Notes:
       crashes (e.g., BasicEffect ObjectDisposedException).
 - Pack picker metadata (about.json) is optional and non-fatal; malformed files are ignored.
 - Description styling is lightweight SpriteFont run rendering, not full rich-text/HTML.
+- Door model skins:
+    · Doors are authored as full-sheet textures under Models\Doors\, not as Blocks\*_top/_side/_bottom.
+    · Keep the vanilla packed texture layout intact when repainting or upscaling door sheets.
 
 -------------------------------------------------------------------------------
 Authoring Notes (XNB Models)
@@ -270,10 +304,17 @@ Items (icons)\
   0007.png                                      // Icon: ####.png (fallback).
   Iron_Pickaxe_EnumName.png                     // Icon: Name_EnumName.png / EnumName.png.
 
-Models (held items & characters)\
+Models (held items, doors & characters)\
   Items\0007_Iron_Pickaxe_model.png             // Held item model skin (####_Name_model).
   Items\0051_Pistol_model\0051_Pistol_model.xnb // Held item model GEOMETRY override (per-item folder).
   Items\0051_Pistol_model\texture_0.xnb         // Model dependency (example: diffuse texture referenced by the model).
+  Doors\NormalDoor.png                          // Full-sheet wood door texture.
+  Doors\IronDoor.png                            // Full-sheet iron door texture.
+  Doors\DiamondDoor.png                         // Full-sheet diamond door texture.
+  Doors\TechDoor.png                            // Full-sheet tech door texture.
+  Doors\NormalDoor.xnb                          // Optional wood door GEOMETRY override (flat).
+  Doors\NormalDoor\NormalDoor.xnb               // Optional wood door GEOMETRY override (per-folder).
+  Doors\NormalDoor\Model.xnb                    // Optional wood door GEOMETRY override (convenience name).
   Player\SWATMale.png                           // Full-player texture.
   Player\Player.png                             // Full-player texture.
   Player\Player_model.xnb                       // Player GEOMETRY override (flat).
@@ -462,6 +503,45 @@ namespace TexturePacks
         // Example: "Grass" -> { Enum=Grass, Top=2, Sides=[1], Bottom=0, All=[2,1,0] }
         private static Dictionary<string, BlockFaceMap> _faceMapByName;
 
+        #region Models: Doors (State / Runtime Caches)
+
+        /// <summary>
+        /// Runtime state for full-sheet door model skin replacements loaded from
+        /// Packs\...\Models\Doors\*.png.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - CastleMiner Z doors render from DoorEntity models, not from terrain atlas tiles.
+        /// - Each supported file replaces the full packed texture sheet for one door model family:
+        ///     Models\Doors\NormalDoor.png
+        ///     Models\Doors\IronDoor.png
+        ///     Models\Doors\DiamondDoor.png
+        ///     Models\Doors\TechDoor.png
+        /// - These are full-sheet replacements, not per-face block replacements.
+        /// </remarks>
+        private static readonly Dictionary<string, DoorEntity.ModelNameEnum> _doorSheetNameMap =
+            new Dictionary<string, DoorEntity.ModelNameEnum>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["NormalDoor"] = DoorEntity.ModelNameEnum.Wood,
+                ["IronDoor"] = DoorEntity.ModelNameEnum.Iron,
+                ["DiamondDoor"] = DoorEntity.ModelNameEnum.Diamond,
+                ["TechDoor"] = DoorEntity.ModelNameEnum.Tech,
+            };
+
+        /// <summary>
+        /// Vanilla full-sheet door textures captured from the live game models.
+        /// </summary>
+        private static readonly Dictionary<DoorEntity.ModelNameEnum, Texture2D> _doorSkinVanilla =
+            new Dictionary<DoorEntity.ModelNameEnum, Texture2D>();
+
+        /// <summary>
+        /// Active full-sheet door overrides loaded from the selected texture pack.
+        /// </summary>
+        private static readonly Dictionary<DoorEntity.ModelNameEnum, Texture2D> _doorSkinOverrides =
+            new Dictionary<DoorEntity.ModelNameEnum, Texture2D>();
+
+        #endregion
+
         #endregion
 
         #region Public API (Icons & Blocks)
@@ -492,7 +572,14 @@ namespace TexturePacks
 
             var cfg = TPConfig.LoadOrCreate();
             var packDir = Path.Combine(PacksRoot, cfg.ActivePack ?? "");
+
             var blocksDir = Path.Combine(packDir, "Blocks");
+            string modelsDir = Path.Combine(packDir, "Models");
+            string modelsDoorsDir = Path.Combine(modelsDir, "Doors");
+
+            bool hasBlocksDir = Directory.Exists(blocksDir);
+            bool hasDoorModelsDir = Directory.Exists(modelsDoorsDir);
+
             if (!Directory.Exists(blocksDir))
             {
                 // Log($"Blocks dir not found: {blocksDir}");
@@ -513,14 +600,29 @@ namespace TexturePacks
             // Build face map from engine data so BlockName_face works exactly.
             EnsureFaceMap();
 
+            // Cache vanilla door model skins so full-sheet door exports and runtime overrides
+            // can resolve against the actual live game model textures.
+            CaptureDoorVanillaBaselinesIfNeeded();
+
             // Derive tile sizes (engine uses 8 tiles per row).
             int nearTile = Math.Max(1, nearAtlas.Width / 8);
             int mipTile;
 
-            // Load replacements from Blocks\ (tile_### and BlockName_face).
-            var reps = LoadBlockTileReplacements(blocksDir, nearAtlas.GraphicsDevice);
-            Log($"Found {reps.Count} block-face replacement PNG(s).");
-            if (reps.Count == 0) return;
+            // Load replacements from the active pack.
+            // - Terrain-backed blocks use Blocks\tile_### and Blocks\BlockName_face.
+            // - Door models use Models\Doors\NormalDoor.png, IronDoor.png, etc.
+            var reps = hasBlocksDir
+                ? LoadBlockTileReplacements(blocksDir, nearAtlas.GraphicsDevice)
+                : new List<TileReplacement>();
+            var doorReps = hasDoorModelsDir
+                ? LoadDoorSheetReplacements(modelsDoorsDir, nearAtlas.GraphicsDevice)
+                : new List<DoorSheetReplacement>();
+
+            Log($"Found {reps.Count} terrain block-face replacement PNG(s) and {doorReps.Count} door model sheet replacement PNG(s).");
+
+            // Nothing to do if the pack provided neither terrain block replacements nor door model replacements.
+            if (reps.Count == 0 && doorReps.Count == 0)
+                return;
 
             // 1) Write the near atlas.
             BlitReplacementsIntoAtlas(nearAtlas, nearTile, reps, disposeImagesAfter: false);
@@ -531,6 +633,9 @@ namespace TexturePacks
                 mipTile = Math.Max(1, mipAtlas.Width / 8);
                 BlitReplacementsIntoAtlas(mipAtlas, mipTile, reps, disposeImagesAfter: false);
             }
+
+            // 3) Apply full-sheet door model replacements from Models\Doors\.
+            ApplyDoorSheetReplacements(doorReps);
 
             // Now it's safe to dispose source PNGs.
             foreach (var rep in reps) rep.Dispose();
@@ -1191,6 +1296,167 @@ namespace TexturePacks
         }
         #endregion
 
+        #region Door Model Skins (Full-Sheet Overrides)
+
+        /// <summary>
+        /// Attempts to locate the first diffuse/albedo texture bound to a model's mesh parts.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - Door models do not expose their diffuse texture through a simple public property,
+        ///   so we inspect the mesh part effect bindings.
+        /// - This is used to capture the vanilla full-sheet textures once at runtime so exports
+        ///   and pack reloads have a reliable source image.
+        /// </remarks>
+        private static Texture2D GetFirstDiffuseTextureFromModel(Model model)
+        {
+            if (model == null)
+                return null;
+
+            foreach (var mesh in model.Meshes)
+            {
+                foreach (var part in mesh.MeshParts)
+                {
+                    var fx = part.Effect;
+                    if (fx == null)
+                        continue;
+
+                    if (fx is BasicEffect be && be.Texture != null)
+                        return be.Texture;
+
+                    var names = new[] { "Texture", "Texture0", "DiffuseTexture", "DiffuseMap", "Albedo", "AlbedoMap" };
+                    foreach (var n in names)
+                    {
+                        var p = fx.Parameters[n];
+                        if (p == null)
+                            continue;
+
+                        try
+                        {
+                            var tex = p.GetValueTexture2D();
+                            if (tex != null)
+                                return tex;
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Captures the vanilla full-sheet door textures from the live game models once per session.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - These source textures are used for exporting door sheets and as a known-good
+        ///   fallback reference for active runtime overrides.
+        /// - Because the game resolves door visuals through DoorEntity models, this is the
+        ///   most reliable way to discover the true texture in use.
+        /// </remarks>
+        private static void CaptureDoorVanillaBaselinesIfNeeded()
+        {
+            var names = new[]
+            {
+                DoorEntity.ModelNameEnum.Wood,
+                DoorEntity.ModelNameEnum.Iron,
+                DoorEntity.ModelNameEnum.Diamond,
+                DoorEntity.ModelNameEnum.Tech,
+            };
+
+            foreach (var modelName in names)
+            {
+                if (_doorSkinVanilla.TryGetValue(modelName, out Texture2D existing) && existing != null && !existing.IsDisposed)
+                    continue;
+
+                try
+                {
+                    var model = DoorEntity.GetDoorModel(modelName);
+                    var tex = GetFirstDiffuseTextureFromModel(model);
+
+                    if (tex != null && !tex.IsDisposed)
+                        _doorSkinVanilla[modelName] = tex;
+                }
+                catch (Exception ex)
+                {
+                    Log($"[Doors] Failed to capture vanilla baseline for {modelName}: {ex.Message}.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies full-sheet door overrides loaded from Models\Doors\*.png.
+        /// </summary>
+        /// <param name="reps">Loaded full-sheet replacements for the active pack.</param>
+        /// <remarks>
+        /// NOTE:
+        /// - Existing overrides are cleared before new ones are installed.
+        /// - Replacement textures are not cloned; the loaded Texture2D is stored directly
+        ///   as the active override for the corresponding door model family.
+        /// - Source PNG textures are intentionally NOT disposed here because they become
+        ///   the live active override textures.
+        /// </remarks>
+        private static void ApplyDoorSheetReplacements(List<DoorSheetReplacement> reps)
+        {
+            foreach (var tex in _doorSkinOverrides.Values)
+            {
+                try { tex?.Dispose(); } catch { }
+            }
+            _doorSkinOverrides.Clear();
+
+            if (reps == null || reps.Count == 0)
+                return;
+
+            foreach (var rep in reps)
+            {
+                if (rep == null || rep.Image == null || rep.Image.IsDisposed)
+                    continue;
+
+                _doorSkinOverrides[rep.ModelName] = rep.Image;
+                rep.Image = null; // Ownership transferred to _doorSkinOverrides.
+            }
+
+            foreach (var rep in reps)
+                rep.Dispose();
+        }
+
+        /// <summary>
+        /// Applies the active full-sheet override to a live door entity, if one exists.
+        /// </summary>
+        /// <param name="door">Live DoorEntity instance.</param>
+        /// <param name="modelName">Door model family resolved by the game.</param>
+        /// <remarks>
+        /// NOTE:
+        /// - DoorEntity renders through its private child model entity (_modelEnt).
+        /// - We therefore register the override texture against that rendered child entity.
+        /// </remarks>
+        public static void TryApplyDoorModelSkin(DoorEntity door, DoorEntity.ModelNameEnum modelName)
+        {
+            try
+            {
+                if (door == null)
+                    return;
+
+                if (!_doorSkinOverrides.TryGetValue(modelName, out Texture2D skin) || skin == null || skin.IsDisposed)
+                    return;
+
+                var f = AccessTools.Field(typeof(DoorEntity), "_modelEnt");
+                if (f == null)
+                    return;
+
+                if (!(f.GetValue(door) is Entity modelEnt))
+                    return;
+
+                EntitySkinRegistry.SetSkin(modelEnt, skin);
+            }
+            catch (Exception ex)
+            {
+                Log($"[DoorSkin] Failed to apply door skin: {ex.Message}.");
+            }
+        }
+        #endregion
+
         #region Item Model Geometry: Overrides (XNB)
 
         /// <summary>
@@ -1367,6 +1633,183 @@ namespace TexturePacks
 
                 // Apply (invokes SetupModel via the protected setter).
                 SetModel(me, model);
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Door Model Geometry Overrides (XNB)
+
+        /// <summary>
+        /// Runtime manager for pack-provided door model geometry overrides loaded from
+        /// Packs\...\Models\Doors\*.xnb.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - Doors are rendered by DoorEntity's private child model entity (_modelEnt).
+        /// - We preserve that child entity and only swap its Model so the vanilla lighting,
+        ///   transforms, and door-open/door-closed positioning behavior stay intact.
+        /// - PNG door sheet overrides can still be layered on top of a custom XNB model.
+        /// </remarks>
+        internal static class DoorModelGeometryOverrides
+        {
+            #region Tracking
+
+            private sealed class GeoEntry
+            {
+                public DoorEntity.ModelNameEnum ModelName;
+                public ModelEntity ModelEntity;
+                public Model VanillaModel;
+            }
+
+            private sealed class RefEq<T> : IEqualityComparer<T> where T : class
+            {
+                public static readonly RefEq<T> Instance = new RefEq<T>();
+                public bool Equals(T a, T b) => ReferenceEquals(a, b);
+                public int GetHashCode(T obj) => RuntimeHelpers.GetHashCode(obj);
+            }
+
+            private static readonly Dictionary<DoorEntity, GeoEntry> _byDoor =
+                new Dictionary<DoorEntity, GeoEntry>(RefEq<DoorEntity>.Instance);
+
+            private static readonly Dictionary<DoorEntity.ModelNameEnum, Model> _modelGeoCache =
+                new Dictionary<DoorEntity.ModelNameEnum, Model>();
+
+            #endregion
+
+            #region Reflection
+
+            private static readonly FieldInfo FI_Door_ModelEnt =
+                AccessTools.Field(typeof(DoorEntity), "_modelEnt");
+
+            private static readonly PropertyInfo PI_ModelEntity_Model =
+                AccessTools.Property(typeof(ModelEntity), "Model");
+
+            private static ModelEntity GetDoorModelEntity(DoorEntity door)
+            {
+                try { return FI_Door_ModelEnt?.GetValue(door) as ModelEntity; }
+                catch { return null; }
+            }
+
+            private static Model GetModel(ModelEntity e)
+            {
+                try { return (Model)PI_ModelEntity_Model.GetValue(e, null); }
+                catch { return null; }
+            }
+
+            private static void SetModel(ModelEntity e, Model m)
+            {
+                try { PI_ModelEntity_Model.SetValue(e, m, null); }
+                catch { }
+            }
+            #endregion
+
+            #region Pack Switch Hook
+
+            /// <summary>
+            /// Restores tracked live door entities back to their vanilla baseline model,
+            /// clears pack caches, and reapplies any active door geometry override.
+            /// </summary>
+            public static void OnPackSwitched()
+            {
+                // 1) Restore all tracked live doors to vanilla before unloading pack assets.
+                foreach (var kv in _byDoor.ToArray())
+                {
+                    var door = kv.Key;
+                    var entry = kv.Value;
+                    if (door == null || entry == null || entry.ModelEntity == null)
+                        continue;
+
+                    if (entry.VanillaModel != null)
+                        SetModel(entry.ModelEntity, entry.VanillaModel);
+                }
+
+                // 2) Clear loaded pack models + folder-rooted content managers.
+                _modelGeoCache.Clear();
+                ResetPackModelCM();
+
+                // 3) Reapply against the new active pack.
+                foreach (var kv in _byDoor.ToArray())
+                {
+                    var door = kv.Key;
+                    var entry = kv.Value;
+                    if (door == null || entry == null)
+                        continue;
+
+                    TryApplyDoorModelGeometry(door, entry.ModelName);
+                }
+            }
+            #endregion
+
+            #region Apply
+
+            /// <summary>
+            /// Attempts to apply a pack-provided XNB Model geometry override to a live door entity.
+            /// </summary>
+            /// <remarks>
+            /// NOTE:
+            /// - Supported filenames are:
+            ///     Models\Doors\NormalDoor.xnb
+            ///     Models\Doors\IronDoor.xnb
+            ///     Models\Doors\DiamondDoor.xnb
+            ///     Models\Doors\TechDoor.xnb
+            /// - Per-folder variants are also supported:
+            ///     Models\Doors\NormalDoor\NormalDoor.xnb
+            ///     Models\Doors\NormalDoor\Model.xnb
+            /// - Dependencies should live beside the selected XNB.
+            /// </remarks>
+            public static void TryApplyDoorModelGeometry(DoorEntity door, DoorEntity.ModelNameEnum modelName)
+            {
+                if (door == null || modelName == DoorEntity.ModelNameEnum.None)
+                    return;
+
+                var modelEnt = GetDoorModelEntity(door);
+                if (modelEnt == null)
+                    return;
+
+                // Track the live door once so pack switches can restore/reapply safely.
+                if (!_byDoor.TryGetValue(door, out var entry) || entry == null)
+                {
+                    entry = new GeoEntry
+                    {
+                        ModelName = modelName,
+                        ModelEntity = modelEnt,
+                        VanillaModel = GetModel(modelEnt)
+                    };
+                    _byDoor[door] = entry;
+                }
+                else
+                {
+                    entry.ModelName = modelName;
+                    if (entry.ModelEntity == null)
+                        entry.ModelEntity = modelEnt;
+                    if (entry.VanillaModel == null)
+                        entry.VanillaModel = GetModel(modelEnt);
+                }
+
+                var cfg = TPConfig.LoadOrCreate();
+                var dir = Path.Combine(PacksRoot, cfg.ActivePack ?? "", "Models", "Doors");
+                if (!Directory.Exists(dir))
+                    return;
+
+                if (!_modelGeoCache.TryGetValue(modelName, out var model) || model == null)
+                {
+                    var xnbPath = DoorModelGeoResolver
+                        .EnumerateDoorCandidates(dir, modelName)
+                        .FirstOrDefault(File.Exists);
+
+                    if (xnbPath == null)
+                        return;
+
+                    var xnbRoot = Path.GetDirectoryName(xnbPath);
+                    var assetName = Path.GetFileNameWithoutExtension(xnbPath);
+
+                    var cm = GetPackCM(xnbRoot);
+                    model = cm.Load<Model>(assetName);
+                    _modelGeoCache[modelName] = model;
+                }
+
+                SetModel(modelEnt, model);
             }
             #endregion
         }
@@ -1848,6 +2291,70 @@ namespace TexturePacks
             #endregion
         }
 
+        #region Door Model Geometry (XNB) - Path Candidate Resolver
+
+        /// <summary>
+        /// Candidate path resolver for door model geometry overrides.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - Supports both flat files and per-door subfolders so model dependencies can stay
+        ///   beside the chosen XNB.
+        /// </remarks>
+        internal static class DoorModelGeoResolver
+        {
+            private static IEnumerable<string> Expand(string dir, string stem)
+            {
+                // Flat.
+                yield return Path.Combine(dir, stem + ".xnb");
+
+                // Per-folder (preferred).
+                yield return Path.Combine(dir, stem, stem + ".xnb");
+
+                // Convenience name.
+                yield return Path.Combine(dir, stem, "Model.xnb");
+            }
+
+            private static string GetStem(DoorEntity.ModelNameEnum modelName)
+            {
+                switch (modelName)
+                {
+                    case DoorEntity.ModelNameEnum.Wood:
+                        return "NormalDoor";
+
+                    case DoorEntity.ModelNameEnum.Iron:
+                        return "IronDoor";
+
+                    case DoorEntity.ModelNameEnum.Diamond:
+                        return "DiamondDoor";
+
+                    case DoorEntity.ModelNameEnum.Tech:
+                        return "TechDoor";
+
+                    default:
+                        return null;
+                }
+            }
+
+            public static IEnumerable<string> EnumerateDoorCandidates(string dir, DoorEntity.ModelNameEnum modelName)
+            {
+                var stem = GetStem(modelName);
+                if (string.IsNullOrWhiteSpace(stem))
+                    yield break;
+
+                foreach (var p in Expand(dir, stem))
+                    yield return p;
+
+                var lower = stem.ToLowerInvariant();
+                if (lower != stem)
+                {
+                    foreach (var p in Expand(dir, lower))
+                        yield return p;
+                }
+            }
+        }
+        #endregion
+
         #region Global Model Geometry (XNB) - Path Candidate Resolver
 
         /// <summary>
@@ -2103,6 +2610,89 @@ namespace TexturePacks
         {
             try { using (var s = File.OpenRead(path)) return Texture2D.FromStream(gd, s); }
             catch { return null; }
+        }
+        #endregion
+
+        #region Models: Doors (Replacement Loading)
+
+        /// <summary>
+        /// Represents a full packed texture sheet replacement for one door model family.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - This replaces the entire diffuse texture bound to the door model.
+        /// - We no longer try to treat doors like block-face tiles because the actual
+        ///   door art is packed into a single model texture sheet.
+        /// </remarks>
+        private sealed class DoorSheetReplacement : IDisposable
+        {
+            public DoorEntity.ModelNameEnum ModelName;
+            public Texture2D Image;
+
+            public void Dispose()
+            {
+                try { Image?.Dispose(); } catch { }
+                Image = null;
+            }
+        }
+
+        /// <summary>
+        /// Parses a door sheet filename stem from Models\Doors\*.png.
+        /// </summary>
+        /// <param name="bare">Filename without extension (for example "DiamondDoor").</param>
+        /// <param name="modelName">Resolved door model family.</param>
+        /// <returns>True if the filename is a supported canonical door model sheet name.</returns>
+        private static bool TryParseDoorSheetName(string bare, out DoorEntity.ModelNameEnum modelName)
+        {
+            modelName = DoorEntity.ModelNameEnum.None;
+
+            if (string.IsNullOrWhiteSpace(bare))
+                return false;
+
+            return _doorSheetNameMap.TryGetValue(bare.Trim(), out modelName);
+        }
+
+        /// <summary>
+        /// Loads full-sheet door replacements from Packs\...\Models\Doors\*.png.
+        /// </summary>
+        /// <param name="doorsDir">Resolved Models\Doors directory for the active pack.</param>
+        /// <param name="gd">Graphics device used to create Texture2D instances from PNG files.</param>
+        /// <returns>List of full-sheet door texture replacements.</returns>
+        /// <remarks>
+        /// NOTE:
+        /// - Supported canonical filenames are:
+        ///     NormalDoor.png
+        ///     IronDoor.png
+        ///     DiamondDoor.png
+        ///     TechDoor.png
+        /// - Unknown filenames are ignored.
+        /// </remarks>
+        private static List<DoorSheetReplacement> LoadDoorSheetReplacements(string doorsDir, GraphicsDevice gd)
+        {
+            var list = new List<DoorSheetReplacement>();
+
+            if (string.IsNullOrWhiteSpace(doorsDir) || !Directory.Exists(doorsDir) || gd == null)
+                return list;
+
+            foreach (var path in Directory.EnumerateFiles(doorsDir, "*.png", SearchOption.TopDirectoryOnly))
+            {
+                var bare = Path.GetFileNameWithoutExtension(path);
+
+                if (!TryParseDoorSheetName(bare, out var modelName))
+                    continue;
+
+                var tex = LoadPng(gd, path);
+                if (tex == null)
+                    continue;
+
+                list.Add(new DoorSheetReplacement
+                {
+                    ModelName = modelName,
+                    Image = tex,
+                });
+            }
+
+            return list;
         }
         #endregion
 
@@ -4979,7 +5569,7 @@ namespace TexturePacks
             /// <summary>
             /// Try to read a Texture2D into a Color[] buffer. Uses a render-target blit for non-Color formats.
             /// </summary>
-            private static bool TryReadTextureToColors(Texture2D tex, out Color[] pixels)
+            public static bool TryReadTextureToColors(Texture2D tex, out Color[] pixels)
             {
                 pixels = null;
                 if (tex == null || tex.IsDisposed) return false;
@@ -6068,6 +6658,9 @@ namespace TexturePacks
                 // Blocks (terrain atlas faces).
                 Try(() => ExportBlocks(Path.Combine(root, "Blocks")));
 
+                // Door model sheets.
+                Try(() => ExportDoorModelSheets(Path.Combine(root, "Models", "Doors")));
+
                 // HUD (UI sprites).
                 Try(() => ExportUISprites(gd, gm, Path.Combine(root, "HUD")));
 
@@ -6335,7 +6928,7 @@ namespace TexturePacks
         {
             // Entry point you can call from a hotkey
             /// <summary>
-            /// Exports each block's face textures (Top / Side / Bottom) from the near terrain atlas
+            /// Exports each terrain-backed block's face textures (Top / Side / Bottom) from the near terrain atlas
             /// into !Mods/TexturePacks/_Export/Blocks (or a custom folder).
             /// - Top:    "BlockName_top.png"    (if present)
             /// - Side:   "BlockName_side.png"   (first distinct side); if multiple, also _side2, _side3...
@@ -6426,6 +7019,93 @@ namespace TexturePacks
                 Log($"[Export] Wrote {written} face PNG(s) to \"{ShortenForLog(outDir)}\".");
                 return written;
             }
+
+            #region Models: Doors (Full-Sheet Export)
+
+            /// <summary>
+            /// Exports the live vanilla full-sheet door model textures into
+            /// !Mods/TexturePacks/_Export/Models/Doors (or a custom folder).
+            /// </summary>
+            /// <param name="outDir">Optional custom output directory.</param>
+            /// <param name="overwrite">True to overwrite existing PNG files.</param>
+            /// <returns>The number of PNG files written.</returns>
+            /// <remarks>
+            /// NOTE:
+            /// - These are full-sheet door model textures, not block-face tiles.
+            /// - Output filenames are:
+            ///     NormalDoor.png
+            ///     IronDoor.png
+            ///     DiamondDoor.png
+            ///     TechDoor.png
+            /// </remarks>
+            public static int ExportDoorSheets(string outDir = null, bool overwrite = true)
+            {
+                if (string.IsNullOrWhiteSpace(outDir))
+                    outDir = Path.Combine(PacksRoot, "_Export", "Models", "Doors");
+
+                try { Directory.CreateDirectory(outDir); }
+                catch (Exception ex)
+                {
+                    Log($"[Export] Failed to create door export directory: {ex.Message}.");
+                    return 0;
+                }
+
+                CaptureDoorVanillaBaselinesIfNeeded();
+
+                int written = 0;
+
+                foreach (var kv in _doorSkinVanilla)
+                {
+                    var modelName = kv.Key;
+                    var tex = kv.Value;
+
+                    if (tex == null || tex.IsDisposed)
+                        continue;
+
+                    string fileName;
+                    switch (modelName)
+                    {
+                        case DoorEntity.ModelNameEnum.Wood:
+                            fileName = "NormalDoor.png";
+                            break;
+
+                        case DoorEntity.ModelNameEnum.Iron:
+                            fileName = "IronDoor.png";
+                            break;
+
+                        case DoorEntity.ModelNameEnum.Diamond:
+                            fileName = "DiamondDoor.png";
+                            break;
+
+                        case DoorEntity.ModelNameEnum.Tech:
+                            fileName = "TechDoor.png";
+                            break;
+
+                        default:
+                            fileName = modelName.ToString() + ".png";
+                            break;
+                    }
+
+                    var path = Path.Combine(outDir, fileName);
+
+                    if (!overwrite && File.Exists(path))
+                        continue;
+
+                    try
+                    {
+                        if (SaveTextureAsPng(tex, path, true))
+                            written++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"[Export] Failed to export door sheet '{fileName}': {ex.Message}.");
+                    }
+                }
+
+                Log($"[Export] Wrote {written} door sheet PNG(s) to \"{ShortenForLog(outDir)}\".");
+                return written;
+            }
+            #endregion
 
             /// <summary>Build a safe filename stem (keeps letters, digits, underscore).</summary>
             private static string SafeFileName(string stem)
@@ -6570,6 +7250,10 @@ namespace TexturePacks
         // Thin wrapper so TexturePackExtractor.ExportAll() reads nicely.
         static void ExportBlocks(string dir)
             => BlockExporter.ExportAllFaces(dir);
+
+        // Thin wrapper so TexturePackExtractor.ExportAll() reads nicely.
+        static void ExportDoorModelSheets(string dir)
+            => BlockExporter.ExportDoorSheets(dir);
 
         #endregion
 
@@ -9332,15 +10016,16 @@ namespace TexturePacks
             }
 
             /// <summary>
-            /// Export current model textures (Player/Enemies/Dragon) and model GLBs under:
+            /// Export current model textures (Doors / Player / Enemies / Dragon) and model GLBs under:
             ///   !Mods/TexturePacks/_Extracted/<timestamp>/Models/...
             ///
             /// Folder layout produced:
+            ///   Models\Doors\Misc\NormalDoor.glb / IronDoor.glb / DiamondDoor.glb / TechDoor.glb
             ///   Models\Player\Misc\Player.glb
             ///   Models\Enemies\Misc\<EnemyType>.glb
             ///   Models\Dragon\Misc\DragonBody.glb + DragonFeet.glb
-            ///   Models\Items\Misc\<Item>.glb               (via ExportAllItemModelsObj -> GLB)
-            ///   Models\Extras\{Dragons|Enemies|Misc}\*.glb (via reflection scan)
+            ///   Models\Items\Misc\<Item>.glb
+            ///   Models\Extras\{Dragons|Enemies|Misc}\*.glb
             ///
             /// Pass the player's Model if you want their current skin exported as well.
             /// Returns the absolute extraction folder.
@@ -9348,13 +10033,14 @@ namespace TexturePacks
             public static string ExportModelTextures(string root, Model playerModel = null, bool overwrite = true)
             {
                 var extract = Path.Combine(root, "Models");
+                var doorDir = Path.Combine(extract, "Doors");
                 var playerDir = Path.Combine(extract, "Player");
                 var enemyDir = Path.Combine(extract, "Enemies");
                 var dragonDir = Path.Combine(extract, "Dragon");
                 var itemsDir = Path.Combine(extract, "Items");
                 var extrasDir = Path.Combine(extract, "Extras");
 
-                int pCount = 0, eCount = 0, dCount = 0;
+                int doorGlbCount = 0, pCount = 0, eCount = 0, dCount = 0;
 
                 // One dedupe set for *all* model instances exported under Models\
                 var globalSeen = new HashSet<Model>(new ReferenceEqualityComparerModel());
@@ -9362,6 +10048,53 @@ namespace TexturePacks
                 try
                 {
                     Directory.CreateDirectory(extract);
+
+                    // =====================================================================================
+                    // Doors (shared door model GLBs in Models\Doors\Misc)
+                    // =====================================================================================
+                    try
+                    {
+                        Directory.CreateDirectory(doorDir);
+
+                        var miscDir = Path.Combine(doorDir, "Misc");
+                        Directory.CreateDirectory(miscDir);
+
+                        var doorNames = new[]
+                        {
+                            DoorEntity.ModelNameEnum.Wood,
+                            DoorEntity.ModelNameEnum.Iron,
+                            DoorEntity.ModelNameEnum.Diamond,
+                            DoorEntity.ModelNameEnum.Tech,
+                        };
+
+                        for (int i = 0; i < doorNames.Length; i++)
+                        {
+                            var modelName = doorNames[i];
+                            var stem = GetDoorStem(modelName);
+                            if (string.IsNullOrWhiteSpace(stem))
+                                continue;
+
+                            Model model = null;
+                            try { model = DoorEntity.GetDoorModel(modelName); }
+                            catch { }
+
+                            if (model == null)
+                                continue;
+
+                            if (TryExportGlbOnce(
+                                model,
+                                Path.Combine(miscDir, stem + ".glb"),
+                                overwrite,
+                                globalSeen))
+                            {
+                                doorGlbCount++;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"[Export] Doors export error: {ex.Message}.");
+                    }
 
                     // =====================================================================================
                     // Player (optional, if you provide a live Model instance)
@@ -9548,7 +10281,7 @@ namespace TexturePacks
                     Log($"[Export] Unhandled export error: {ex.Message}.");
                 }
 
-                Log($"[Export] Wrote P:{pCount} E:{eCount} D:{dCount} -> \"{ShortenForLog(extract)}\".");
+                Log($"[Export] Wrote Doors:{doorGlbCount} P:{pCount} E:{eCount} D:{dCount} -> \"{ShortenForLog(extract)}\".");
                 return extract;
             }
 
@@ -9627,6 +10360,9 @@ namespace TexturePacks
                 return count;
             }
 
+            /// <summary>
+            /// Gets a Texture2D from a field or property by name.
+            /// </summary>
             private static Texture2D GetFieldTexture2D(object obj, string fieldOrProp)
             {
                 if (obj == null) return null;
@@ -9644,6 +10380,30 @@ namespace TexturePacks
                     try { return p.GetValue(obj, null) as Texture2D; } catch { }
                 }
                 return null;
+            }
+
+            /// <summary>
+            /// Gets the pack/export stem for a door model type.
+            /// </summary>
+            private static string GetDoorStem(DoorEntity.ModelNameEnum modelName)
+            {
+                switch (modelName)
+                {
+                    case DoorEntity.ModelNameEnum.Wood:
+                        return "NormalDoor";
+
+                    case DoorEntity.ModelNameEnum.Iron:
+                        return "IronDoor";
+
+                    case DoorEntity.ModelNameEnum.Diamond:
+                        return "DiamondDoor";
+
+                    case DoorEntity.ModelNameEnum.Tech:
+                        return "TechDoor";
+
+                    default:
+                        return null;
+                }
             }
 
             // Reference equality comparer for HashSet< Texture2D >
@@ -10801,9 +11561,10 @@ namespace TexturePacks
             ModelGeometryManager.ApplyActiveModelGeometryNow();
             ModelSkinManager.ApplyActiveModelSkinsNow();
 
-            // ITEM MODELS: Clear old per-entity skins + models + reset default cache.
+            // ITEM / DOOR MODELS: Clear old per-entity skins + models + reset default caches.
             EntitySkinRegistry.OnPackSwitched();
             ItemModelGeometryOverrides.OnPackSwitched();
+            DoorModelGeometryOverrides.OnPackSwitched();
 
             // Inventory/HUD sprites.
             UISpritePacks.OnPackSwitched();

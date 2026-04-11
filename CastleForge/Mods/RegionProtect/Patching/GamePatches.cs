@@ -9,6 +9,7 @@ using DNA.CastleMinerZ.Inventory;
 using System.Collections.Generic;
 using DNA.CastleMinerZ.Terrain;
 using Microsoft.Xna.Framework;
+using DNA.Net.GamerServices;
 using DNA.CastleMinerZ.Net;
 using DNA.CastleMinerZ.UI;
 using System.Reflection;
@@ -579,6 +580,59 @@ namespace RegionProtect
         }
         #endregion
 
+        #region Patch: Gun-Triggered TNT/C4 Shooter Attribution
+
+        /// <summary>
+        /// Patch: TracerManager.Tracer.Update(float dt)
+        /// Summary:
+        /// - Remembers which shooter actually hit a TNT/C4 block with a bullet/laser.
+        /// - Vanilla later sends DetonateExplosiveMessage using MyNetworkGamer, which can be the host
+        ///   instead of the actual shooter, so RegionProtect needs this hint to notify the correct player.
+        /// </summary>
+        [HarmonyPatch]
+        internal static class Patch_TracerManager_Tracer_Update_TrackExplosiveShooter
+        {
+            private static MethodBase TargetMethod()
+            {
+                var tracerType = AccessTools.TypeByName("DNA.CastleMinerZ.TracerManager+Tracer");
+                return AccessTools.Method(tracerType, "Update");
+            }
+
+            [HarmonyPostfix]
+            private static void Postfix(object __instance)
+            {
+                try
+                {
+                    if (__instance == null || BlockTerrain.Instance == null)
+                        return;
+
+                    Type tracerType = __instance.GetType();
+
+                    var shooterField = AccessTools.Field(tracerType, "ShooterID");
+                    var tpField = AccessTools.Field(tracerType, "tp");
+
+                    if (shooterField == null || tpField == null)
+                        return;
+
+                    byte shooterId = (byte)shooterField.GetValue(__instance);
+
+                    if (!(tpField.GetValue(null) is DNA.CastleMinerZ.Utils.Trace.TraceProbe tp) || !tp._collides)
+                        return;
+
+                    BlockTypeEnum blockType = BlockTerrain.Instance.GetBlockWithChanges(tp._worldIndex);
+                    if (blockType != BlockTypeEnum.TNT && blockType != BlockTypeEnum.C4)
+                        return;
+
+                    RememberExplosiveShooter(tp._worldIndex, shooterId);
+                }
+                catch (Exception ex)
+                {
+                    Log($"[RProt] Failed to track explosive shooter: {ex.Message}.");
+                }
+            }
+        }
+        #endregion
+
         #region Patch: Explosives (DetonateExplosiveMessage)
 
         /// <summary>
@@ -606,13 +660,13 @@ namespace RegionProtect
 
                 if (BlockTerrain.Instance == null) return true;
 
-                string who = msg.Sender?.Gamertag ?? "";
+                NetworkGamer offender = ResolveExplosiveOffender(g, msg, out string who);
                 IntVector3 p = msg.Location;
 
                 if (RegionProtectCore.ShouldDeny(who, p, RegionProtectCore.ProtectAction.Mine, out var reason))
                 {
-                    // Optional notify (rate-limited), consistent with your other explosion filtering.
-                    RegionProtectCore.NotifyDenied(g, msg.Sender, reason, RegionProtectCore.ProtectAction.Mine);
+                    // Optional notify (rate-limited), consistent with other explosion filtering.
+                    RegionProtectCore.NotifyDenied(g, offender, reason, RegionProtectCore.ProtectAction.Mine);
 
                     if (cfg.LogDenied)
                         Log($"DENY {who} detonate at {p} type={msg.ExplosiveType} reason={reason.Kind} {reason.RegionName}.");
@@ -797,6 +851,255 @@ namespace RegionProtect
 
                 return false; // Skip vanilla crate removal.
             }
+        }
+        #endregion
+
+        #region Patch: Local Player Pre-Checks (Make Host Obey Region Rules)
+
+        /// <summary>
+        /// Patch: CrateScreen.OnPushed()
+        /// Summary:
+        /// - Prevents the local player from even opening a protected crate if they are not allowed.
+        /// - This fixes the local/host bypass where crate UI actions never hit _processItemCrateMessage
+        ///   because ItemCrateMessage has Echo=false.
+        /// </summary>
+        [HarmonyPatch(typeof(CrateScreen), nameof(CrateScreen.OnPushed))]
+        internal static class Patch_CrateScreen_OnPushed_RegionProtect
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(CrateScreen __instance)
+            {
+                if (__instance == null || __instance.CurrentCrate == null)
+                    return true;
+
+                var cfg = RPConfig.Active;
+                if (cfg == null || !cfg.Enabled || !cfg.ProtectCrateItems)
+                    return true;
+
+                var game = CastleMinerZGame.Instance;
+                var local = game?.MyNetworkGamer;
+
+                // Match host-authoritative design.
+                if (cfg.EnforceHostOnly && (local == null || !local.IsHost))
+                    return true;
+
+                string who = local?.Gamertag ?? "";
+
+                if (!RegionProtectCore.ShouldDeny(
+                        who,
+                        __instance.CurrentCrate.Location,
+                        RegionProtectCore.ProtectAction.UseCrate,
+                        out var reason))
+                {
+                    return true;
+                }
+
+                RegionProtectCore.NotifyDenied(game, local, reason, RegionProtectCore.ProtectAction.UseCrate);
+
+                // The screen was already pushed by vanilla. Pop it immediately.
+                game?.GameScreen?._uiGroup?.PopScreen();
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Patch: InGameHUD.Dig(InventoryItem tool, bool effective)
+        /// Summary:
+        /// - Stops the local player before vanilla runs its local dig side-effects.
+        /// - This prevents local crate mining from ejecting contents, creating pickups, granting stats,
+        ///   and then relying on an after-the-fact terrain restore.
+        /// </summary>
+        [HarmonyPatch(typeof(InGameHUD), "Dig")]
+        internal static class Patch_InGameHUD_Dig_LocalPrecheck_RegionProtect
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(InGameHUD __instance, InventoryItem tool, bool effective)
+            {
+                if (__instance == null || __instance.LocalPlayer == null || __instance.ConstructionProbe == null)
+                    return true;
+
+                var cfg = RPConfig.Active;
+                if (cfg == null || !cfg.Enabled || !cfg.ProtectMining)
+                    return true;
+
+                var game = CastleMinerZGame.Instance;
+                var local = game?.MyNetworkGamer;
+
+                // Match host-authoritative design.
+                if (cfg.EnforceHostOnly && (local == null || !local.IsHost))
+                    return true;
+
+                if (!__instance.ConstructionProbe._collides)
+                    return true;
+
+                IntVector3 p = __instance.ConstructionProbe._worldIndex;
+                BlockTypeEnum blockType = InGameHUD.GetBlock(p);
+
+                if (!BlockType.GetType(blockType).CanBeDug)
+                    return true;
+
+                // Mirrors vanilla IsValidDigTarget(...)
+                if (blockType == BlockTypeEnum.TeleportStation &&
+                    __instance.LocalPlayer.PlayerInventory.GetTeleportAtWorldIndex(p + Vector3.Zero) == null)
+                {
+                    return true;
+                }
+
+                string who = local?.Gamertag ?? "";
+
+                if (!RegionProtectCore.ShouldDeny(
+                        who,
+                        p,
+                        RegionProtectCore.ProtectAction.Mine,
+                        out var reason))
+                {
+                    return true;
+                }
+
+                RegionProtectCore.NotifyDenied(game, local, reason, RegionProtectCore.ProtectAction.Mine);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Patch: Crate.EjectContents()
+        /// Summary:
+        /// - Prevents local crate contents from being dumped on the ground before the authoritative
+        ///   destroy-crate deny/restore path runs.
+        /// - Covers local dig/explosive/fireball code paths that call EjectContents() directly.
+        /// </summary>
+        [HarmonyPatch(typeof(Crate), nameof(Crate.EjectContents))]
+        internal static class Patch_Crate_EjectContents_LocalPrecheck_RegionProtect
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(Crate __instance)
+            {
+                if (__instance == null)
+                    return true;
+
+                var cfg = RPConfig.Active;
+                if (cfg == null || !cfg.Enabled || !cfg.ProtectCrateMining)
+                    return true;
+
+                var game = CastleMinerZGame.Instance;
+                var local = game?.MyNetworkGamer;
+
+                // Match host-authoritative design.
+                if (cfg.EnforceHostOnly && (local == null || !local.IsHost))
+                    return true;
+
+                string who = local?.Gamertag ?? "";
+
+                if (!RegionProtectCore.ShouldDeny(
+                        who,
+                        __instance.Location,
+                        RegionProtectCore.ProtectAction.BreakCrate,
+                        out var reason))
+                {
+                    return true;
+                }
+
+                RegionProtectCore.NotifyDenied(game, local, reason, RegionProtectCore.ProtectAction.BreakCrate);
+                return false;
+            }
+        }
+        #endregion
+
+        #endregion
+
+        #region Helpers
+
+        #region Explosive Shooter Attribution Helpers
+
+        /// <summary>
+        /// Small hint record used to remember who actually shot a TNT/C4 block.
+        /// This fixes vanilla's detonation sender attribution for gun-triggered explosives.
+        /// </summary>
+        private struct ExplosiveShooterHint
+        {
+            public byte ShooterId;
+            public long TickMs;
+        }
+
+        private static readonly object _explosiveShooterHintsLock = new object();
+        private static readonly Dictionary<IntVector3, ExplosiveShooterHint> _explosiveShooterHints =
+            new Dictionary<IntVector3, ExplosiveShooterHint>();
+
+        private const long ExplosiveShooterHintLifetimeMs = 3000;
+
+        /// <summary>
+        /// Remembers the real shooter for a recently hit TNT/C4 block.
+        /// </summary>
+        private static void RememberExplosiveShooter(IntVector3 location, byte shooterId)
+        {
+            long now = Environment.TickCount;
+
+            lock (_explosiveShooterHintsLock)
+            {
+                _explosiveShooterHints[location] = new ExplosiveShooterHint
+                {
+                    ShooterId = shooterId,
+                    TickMs    = now
+                };
+
+                // Cheap stale cleanup.
+                if (_explosiveShooterHints.Count > 64)
+                {
+                    var stale = _explosiveShooterHints
+                        .Where(kvp => now - kvp.Value.TickMs > ExplosiveShooterHintLifetimeMs)
+                        .Select(kvp => kvp.Key)
+                        .ToList();
+
+                    foreach (var key in stale)
+                        _explosiveShooterHints.Remove(key);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolves the actual offender for TNT/C4 detonation:
+        /// - For gun-triggered hits, prefer the cached tracer shooter.
+        /// - Otherwise fall back to the message sender (works for normal fuse lighting).
+        /// </summary>
+        private static NetworkGamer ResolveExplosiveOffender(CastleMinerZGame game, DetonateExplosiveMessage msg, out string who)
+        {
+            NetworkGamer offender = msg?.Sender;
+            who = offender?.Gamertag ?? "";
+
+            if (game == null || msg == null || !msg.OriginalExplosion)
+                return offender;
+
+            long now       = Environment.TickCount;
+            byte shooterId = 0;
+            bool foundHint = false;
+
+            lock (_explosiveShooterHintsLock)
+            {
+                if (_explosiveShooterHints.TryGetValue(msg.Location, out var hint))
+                {
+                    if (now - hint.TickMs <= ExplosiveShooterHintLifetimeMs)
+                    {
+                        shooterId = hint.ShooterId;
+                        foundHint = true;
+                    }
+
+                    // One-shot consume so we do not reuse stale attribution.
+                    _explosiveShooterHints.Remove(msg.Location);
+                }
+            }
+
+            if (foundHint)
+            {
+                var resolved = game.GetGamerFromID(shooterId);
+                if (resolved != null)
+                {
+                    offender = resolved;
+                    who = resolved.Gamertag ?? who;
+                }
+            }
+
+            return offender;
         }
         #endregion
 

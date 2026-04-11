@@ -1023,6 +1023,34 @@ namespace TexturePacks
             }
         }
 
+        #region Door Entities (Model Sheet Skin Apply)
+
+        /// <summary>
+        /// Applies full-sheet door model texture overrides as soon as a DoorEntity is constructed.
+        /// </summary>
+        /// <remarks>
+        /// NOTE:
+        /// - DoorEntity is model-driven, not terrain-atlas-driven.
+        /// - TexturePackManager now loads door replacements from:
+        ///     Packs\...\Models\Doors\NormalDoor.png
+        ///     Packs\...\Models\Doors\IronDoor.png
+        ///     Packs\...\Models\Doors\DiamondDoor.png
+        ///     Packs\...\Models\Doors\TechDoor.png
+        /// - Applying at construction time ensures newly created world doors, hand-held doors,
+        ///   and pickup doors receive the correct active override before the next draw.
+        /// </remarks>
+        [HarmonyPatch(typeof(DoorEntity), MethodType.Constructor, new[] { typeof(DoorEntity.ModelNameEnum), typeof(BlockTypeEnum) })]
+        internal static class Patch_DoorEntityCtor_TexturePackSkin
+        {
+            static void Postfix(DoorEntity __instance, DoorEntity.ModelNameEnum modelName)
+            {
+                // Apply geometry first so any PNG sheet override can target the final live model entity.
+                TexturePackManager.DoorModelGeometryOverrides.TryApplyDoorModelGeometry(__instance, modelName);
+                TexturePackManager.TryApplyDoorModelSkin(__instance, modelName);
+            }
+        }
+        #endregion
+
         /// <summary>
         /// Draw-time Harmony patch that performs a per-entity texture swap just before
         /// a model's effect is used. It:

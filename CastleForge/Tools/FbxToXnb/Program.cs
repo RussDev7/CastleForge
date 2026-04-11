@@ -307,7 +307,6 @@ internal static class Program
         // Source + naming.
         string srcDir  = Path.GetDirectoryName(fbxPath) ?? ".";
         string asset   = Path.GetFileNameWithoutExtension(fbxPath);
-        string sidecar = Path.Combine(srcDir, asset + ".png");
 
         // OUTPUT: Isolated folder per model (prevents texture.xnb collisions).
         string outDir = Path.Combine(srcDir, asset);
@@ -328,16 +327,22 @@ internal static class Program
             string workFbx = Path.Combine(work, Path.GetFileName(fbxPath));
             File.Copy(fbxPath, workFbx, overwrite: true);
 
-            // Sidecar -> Same name + optional texture.png.
-            if (File.Exists(sidecar))
+            // Stage candidate texture files into the TEMP work folder so the FBX importer
+            // can resolve exact material/texture references such as:
+            //   texture.png
+            //   texture_0.png
+            //   texture_1.png
+            //   albedo.jpg
+            //
+            // This keeps the source folder untouched while allowing multi-texture FBXs
+            // to compile correctly through the XNA pipeline.
+            var stagedTextures = StageCandidateTextureFiles(srcDir, work, asset);
+
+            if (stagedTextures.Count > 0)
             {
-                var sidecarFileName = Path.GetFileName(sidecar);
-                File.Copy(sidecar, Path.Combine(work, sidecarFileName), overwrite: true);
-
-                if (!sidecarFileName.Equals("texture.png", StringComparison.OrdinalIgnoreCase))
-                    File.Copy(sidecar, Path.Combine(work, "texture.png"), overwrite: true);
-
-                Console.WriteLine($"  * Using sidecar: {sidecarFileName} -> (temp)");
+                Console.WriteLine($"  * Staged {stagedTextures.Count} texture file(s) into temp:");
+                foreach (var tex in stagedTextures)
+                    Console.WriteLine($"      - {tex}");
             }
 
             Directory.SetCurrentDirectory(work);
@@ -413,6 +418,95 @@ internal static class Program
             try { Directory.SetCurrentDirectory(oldCwd); } catch { }
             try { Directory.Delete(work, recursive: true); } catch { }
         }
+    }
+
+    /// <summary>
+    /// Stages likely texture files for the FBX into the TEMP build folder.
+    ///
+    /// Purpose:
+    /// - Supports FBX files that reference textures directly from the root.
+    /// - Supports FBX files that reference textures through a relative "textures\" folder.
+    /// - Preserves the old "<asset>.png" compatibility alias as "texture.png".
+    ///
+    /// Notes:
+    /// - Files are copied into:
+    ///     1) workDir
+    ///     2) workDir\textures
+    /// - This handles common exporter behavior where the FBX stores paths like:
+    ///     textures/texture_0.png
+    /// </summary>
+    private static List<string> StageCandidateTextureFiles(string srcDir, string workDir, string asset)
+    {
+        var copied = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        string[] textureExtensions =
+        {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+        ".tga",
+        ".dds"
+    };
+
+        if (!Directory.Exists(srcDir))
+            return copied;
+
+        string texturesDir = Path.Combine(workDir, "textures");
+        Directory.CreateDirectory(texturesDir);
+
+        foreach (var file in Directory.GetFiles(srcDir))
+        {
+            string ext = Path.GetExtension(file);
+            if (string.IsNullOrWhiteSpace(ext))
+                continue;
+
+            bool isTexture = false;
+            for (int i = 0; i < textureExtensions.Length; i++)
+            {
+                if (ext.Equals(textureExtensions[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    isTexture = true;
+                    break;
+                }
+            }
+
+            if (!isTexture)
+                continue;
+
+            string fileName = Path.GetFileName(file);
+
+            // Copy to TEMP root.
+            string destRoot = Path.Combine(workDir, fileName);
+            File.Copy(file, destRoot, overwrite: true);
+
+            // Copy to TEMP\textures for FBX material references like "textures\foo.png".
+            string destTextures = Path.Combine(texturesDir, fileName);
+            File.Copy(file, destTextures, overwrite: true);
+
+            if (seen.Add(fileName))
+                copied.Add(fileName);
+        }
+
+        // Preserve old same-name sidecar compatibility.
+        string sidecarPng = Path.Combine(srcDir, asset + ".png");
+        string textureAliasRoot = Path.Combine(workDir, "texture.png");
+        string textureAliasSub = Path.Combine(texturesDir, "texture.png");
+
+        if (File.Exists(sidecarPng))
+        {
+            if (!File.Exists(textureAliasRoot))
+                File.Copy(sidecarPng, textureAliasRoot, overwrite: true);
+
+            if (!File.Exists(textureAliasSub))
+                File.Copy(sidecarPng, textureAliasSub, overwrite: true);
+
+            if (seen.Add("texture.png"))
+                copied.Add("texture.png (alias of " + Path.GetFileName(sidecarPng) + ")");
+        }
+
+        return copied;
     }
 
     /// <summary>

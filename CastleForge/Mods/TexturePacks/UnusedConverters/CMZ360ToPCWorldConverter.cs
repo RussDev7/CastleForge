@@ -217,27 +217,27 @@ namespace TexturePacks.UnusedConverters
                 get { return _worldID; }
             }
 
-            public byte[] Bytes;
+            public byte[]              Bytes;
             public static List<string> CorruptWorlds = new List<string>();
 
             private static readonly string BasePath = "OutputWorlds";
             private static readonly string FileName = "world.info";
 
-            private string                _savePath;
-            private readonly WorldTypeIDs _terrainVersion = WorldTypeIDs.CastleMinerZ;
-            private string                _name = "World";
-            private readonly string       _ownerGamerTag;
-            private readonly string       _creatorGamerTag;
-            private readonly DateTime     _createdDate;
-            private DateTime              _lastPlayedDate;
-            private readonly int          _seed;
-            private readonly Guid         _worldID;
+            private string            _savePath;
+            private string            _name            = "World";
+            private readonly string   _ownerGamerTag   = string.Empty;
+            private readonly string   _creatorGamerTag = string.Empty;
+            private readonly DateTime _createdDate     = DateTime.Now;
+            private DateTime          _lastPlayedDate;
+            private readonly int      _seed            = 0;
+            private readonly Guid     _worldID         = Guid.Empty;
 
-            public bool   InfiniteResourceMode;
-            public int    HellBossesSpawned;
-            public int    MaxHellBossSpawns;
-            public string ServerMessage  = string.Empty;
-            public string ServerPassword = string.Empty;
+            public bool   InfiniteResourceMode = false;
+            public int    HellBossesSpawned    = 0;
+            public int    MaxHellBossSpawns    = 0;
+            public string ServerMessage        = string.Empty;
+            public string ServerPassword       = string.Empty;
+
             #endregion
 
             /// <summary>
