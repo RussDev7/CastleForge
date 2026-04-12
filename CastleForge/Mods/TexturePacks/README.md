@@ -95,6 +95,14 @@ TexturePacks is not just a folder of PNG replacements. It is a **content-pack fr
 ### Runtime pack switching
 TexturePacks supports deferred pack reloads on the main thread. When the active pack changes, it restores vanilla baselines and re-applies the selected pack cleanly instead of stacking replacements on top of each other.
 
+Reload flow at a glance:
+- UI, commands, or config changes call a deferred reload request instead of swapping content immediately.
+- The actual pack swap runs on the next safe update tick on the main thread.
+- GPU-backed resources that cannot be destroyed mid-draw are pushed into a retire queue and disposed after the frame finishes.
+- Terrain, icons, models, shaders, skies, audio, and UI assets are restored from captured vanilla baselines before the active pack is re-applied.
+
+This keeps pack switching predictable, helps reduce device-state problems during hot-swaps, and makes it much clearer why a pack change happens one tick later instead of instantly.
+
 ### In-game pack picker
 The mod injects a **Texture Packs** option into:
 - the **main menu**
@@ -115,10 +123,30 @@ It also supports:
 
 ### Full terrain atlas replacement
 TexturePacks patches:
-- the **near terrain atlas**
-- the **far / mip terrain atlas**
+- the **near terrain diffuse atlas**
+- the **far / mip terrain diffuse atlas**
+- the **near terrain normal/spec atlas** when `_normalspec` companions are present
+- the **far / mip terrain normal/spec atlas** when `_normalspec` companions are present
 
 This matters because it helps prevent ugly distance pop where nearby blocks look replaced but far terrain still uses vanilla art.
+
+### Terrain `_normalspec` companions
+For terrain blocks, a diffuse file like `Grass_top.png` can be paired with `Grass_top_normalspec.png`.
+
+Use the exact same stem and face suffix, then append `_normalspec` before the extension:
+
+```text
+Grass_top.png
+Grass_top_normalspec.png
+
+TNT_side.png
+TNT_side_normalspec.png
+
+tile_2.png
+tile_2_normalspec.png
+```
+
+These files are intended to travel together so the terrain shader can use matching surface detail for the same block face or tile index.
 
 ### Item icon replacement
 Inventory icons support multiple naming patterns, including ID-based and name-based lookups, making packs easier to author and maintain.
@@ -472,10 +500,12 @@ Blocks\
 ```
 
 ### Notes
-- `tile_###.png` is the fastest direct-index path.
+- `tile_###.png` is the fastest direct-index path for the color/diffuse tile.
+- `tile_###_normalspec.png` targets the matching normal/spec slot for that same tile index.
 - Friendly names mirror the engine's own face mappings.
-- Top / side / bottom / all face naming is supported.
-- Near and far terrain atlases are both handled.
+- Top / side / bottom / all face naming is supported for both diffuse and `_normalspec` files.
+- `_normalspec` files are optional companions. Use the same base name as the diffuse file and add `_normalspec` at the end.
+- Near and far terrain atlases are both handled, and matching `_normalspec` companions are written to the terrain normal/spec atlases.
 
 ### Example files included in the Example Pack
 ```text
@@ -483,6 +513,9 @@ Blocks\
   TNT_bottom.png
   TNT_side.png
   TNT_top.png
+  TNT_bottom_normalspec.png      // optional companion example
+  TNT_side_normalspec.png        // optional companion example
+  TNT_top_normalspec.png         // optional companion example
 ```
 
 <details>
@@ -1600,7 +1633,7 @@ Ctrl+Shift+F3
 
 ### What gets exported
 - Screens
-- Blocks
+- Blocks, including diffuse terrain references and optional `_normalspec` companion naming guidance
 - HUD sprites
 - item icons
 - item model skins
@@ -1626,6 +1659,9 @@ TexturePacks also pairs well with the bundled **FBX → XNB** helper tooling use
 ![Author tools placeholder](docs/images/texturepacks/author-tools-fbxtoxnb.png)
 
 **Image suggestion:** Show the `_FbxToXnb` folder opened in Explorer next to a custom FBX model and the generated per-model output folder.
+
+**Multi-texture FBX note:** `_FbxToXnb` can stage multiple texture files for a single FBX.  
+Keep referenced textures beside the `.fbx` file, and if the FBX was exported with relative paths like `textures/texture_0.png`, keep that folder structure as well. The converter is designed to preserve common relative texture lookups during the XNB build process.
 
 #### What the companion tools are for
 - converting edited `.fbx` models back into `.xnb`
@@ -1790,15 +1826,19 @@ If `ffmpeg.exe` is available there, the exporter can better handle certain conve
 The mod package is accompanied by an **Example Pack** that demonstrates:
 - pack root layout
 - `about.json`
-- icon usage
-- asset naming references
-- starter text files for categories such as blocks, fonts, screens, sounds, models, skies, and particle effects
+- root pack image usage (`pack.png` / `icon.*` style workflow)
+- block, item, HUD, inventory, screen, sound, shader, sky, and particle-effect naming references
+- model categories for doors, held items, player, enemies, and dragons
+- starter text files that act as commented reference sheets rather than runtime-required files
+- a simple real replacement example (`Blocks\TNT_top.png`, `TNT_side.png`, `TNT_bottom.png`)
 
 This makes TexturePacks much easier to learn than a blank template.
 
 ![Example pack placeholder](docs/images/texturepacks/example-pack-overview.png)
 
 **Image suggestion:** Show the Example Pack root beside a text editor open to `TexturePackAssetReference.txt`.
+
+**What the reference files are for:** the `.txt` files inside the Example Pack are there to document naming patterns, common stems, and supported categories. They are safe to delete from a real pack once you no longer need the notes.
 
 <details>
 <summary><strong>Full Example Pack file listing</strong></summary>

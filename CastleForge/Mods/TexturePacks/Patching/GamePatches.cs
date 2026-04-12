@@ -890,7 +890,8 @@ namespace TexturePacks
             static void Postfix()
             {
                 // Debugging: Log("SecondaryLoad (DNA) fired.");
-                TexturePackManager.ApplyActivePackIfAny();
+                // Use the safer deferred reload path instead of directly patching atlases here.
+                TexturePackManager.BeginStartupLaunchGate();
 
                 // Only now that content exists, patch all item CreateEntity overrides.
                 ItemEntitySkinner.ApplyAfterContent();
@@ -2193,6 +2194,26 @@ namespace TexturePacks
                 {
                     ModLoader.LogSystem.Log($"[Models] Startup patch FAILED: {ex}.");
                 }
+            }
+        }
+        #endregion
+
+        #region Startup Launch Gate - New World
+
+        /// <summary>
+        /// Blocks starting a new world until startup texture-pack work is fully complete.
+        /// </summary>
+        [HarmonyPatch(typeof(FrontEndScreen), "startWorld")]
+        internal static class Patch_TP_BlockStartWorldUntilReady
+        {
+            [HarmonyPrefix]
+            static bool Prefix(FrontEndScreen __instance)
+            {
+                if (TexturePackManager.CanLaunchWorlds)
+                    return true;
+
+                __instance.ShowUIDialog("Texture Packs", "Please wait a moment for texture packs to finish loading.", false);
+                return false;
             }
         }
         #endregion

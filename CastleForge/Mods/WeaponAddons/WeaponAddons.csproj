@@ -109,7 +109,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="WeaponAddons\Packs\Raygun\models\raygun.xnb" />
-    <EmbeddedResource Include="WeaponAddons\Packs\Raygun\models\raygun_0.xnb" />
+    <EmbeddedResource Include="WeaponAddons\Packs\Raygun\models\texture_0.xnb" />
     <EmbeddedResource Include="WeaponAddons\Packs\Raygun\raygun.clag" />
   </ItemGroup>
   <ItemGroup>

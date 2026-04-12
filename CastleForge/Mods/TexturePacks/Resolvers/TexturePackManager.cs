@@ -229,6 +229,25 @@ Core categories:
       whether the engine references them with or without flavor prefixes.
 
 --------------------------------------------------------------------------------
+Hot-swap / reload lifecycle (how pack changes are applied safely)
+--------------------------------------------------------------------------------
+• RequestReload()
+    - Called by UI, commands, config changes, and hotkeys.
+    - Only marks the pack system dirty; it does NOT perform the swap immediately.
+
+• Tick()
+    - Runs from the main game Update.
+    - If a reload was requested, it enters the main-thread swap pipeline under a lock.
+
+• DoReloadCore()
+    - Restores vanilla baselines first, then reapplies the current pack categories in a known order.
+    - This keeps pack switches from stacking modified resources on top of already-modified state.
+
+• GpuRetireQueue
+    - Holds GPU-backed disposables that should not be destroyed while the frame is still drawing.
+    - Flushed after Draw so pack swaps can retire old textures/effects safely.
+
+--------------------------------------------------------------------------------
 Model authoring & extraction workflow (GLB + bone-name safety)
 --------------------------------------------------------------------------------
 • Model extraction dumps now support .glb (single file) with node/bone hierarchy + meshes.
@@ -444,6 +463,46 @@ namespace TexturePacks
     {
         #region Core Runtime (Blocks, Item Icons, Device Reset)
 
+        #region Startup / Launch Gate
+
+        /// <summary>
+        /// True while the startup texture-pack apply is still warming up.
+        /// Blocks joining/starting worlds until the pack is safely applied.
+        /// </summary>
+        private static volatile bool _startupGateActive;
+
+        /// <summary>
+        /// True while a deferred reload is actively running.
+        /// </summary>
+        private static volatile bool _reloadInProgress;
+
+        /// <summary>
+        /// Extra frame delay after reload completes.
+        /// This helps avoid same-frame / next-frame races when entering a world immediately.
+        /// </summary>
+        private static int _startupUnlockFramesRemaining;
+
+        /// <summary>
+        /// Returns true only when it is safe to join/start a world.
+        /// </summary>
+        public static bool CanLaunchWorlds =>
+            !_startupGateActive &&
+            !_reloadRequested &&
+            !_reloadInProgress &&
+            _startupUnlockFramesRemaining <= 0;
+
+        /// <summary>
+        /// Starts the startup gate and requests the safer deferred reload pipeline.
+        /// </summary>
+        public static void BeginStartupLaunchGate()
+        {
+            _startupGateActive = true;
+            _startupUnlockFramesRemaining = 0;
+            RequestReload();
+            Log("[StartupGate] Startup gate enabled.");
+        }
+        #endregion
+
         #region Paths / State
 
         // Global paths, active pack/cache state, and block face mapping.
@@ -568,7 +627,16 @@ namespace TexturePacks
                 return;
             }
 
+            var gd = nearAtlas.GraphicsDevice;
+            if (gd != null)
+            {
+                gd.SetRenderTarget(null);
+                UnbindAllTextures(gd);
+            }
+
             var mipAtlas = FindTerrainMipDiffuseTexture(); // _mipMapDiffuse (may be null on some builds).
+            var normalSpecAtlas = FindTerrainNormalSpecTexture(); // _normalSpec (may be null on some builds).
+            var mipNormalsAtlas = FindTerrainMipNormalsTexture(); // _mipMapNormals (may be null on some builds).
 
             var cfg = TPConfig.LoadOrCreate();
             var packDir = Path.Combine(PacksRoot, cfg.ActivePack ?? "");
@@ -614,33 +682,52 @@ namespace TexturePacks
             var reps = hasBlocksDir
                 ? LoadBlockTileReplacements(blocksDir, nearAtlas.GraphicsDevice)
                 : new List<TileReplacement>();
+            var normalSpecReps = hasBlocksDir
+                ? LoadBlockTileReplacements(blocksDir, nearAtlas.GraphicsDevice, requiredStemSuffix: "normalspec")
+                : new List<TileReplacement>();
             var doorReps = hasDoorModelsDir
                 ? LoadDoorSheetReplacements(modelsDoorsDir, nearAtlas.GraphicsDevice)
                 : new List<DoorSheetReplacement>();
 
-            Log($"Found {reps.Count} terrain block-face replacement PNG(s) and {doorReps.Count} door model sheet replacement PNG(s).");
+            Log($"Found {reps.Count} terrain block-face replacement PNG(s), {normalSpecReps.Count} terrain _normalSpec replacement PNG(s), and {doorReps.Count} door model sheet replacement PNG(s).");
 
-            // Nothing to do if the pack provided neither terrain block replacements nor door model replacements.
-            if (reps.Count == 0 && doorReps.Count == 0)
+            // Nothing to do if the pack provided neither terrain block replacements,
+            // nor terrain normal/spec replacements, nor door model replacements.
+            if (reps.Count == 0 && normalSpecReps.Count == 0 && doorReps.Count == 0)
                 return;
 
-            // 1) Write the near atlas.
-            BlitReplacementsIntoAtlas(nearAtlas, nearTile, reps, disposeImagesAfter: false);
+            // 1) Write the near diffuse atlas.
+            BlitReplacementsIntoAtlas(nearAtlas, nearTile, reps, disposeImagesAfter: false, preserveOriginalAlpha: true);
 
-            // 2) Write far/mip atlas (all mips).
+            // 2) Write the near normal/spec atlas.
+            if (normalSpecAtlas != null && normalSpecReps.Count > 0)
+            {
+                int normalSpecTile = Math.Max(1, normalSpecAtlas.Width / 8);
+                BlitReplacementsIntoAtlas(normalSpecAtlas, normalSpecTile, normalSpecReps, disposeImagesAfter: false, preserveOriginalAlpha: false);
+            }
+
+            // 3) Write far/mip diffuse atlas (all mips).
             if (mipAtlas != null)
             {
                 mipTile = Math.Max(1, mipAtlas.Width / 8);
-                BlitReplacementsIntoAtlas(mipAtlas, mipTile, reps, disposeImagesAfter: false);
+                BlitReplacementsIntoAtlas(mipAtlas, mipTile, reps, disposeImagesAfter: false, preserveOriginalAlpha: true);
             }
 
-            // 3) Apply full-sheet door model replacements from Models\Doors\.
+            // 4) Write far/mip normal/spec atlas (all mips).
+            if (mipNormalsAtlas != null && normalSpecReps.Count > 0)
+            {
+                int mipNormalsTile = Math.Max(1, mipNormalsAtlas.Width / 8);
+                BlitReplacementsIntoAtlas(mipNormalsAtlas, mipNormalsTile, normalSpecReps, disposeImagesAfter: false, preserveOriginalAlpha: false);
+            }
+
+            // 5) Apply full-sheet door model replacements from Models\Doors\.
             ApplyDoorSheetReplacements(doorReps);
 
             // Now it's safe to dispose source PNGs.
             foreach (var rep in reps) rep.Dispose();
+            foreach (var rep in normalSpecReps) rep.Dispose();
 
-            Log("Terrain atlases (near+far) patched.");
+            Log("Terrain atlases (near+far + normal/spec) patched.");
         }
 
         /// <summary>
@@ -888,7 +975,7 @@ namespace TexturePacks
         /// </summary>
         /// <param name="gd">Graphics device.</param>
         /// <remarks>
-        /// All GPU writes run under WithNoRenderTargets(gd, ...) to avoid colliding with RTs missing DS.
+        /// All GPU writes run under WithDeviceResourcesUnbound(gd, ...) to avoid colliding with RTs missing DS.
         /// </remarks>
         public static void SwapIconAtlasesFromCpu(GraphicsDevice gd)
         {
@@ -944,14 +1031,14 @@ namespace TexturePacks
         /// absolutely no render targets bound. Returns false if the upload fails for any reason.
         /// </summary>
         /// <remarks>
-        /// • Uses WithNoRenderTargets to avoid DS-less Clear exceptions during window restore.
+        /// • Uses WithDeviceResourcesUnbound to avoid DS-less Clear exceptions during window restore.
         /// • Keeps logic minimal; caller decides whether to retry or replace.
         /// </remarks>
         static bool TryUploadInPlace(GraphicsDevice gd, Texture2D dst, Color[][] work)
         {
             try
             {
-                WithNoRenderTargets(gd, () =>
+                WithTextureUnbound(gd, dst, () =>
                 {
                     int levels = Math.Min(dst.LevelCount, work.Length);
                     for (int level = 0; level < levels; level++)
@@ -2431,8 +2518,10 @@ namespace TexturePacks
 
         // --- Hot-swap baselines (vanilla pixels) ---
         private static readonly object _baselineLock = new object();
-        private static Color[][] _nearBaseline; // For BlockTerrain._diffuseAlpha.
-        private static Color[][] _mipBaseline;  // For BlockTerrain._mipMapDiffuse.
+        private static Color[][] _nearBaseline;       // For BlockTerrain._diffuseAlpha.
+        private static Color[][] _mipBaseline;        // For BlockTerrain._mipMapDiffuse.
+        private static Color[][] _normalSpecBaseline; // For BlockTerrain._normalSpec.
+        private static Color[][] _mipNormalsBaseline; // For BlockTerrain._mipMapNormals.
 
         private static Color[][] CaptureBaseline(Texture2D tex)
         {
@@ -2462,7 +2551,7 @@ namespace TexturePacks
                 int h = Math.Max(1, tex.Height >> level);
                 var rect = new Rectangle(0, 0, w, h);
                 var data = baseline[level];
-                WithNoRenderTargets(gd, () => tex.SetData(level, rect, data, 0, data.Length));
+                WithTextureUnbound(gd, tex, () => tex.SetData(level, rect, data, 0, data.Length));
             }
         }
 
@@ -2478,6 +2567,14 @@ namespace TexturePacks
                 var mip = FindTerrainMipDiffuseTexture();
                 if (mip != null && _mipBaseline == null)
                     _mipBaseline = CaptureBaseline(mip);
+
+                var normalSpec = FindTerrainNormalSpecTexture();
+                if (normalSpec != null && _normalSpecBaseline == null)
+                    _normalSpecBaseline = CaptureBaseline(normalSpec);
+
+                var mipNormals = FindTerrainMipNormalsTexture();
+                if (mipNormals != null && _mipNormalsBaseline == null)
+                    _mipNormalsBaseline = CaptureBaseline(mipNormals);
             }
         }
 
@@ -2488,6 +2585,8 @@ namespace TexturePacks
             {
                 RestoreBaseline(FindTerrainAtlasTexture(), _nearBaseline);
                 RestoreBaseline(FindTerrainMipDiffuseTexture(), _mipBaseline);
+                RestoreBaseline(FindTerrainNormalSpecTexture(), _normalSpecBaseline);
+                RestoreBaseline(FindTerrainMipNormalsTexture(), _mipNormalsBaseline);
             }
         }
         #endregion
@@ -2526,13 +2625,18 @@ namespace TexturePacks
         /// Supports "tile_###.png" (direct index) and "BlockName[_face].png"
         /// where face is one of: top, side, bottom, all (default: all).
         /// </remarks>
-        private static List<TileReplacement> LoadBlockTileReplacements(string blocksDir, GraphicsDevice gd)
+        private static List<TileReplacement> LoadBlockTileReplacements(
+            string blocksDir,
+            GraphicsDevice gd,
+            string requiredStemSuffix = null)
         {
             var list = new List<TileReplacement>();
 
             foreach (var path in Directory.EnumerateFiles(blocksDir, "*.png", SearchOption.TopDirectoryOnly))
             {
-                var name = Path.GetFileNameWithoutExtension(path);
+                var rawName = Path.GetFileNameWithoutExtension(path);
+                if (!TryPrepareReplacementStem(rawName, requiredStemSuffix, out var name))
+                    continue;
 
                 // 1) tile_###.png - direct, fastest path.
                 if (TryParseTileIndexName(name, out int tileIdx))
@@ -2552,7 +2656,7 @@ namespace TexturePacks
                     var indices = ResolveTileIndicesFromFace(block, face).ToArray();
                     if (indices.Length == 0)
                     {
-                        Log($"! Unresolved block face: {block}_{face}.");
+                        Log($"! Unresolved block face: {name}.");
                         continue;
                     }
 
@@ -2578,6 +2682,41 @@ namespace TexturePacks
             if (!bare.StartsWith("tile_", StringComparison.OrdinalIgnoreCase)) return false;
             var tail = bare.Substring(5);
             return int.TryParse(tail, out idx) && idx >= 0;
+        }
+
+        /// <summary>
+        /// Normalizes a replacement filename stem for a specific terrain atlas.
+        /// </summary>
+        /// <remarks>
+        /// Examples:
+        /// - Diffuse pass:     FixedLantern_top.png             -> FixedLantern_top
+        /// - Normal/spec pass: FixedLantern_top_normalspec.png -> FixedLantern_top
+        /// - Diffuse pass skips known companion suffixes so they don't get treated as regular block faces.
+        /// </remarks>
+        private static bool TryPrepareReplacementStem(string rawStem, string requiredStemSuffix, out string normalizedStem)
+        {
+            normalizedStem = null;
+            if (string.IsNullOrWhiteSpace(rawStem))
+                return false;
+
+            rawStem = rawStem.Trim();
+
+            if (string.IsNullOrWhiteSpace(requiredStemSuffix))
+            {
+                // Skip companion material maps during the diffuse pass.
+                if (rawStem.EndsWith("_normalspec", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                normalizedStem = rawStem;
+                return true;
+            }
+
+            string suffix = "_" + requiredStemSuffix.Trim();
+            if (!rawStem.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            normalizedStem = rawStem.Substring(0, rawStem.Length - suffix.Length).TrimEnd();
+            return !string.IsNullOrWhiteSpace(normalizedStem);
         }
 
         /// <summary>
@@ -2722,7 +2861,8 @@ namespace TexturePacks
             Texture2D atlas,
             int tileSize,
             List<TileReplacement> reps,
-            bool disposeImagesAfter = false)
+            bool disposeImagesAfter = false,
+            bool preserveOriginalAlpha = true)
         {
             if (atlas == null || reps == null || reps.Count == 0) return;
 
@@ -2760,24 +2900,30 @@ namespace TexturePacks
                         {
                             data = new Color[s * s];
                             // Be conservative: read under "no RTs" guard.
-                            WithNoRenderTargets(gd, () => rep.Image.GetData(data));
+                            WithTextureUnbound(gd, rep.Image, () => rep.Image.GetData(data));
                         }
                         else
                         {
                             data = ToSizedPixelData(rep.Image, s, s); // Nearest-neighbor CPU scaler.
                         }
 
-                        // Preserve original atlas alpha, then write - all under no-RT guard.
-                        WithNoRenderTargets(gd, () =>
+                        // Preserve original atlas alpha when requested, then write - all under no-RT guard.
+                        WithTextureUnbound(gd, atlas, () =>
                         {
-                            MergeOriginalAlpha(atlas, level, dest, data);
+                            if (preserveOriginalAlpha)
+                                MergeOriginalAlpha(atlas, level, dest, data);
+
                             atlas.SetData(level, dest, data, 0, data.Length);
                         });
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // One tile failed - keep going.
+                    Log(
+                        $"[TP][AtlasWriteFail] " +
+                        $"Atlas={atlas?.Width}x{atlas?.Height} " +
+                        $"TileIndex={rep?.TileIndex} " +
+                        $"Err={ex.GetType().Name}: {ex.Message}");
                 }
             }
 
@@ -2802,7 +2948,7 @@ namespace TexturePacks
             var gd = atlas.GraphicsDevice;
             var orig = new Color[rect.Width * rect.Height];
 
-            WithNoRenderTargets(gd, () =>
+            WithTextureUnbound(gd, atlas, () =>
             {
                 atlas.GetData(level, rect, orig, 0, orig.Length);
             });
@@ -2852,6 +2998,54 @@ namespace TexturePacks
                 if (!typeof(Texture2D).IsAssignableFrom(fld.FieldType)) continue;
                 var n = fld.Name.ToLowerInvariant();
                 if (n.Contains("mipmap") && n.Contains("diffuse"))
+                {
+                    tex = fld.GetValue(bt) as Texture2D;
+                    if (tex != null) return tex;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Returns the mip/distance normal-spec atlas if present.</summary>
+        /// <remarks>Looks for _mipMapNormals; falls back to a name scan if necessary.</remarks>
+        private static Texture2D FindTerrainMipNormalsTexture()
+        {
+            var bt = BlockTerrain.Instance;
+            if (bt == null) return null;
+
+            var f = typeof(BlockTerrain)
+                    .GetField("_mipMapNormals", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (f?.GetValue(bt) is Texture2D tex) return tex;
+
+            foreach (var fld in typeof(BlockTerrain).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (!typeof(Texture2D).IsAssignableFrom(fld.FieldType)) continue;
+                var n = fld.Name.ToLowerInvariant();
+                if (n.Contains("mipmap") && (n.Contains("normal") || n.Contains("spec")))
+                {
+                    tex = fld.GetValue(bt) as Texture2D;
+                    if (tex != null) return tex;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Returns the near/primary terrain normal-spec atlas if present.</summary>
+        /// <remarks>Looks for _normalSpec; falls back to a name scan if necessary.</remarks>
+        private static Texture2D FindTerrainNormalSpecTexture()
+        {
+            var bt = BlockTerrain.Instance;
+            if (bt == null) return null;
+
+            var f = typeof(BlockTerrain)
+                    .GetField("_normalSpec", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (f?.GetValue(bt) is Texture2D tex) return tex;
+
+            foreach (var fld in typeof(BlockTerrain).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (!typeof(Texture2D).IsAssignableFrom(fld.FieldType)) continue;
+                var n = fld.Name.ToLowerInvariant();
+                if ((n.Contains("normal") || n.Contains("spec")) && !n.Contains("mipmap"))
                 {
                     tex = fld.GetValue(bt) as Texture2D;
                     if (tex != null) return tex;
@@ -3351,6 +3545,65 @@ namespace TexturePacks
                 {
                     if (saved != null && saved.Length > 0) gd.SetRenderTargets(saved);
                     else gd.SetRenderTarget(null);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Unbinds a specific texture from the GraphicsDevice if it is currently
+        /// assigned to any pixel-texture or vertex-texture slot.
+        /// </summary>
+        static void UnbindTextureFromDevice(GraphicsDevice gd, Texture target)
+        {
+            if (gd == null || target == null)
+                return;
+
+            for (int i = 0; i < 16; i++)
+            {
+                try
+                {
+                    if (ReferenceEquals(gd.Textures[i], target))
+                        gd.Textures[i] = null;
+                }
+                catch { }
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                try
+                {
+                    if (ReferenceEquals(gd.VertexTextures[i], target))
+                        gd.VertexTextures[i] = null;
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>
+        /// Runs work while ensuring the specified texture is unbound and no render target
+        /// is active, then restores the previous render-target bindings afterward.
+        /// </summary>
+        static void WithTextureUnbound(GraphicsDevice gd, Texture target, Action work)
+        {
+            lock (_gpuLock)
+            {
+                var savedRTs = gd.GetRenderTargets();
+                try
+                {
+                    UnbindTextureFromDevice(gd, target);
+                    gd.SetRenderTarget(null);
+                    work();
+                }
+                finally
+                {
+                    try
+                    {
+                        if (savedRTs != null && savedRTs.Length > 0)
+                            gd.SetRenderTargets(savedRTs);
+                        else
+                            gd.SetRenderTarget(null);
+                    }
+                    catch { }
                 }
             }
         }
@@ -6930,19 +7183,29 @@ namespace TexturePacks
             /// <summary>
             /// Exports each terrain-backed block's face textures (Top / Side / Bottom) from the near terrain atlas
             /// into !Mods/TexturePacks/_Export/Blocks (or a custom folder).
-            /// - Top:    "BlockName_top.png"    (if present)
-            /// - Side:   "BlockName_side.png"   (first distinct side); if multiple, also _side2, _side3...
-            /// - Bottom: "BlockName_bottom.png" (if present)
-            /// Returns the number of PNG files written.
+            /// - Diffuse:
+            ///     BlockName_top.png
+            ///     BlockName_side.png / _side2 / _side3...
+            ///     BlockName_bottom.png
+            /// - Normal/spec (when BlockTerrain._normalSpec exists):
+            ///     BlockName_top_normalspec.png
+            ///     BlockName_side_normalspec.png / _side2_normalspec / _side3_normalspec...
+            ///     BlockName_bottom_normalspec.png
+            /// Returns the total number of PNG files written.
             /// </summary>
             public static int ExportAllFaces(string outDir = null, bool overwrite = true)
             {
-                // Find near/primary atlas (diffuse+alpha). We export from the near one.
+                // Diffuse atlas is required; normal/spec atlas is optional.
                 if (!ResolveBlockAtlas(false, out AtlasInfo near) || near == null || near.Atlas == null || near.Atlas.IsDisposed)
                 {
                     Log("[Export] Near terrain atlas not found.");
                     return 0;
                 }
+
+                bool hasNormalSpec = ResolveNormalSpecAtlas(out AtlasInfo normalSpec) &&
+                                     normalSpec != null &&
+                                     normalSpec.Atlas != null &&
+                                     !normalSpec.Atlas.IsDisposed;
 
                 // Build face map (Top/Bottom/Sides) from engine data once.
                 EnsureFaceMap();
@@ -6963,7 +7226,8 @@ namespace TexturePacks
                     return 0;
                 }
 
-                int written = 0;
+                int writtenDiffuse = 0;
+                int writtenNormalSpec = 0;
 
                 foreach (var kv in _faceMapByName)
                 {
@@ -6973,33 +7237,63 @@ namespace TexturePacks
                     // Top.
                     if (map.Top.HasValue)
                     {
-                        string path = Path.Combine(outDir, SafeFileName(blockName + "_top") + ".png");
-                        if (overwrite || !File.Exists(path))
+                        string diffusePath = Path.Combine(outDir, SafeFileName(blockName + "_top") + ".png");
+                        if ((overwrite || !File.Exists(diffusePath)) &&
+                            SaveTilePNG(near.Atlas, TileRectAt(map.Top.Value, near), diffusePath))
                         {
-                            if (SaveTilePNG(near.Atlas, TileRectAt(map.Top.Value, near), path))
-                                written++;
+                            writtenDiffuse++;
+                        }
+
+                        if (hasNormalSpec)
+                        {
+                            string normalSpecPath = Path.Combine(outDir, SafeFileName(blockName + "_top_normalspec") + ".png");
+                            if ((overwrite || !File.Exists(normalSpecPath)) &&
+                                SaveTilePNG(normalSpec.Atlas, TileRectAt(map.Top.Value, normalSpec), normalSpecPath))
+                            {
+                                writtenNormalSpec++;
+                            }
                         }
                     }
 
                     // Side(s).
                     if (map.Sides != null && map.Sides.Length > 0)
                     {
-                        // Export the first distinct side as "..._side.png".
-                        string p0 = Path.Combine(outDir, SafeFileName(blockName + "_side") + ".png");
-                        if (overwrite || !File.Exists(p0))
+                        // Export the first distinct side as "..._side.png" and "..._side_normalspec.png".
+                        string diffuseSide0 = Path.Combine(outDir, SafeFileName(blockName + "_side") + ".png");
+                        if ((overwrite || !File.Exists(diffuseSide0)) &&
+                            SaveTilePNG(near.Atlas, TileRectAt(map.Sides[0], near), diffuseSide0))
                         {
-                            if (SaveTilePNG(near.Atlas, TileRectAt(map.Sides[0], near), p0))
-                                written++;
+                            writtenDiffuse++;
+                        }
+
+                        if (hasNormalSpec)
+                        {
+                            string normalSpecSide0 = Path.Combine(outDir, SafeFileName(blockName + "_side_normalspec") + ".png");
+                            if ((overwrite || !File.Exists(normalSpecSide0)) &&
+                                SaveTilePNG(normalSpec.Atlas, TileRectAt(map.Sides[0], normalSpec), normalSpecSide0))
+                            {
+                                writtenNormalSpec++;
+                            }
                         }
 
                         // If there are additional distinct side indices, export them as _side2, _side3...
                         for (int i = 1; i < map.Sides.Length; i++)
                         {
-                            string pn = Path.Combine(outDir, SafeFileName(blockName + "_side" + (i + 1)) + ".png");
-                            if (overwrite || !File.Exists(pn))
+                            string diffuseSideN = Path.Combine(outDir, SafeFileName(blockName + "_side" + (i + 1)) + ".png");
+                            if ((overwrite || !File.Exists(diffuseSideN)) &&
+                                SaveTilePNG(near.Atlas, TileRectAt(map.Sides[i], near), diffuseSideN))
                             {
-                                if (SaveTilePNG(near.Atlas, TileRectAt(map.Sides[i], near), pn))
-                                    written++;
+                                writtenDiffuse++;
+                            }
+
+                            if (hasNormalSpec)
+                            {
+                                string normalSpecSideN = Path.Combine(outDir, SafeFileName(blockName + "_side" + (i + 1) + "_normalspec") + ".png");
+                                if ((overwrite || !File.Exists(normalSpecSideN)) &&
+                                    SaveTilePNG(normalSpec.Atlas, TileRectAt(map.Sides[i], normalSpec), normalSpecSideN))
+                                {
+                                    writtenNormalSpec++;
+                                }
                             }
                         }
                     }
@@ -7007,17 +7301,31 @@ namespace TexturePacks
                     // Bottom.
                     if (map.Bottom.HasValue)
                     {
-                        string path = Path.Combine(outDir, SafeFileName(blockName + "_bottom") + ".png");
-                        if (overwrite || !File.Exists(path))
+                        string diffusePath = Path.Combine(outDir, SafeFileName(blockName + "_bottom") + ".png");
+                        if ((overwrite || !File.Exists(diffusePath)) &&
+                            SaveTilePNG(near.Atlas, TileRectAt(map.Bottom.Value, near), diffusePath))
                         {
-                            if (SaveTilePNG(near.Atlas, TileRectAt(map.Bottom.Value, near), path))
-                                written++;
+                            writtenDiffuse++;
+                        }
+
+                        if (hasNormalSpec)
+                        {
+                            string normalSpecPath = Path.Combine(outDir, SafeFileName(blockName + "_bottom_normalspec") + ".png");
+                            if ((overwrite || !File.Exists(normalSpecPath)) &&
+                                SaveTilePNG(normalSpec.Atlas, TileRectAt(map.Bottom.Value, normalSpec), normalSpecPath))
+                            {
+                                writtenNormalSpec++;
+                            }
                         }
                     }
                 }
 
-                Log($"[Export] Wrote {written} face PNG(s) to \"{ShortenForLog(outDir)}\".");
-                return written;
+                if (hasNormalSpec)
+                    Log($"[Export] Wrote {writtenDiffuse} diffuse face PNG(s) and {writtenNormalSpec} _normalSpec face PNG(s) to \"{ShortenForLog(outDir)}\".");
+                else
+                    Log($"[Export] Wrote {writtenDiffuse} face PNG(s) to \"{ShortenForLog(outDir)}\". No _normalSpec atlas was available.");
+
+                return writtenDiffuse + writtenNormalSpec;
             }
 
             #region Models: Doors (Full-Sheet Export)
@@ -7190,13 +7498,30 @@ namespace TexturePacks
             /// </summary>
             private static bool ResolveBlockAtlas(bool preferMip, out AtlasInfo info)
             {
-                info = null;
-
                 Texture2D atlas = null;
                 if (preferMip)
                     atlas = FindTerrainMipDiffuseTexture();
                 if (atlas == null || atlas.IsDisposed)
                     atlas = FindTerrainAtlasTexture();
+
+                return ResolveAtlasFromTexture(atlas, out info);
+            }
+
+            /// <summary>
+            /// Resolve the live terrain normal/spec atlas used by BlockTerrain._normalSpec.
+            /// Returns false if this build does not expose one.
+            /// </summary>
+            private static bool ResolveNormalSpecAtlas(out AtlasInfo info)
+            {
+                return ResolveAtlasFromTexture(FindTerrainNormalSpecTexture(), out info);
+            }
+
+            /// <summary>
+            /// Builds atlas metadata from a concrete texture instance.
+            /// </summary>
+            private static bool ResolveAtlasFromTexture(Texture2D atlas, out AtlasInfo info)
+            {
+                info = null;
 
                 if (atlas == null || atlas.IsDisposed)
                     return false;
@@ -11521,11 +11846,40 @@ namespace TexturePacks
         /// </summary>
         public static void Tick()
         {
-            if (!_reloadRequested) return;
-            lock (_swapLock)
+            if (_reloadRequested)
             {
-                _reloadRequested = false;
-                DoReloadCore(); // Performs the actual safe swap.
+                lock (_swapLock)
+                {
+                    _reloadRequested = false;
+                    _reloadInProgress = true;
+
+                    try
+                    {
+                        DoReloadCore();
+
+                        // Give the menu a few frames to settle after GPU writes.
+                        _startupUnlockFramesRemaining = Math.Max(_startupUnlockFramesRemaining, 3);
+
+                        // Log("[StartupGate] Reload complete. Waiting a few frames before unlocking launch.");
+                    }
+                    finally
+                    {
+                        _reloadInProgress = false;
+                    }
+                }
+            }
+
+            if (_startupGateActive && !_reloadRequested && !_reloadInProgress)
+            {
+                if (_startupUnlockFramesRemaining > 0)
+                {
+                    _startupUnlockFramesRemaining--;
+                }
+                else
+                {
+                    _startupGateActive = false;
+                    // Log("[StartupGate] Launch gate cleared.");
+                }
             }
         }
         #endregion

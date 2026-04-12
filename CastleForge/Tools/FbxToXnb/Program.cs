@@ -421,19 +421,19 @@ internal static class Program
     }
 
     /// <summary>
-    /// Stages likely texture files for the FBX into the TEMP build folder.
+    /// Stages likely texture files for the FBX into the TEMP build folder while
+    /// preserving their relative folder structure from the FBX source directory.
     ///
     /// Purpose:
-    /// - Supports FBX files that reference textures directly from the root.
-    /// - Supports FBX files that reference textures through a relative "textures\" folder.
-    /// - Preserves the old "<asset>.png" compatibility alias as "texture.png".
+    /// - Supports textures placed beside the FBX.
+    /// - Supports textures inside subfolders such as "textures\", "materials\", etc.
+    /// - Preserves the relative paths the FBX importer expects during pipeline build.
+    /// - Still provides legacy "texture.png" alias behavior when "<asset>.png" exists.
     ///
     /// Notes:
-    /// - Files are copied into:
-    ///     1) workDir
-    ///     2) workDir\textures
-    /// - This handles common exporter behavior where the FBX stores paths like:
-    ///     textures/texture_0.png
+    /// - Texture files are copied recursively from the FBX source folder.
+    /// - Relative subfolders are recreated under the temp work folder.
+    /// - This is more flexible than hardcoding a single "textures\" subfolder.
     /// </summary>
     private static List<string> StageCandidateTextureFiles(string srcDir, string workDir, string asset)
     {
@@ -442,21 +442,18 @@ internal static class Program
 
         string[] textureExtensions =
         {
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".bmp",
-        ".tga",
-        ".dds"
-    };
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp",
+            ".tga",
+            ".dds"
+        };
 
         if (!Directory.Exists(srcDir))
             return copied;
 
-        string texturesDir = Path.Combine(workDir, "textures");
-        Directory.CreateDirectory(texturesDir);
-
-        foreach (var file in Directory.GetFiles(srcDir))
+        foreach (var file in Directory.GetFiles(srcDir, "*.*", SearchOption.AllDirectories))
         {
             string ext = Path.GetExtension(file);
             if (string.IsNullOrWhiteSpace(ext))
@@ -475,38 +472,65 @@ internal static class Program
             if (!isTexture)
                 continue;
 
-            string fileName = Path.GetFileName(file);
+            string relativePath = GetRelativePathSafe(srcDir, file);
 
-            // Copy to TEMP root.
-            string destRoot = Path.Combine(workDir, fileName);
-            File.Copy(file, destRoot, overwrite: true);
+            // Skip anything suspicious that escapes the source root.
+            if (string.IsNullOrWhiteSpace(relativePath) ||
+                relativePath.StartsWith("..\\", StringComparison.OrdinalIgnoreCase) ||
+                relativePath.StartsWith("../", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
-            // Copy to TEMP\textures for FBX material references like "textures\foo.png".
-            string destTextures = Path.Combine(texturesDir, fileName);
-            File.Copy(file, destTextures, overwrite: true);
+            string dest = Path.Combine(workDir, relativePath);
+            string destFolder = Path.GetDirectoryName(dest);
+            if (!string.IsNullOrEmpty(destFolder))
+                Directory.CreateDirectory(destFolder);
 
-            if (seen.Add(fileName))
-                copied.Add(fileName);
+            File.Copy(file, dest, overwrite: true);
+
+            if (seen.Add(relativePath))
+                copied.Add(relativePath);
         }
 
-        // Preserve old same-name sidecar compatibility.
+        // Preserve old sidecar compatibility:
+        // If "<asset>.png" exists beside the FBX, also expose "texture.png" in temp root.
         string sidecarPng = Path.Combine(srcDir, asset + ".png");
-        string textureAliasRoot = Path.Combine(workDir, "texture.png");
-        string textureAliasSub = Path.Combine(texturesDir, "texture.png");
-
         if (File.Exists(sidecarPng))
         {
-            if (!File.Exists(textureAliasRoot))
-                File.Copy(sidecarPng, textureAliasRoot, overwrite: true);
-
-            if (!File.Exists(textureAliasSub))
-                File.Copy(sidecarPng, textureAliasSub, overwrite: true);
+            string textureAlias = Path.Combine(workDir, "texture.png");
+            if (!File.Exists(textureAlias))
+                File.Copy(sidecarPng, textureAlias, overwrite: true);
 
             if (seen.Add("texture.png"))
                 copied.Add("texture.png (alias of " + Path.GetFileName(sidecarPng) + ")");
         }
 
         return copied;
+    }
+
+    /// <summary>
+    /// Returns a relative path from baseDir to fullPath using URI logic for
+    /// .NET Framework compatibility.
+    /// </summary>
+    private static string GetRelativePathSafe(string baseDir, string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(baseDir) || string.IsNullOrWhiteSpace(fullPath))
+            return null;
+
+        string baseDirFull = Path.GetFullPath(baseDir);
+        string fullPathFull = Path.GetFullPath(fullPath);
+
+        if (!baseDirFull.EndsWith("\\", StringComparison.Ordinal))
+            baseDirFull += "\\";
+
+        var baseUri = new Uri(baseDirFull, UriKind.Absolute);
+        var fileUri = new Uri(fullPathFull, UriKind.Absolute);
+
+        Uri relativeUri = baseUri.MakeRelativeUri(fileUri);
+        string relative = Uri.UnescapeDataString(relativeUri.ToString());
+
+        return relative.Replace('/', '\\');
     }
 
     /// <summary>
