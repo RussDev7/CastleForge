@@ -902,6 +902,12 @@ namespace TexturePacks
         /// </summary>
         public static volatile bool _itemSwapQueued; // Run on next Update when safe.
 
+        /// <summary>
+        /// When true, item icon baselines/work buffers should be fully rebuilt on the next safe Update.
+        /// Use this when a simple GPU atlas upload retry is not enough.
+        /// </summary>
+        public static volatile bool _itemIconsRebuildQueued;
+
         #endregion
 
         #region Device Reset Gates (Setters)
@@ -992,29 +998,67 @@ namespace TexturePacks
             // ---- Local worker: Prefer in-place upload; fall back to compatible replacement if safe ----
             void UploadInPlaceOrReplace(FieldInfo field, Color[][] work)
             {
-                if (field == null || work == null) return;
-                if (!(field.GetValue(null) is Texture2D dst) || dst.IsDisposed) return;
+                if (field == null || work == null)
+                    return;
 
-                // 1) Safest path - in-place upload (no runtime type/instance change).
-                if (TryUploadInPlace(gd, dst, work)) return;
+                if (!(field.GetValue(null) is Texture2D dst) || dst.IsDisposed)
+                    return;
 
-                // 2) Fallback - only proceed if the device epoch is stable.
-                if (startEpoch != _gdEpoch || _gdResetting) { _itemSwapQueued = true; return; }
+                // 1) If the current CPU icon buffers no longer match the live atlas shape,
+                //    this is NOT a simple upload retry case. Queue a full icon rebuild.
+                if (!WorkMatchesTexture(dst, work))
+                {
+                    InvalidateItemBaselines();
+                    _itemIconsRebuildQueued = true;
+                    return;
+                }
 
-                // Create a field-compatible instance (Texture2D vs RenderTarget2D).
+                // 2) Safest path - in-place upload (no runtime type/instance change).
+                if (TryUploadInPlace(gd, dst, work))
+                    return;
+
+                // 3) If the device became unstable mid-flight, treat this as a transient retry.
+                if (startEpoch != _gdEpoch || _gdResetting)
+                {
+                    _itemSwapQueued = true;
+                    return;
+                }
+
+                // 4) Fallback - create a field-compatible instance and try the upload there.
                 var fresh = CreateLikeForField(gd, dst, field);
 
-                if (TryUploadInPlace(gd, fresh, work))
+                try
                 {
-                    // Swap into the static field; old is retired after Draw to avoid in-flight use.
-                    field.SetValue(null, fresh);
-                    GpuRetireQueue.Enqueue(dst);
+                    // Safety: if the fresh target still doesn't match the CPU data, the problem is
+                    // stale item icon buffers, not this specific texture instance.
+                    if (!WorkMatchesTexture(fresh, work))
+                    {
+                        InvalidateItemBaselines();
+                        _itemIconsRebuildQueued = true;
+                        return;
+                    }
+
+                    if (TryUploadInPlace(gd, fresh, work))
+                    {
+                        field.SetValue(null, fresh);
+                        GpuRetireQueue.Enqueue(dst);
+                    }
+                    else
+                    {
+                        // Upload failed even though the mip layout matched.
+                        // Treat this as a transient GPU retry case.
+                        try { fresh.Dispose(); } catch { }
+                        _itemSwapQueued = true;
+                    }
                 }
-                else
+                finally
                 {
-                    // Couldn't upload now - device might still be settling; try again on the next Update.
-                    try { fresh.Dispose(); } catch { }
-                    _itemSwapQueued = true;
+                    // If we queued a rebuild instead of swapping in the fresh texture,
+                    // make sure it does not leak.
+                    if (_itemIconsRebuildQueued)
+                    {
+                        try { fresh.Dispose(); } catch { }
+                    }
                 }
             }
 
@@ -1038,18 +1082,88 @@ namespace TexturePacks
         {
             try
             {
+                if (dst == null || work == null)
+                    return false;
+
+                int levels = Math.Min(dst.LevelCount, work.Length);
+                for (int level = 0; level < levels; level++)
+                {
+                    int w = Math.Max(1, dst.Width >> level);
+                    int h = Math.Max(1, dst.Height >> level);
+                    int expected = w * h;
+
+                    if (work[level] == null || work[level].Length != expected)
+                        return false;
+                }
+
                 WithTextureUnbound(gd, dst, () =>
                 {
-                    int levels = Math.Min(dst.LevelCount, work.Length);
                     for (int level = 0; level < levels; level++)
                         dst.SetData(level, null, work[level], 0, work[level].Length);
                 });
+
                 return true;
             }
             catch
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Returns true when the CPU-side item icon mip buffers exactly match the current
+        /// destination texture's mip layout.
+        ///
+        /// Purpose:
+        /// - Distinguishes a stale CPU baseline/work-buffer problem from a transient GPU upload failure.
+        /// - Lets SwapIconAtlasesFromCpu queue a full item-icon rebuild when atlas dimensions or mip counts changed.
+        /// </summary>
+        static bool WorkMatchesTexture(Texture2D dst, Color[][] work)
+        {
+            if (dst == null || work == null)
+                return false;
+
+            int levels = Math.Min(dst.LevelCount, work.Length);
+            if (levels <= 0)
+                return false;
+
+            for (int level = 0; level < levels; level++)
+            {
+                int w = Math.Max(1, dst.Width >> level);
+                int h = Math.Max(1, dst.Height >> level);
+                int expected = w * h;
+
+                if (work[level] == null || work[level].Length != expected)
+                    return false;
+            }
+
+            return true;
+        }
+        #endregion
+
+        #region Helper: Item Icon Atlas Baseline Validation / Invalidation
+
+        static bool AtlasMatchesBaseline(Texture2D tex, int width, int height, int levels)
+        {
+            if (tex == null) return false;
+            return tex.Width == width &&
+                   tex.Height == height &&
+                   tex.LevelCount == levels;
+        }
+
+        static void InvalidateItemBaselines()
+        {
+            _items64Baseline = null;
+            _items128Baseline = null;
+            _items64Work = null;
+            _items128Work = null;
+            _itemsBaselineCaptured = false;
+
+            _items64BaseWidth = _items64BaseHeight = _items64BaseLevels = 0;
+            _items128BaseWidth = _items128BaseHeight = _items128BaseLevels = 0;
+
+            _items64BaselineSource = null;
+            _items128BaselineSource = null;
         }
         #endregion
 
@@ -1062,25 +1176,68 @@ namespace TexturePacks
         static Color[][] _items64Work, _items128Work;
         static bool _itemsBaselineCaptured;
 
+        // Captured live-atlas signature used to detect rebuilds / layout changes.
+        static int _items64BaseWidth, _items64BaseHeight, _items64BaseLevels;
+        static int _items128BaseWidth, _items128BaseHeight, _items128BaseLevels;
+        static Texture2D _items64BaselineSource, _items128BaselineSource;
+
         public static void CaptureItemsBaselineIfNeeded()
         {
-            if (_itemsBaselineCaptured) return;
-
             var smallField = AccessTools.Field(typeof(InventoryItem), "_2DImages");
             var largeField = AccessTools.Field(typeof(InventoryItem), "_2DImagesLarge");
             var small = smallField?.GetValue(null) as Texture2D;
             var large = largeField?.GetValue(null) as Texture2D;
-            if (small == null && large == null) return;
+
+            if (small == null && large == null)
+                return;
+
+            bool needRecapture = !_itemsBaselineCaptured;
+
+            if (!needRecapture && small != null)
+            {
+                if (!ReferenceEquals(small, _items64BaselineSource) ||
+                    !AtlasMatchesBaseline(small, _items64BaseWidth, _items64BaseHeight, _items64BaseLevels))
+                {
+                    needRecapture = true;
+                }
+            }
+
+            if (!needRecapture && large != null)
+            {
+                if (!ReferenceEquals(large, _items128BaselineSource) ||
+                    !AtlasMatchesBaseline(large, _items128BaseWidth, _items128BaseHeight, _items128BaseLevels))
+                {
+                    needRecapture = true;
+                }
+            }
+
+            if (!needRecapture)
+                return;
+
+            InvalidateItemBaselines();
 
             WithNoRenderTargets((small ?? large).GraphicsDevice, () =>
             {
-                if (small != null) _items64Baseline = ReadAllMips(small);
-                if (large != null) _items128Baseline = ReadAllMips(large);
+                if (small != null)
+                {
+                    _items64Baseline = ReadAllMips(small);
+                    _items64BaseWidth = small.Width;
+                    _items64BaseHeight = small.Height;
+                    _items64BaseLevels = small.LevelCount;
+                    _items64BaselineSource = small;
+                }
+
+                if (large != null)
+                {
+                    _items128Baseline = ReadAllMips(large);
+                    _items128BaseWidth = large.Width;
+                    _items128BaseHeight = large.Height;
+                    _items128BaseLevels = large.LevelCount;
+                    _items128BaselineSource = large;
+                }
             });
 
             _itemsBaselineCaptured = true;
-
-            // Seed work buffers from vanilla right away.
             RestoreItemsToVanilla();
         }
 
@@ -12023,30 +12180,30 @@ namespace TexturePacks
             private static readonly Color MenuGreen = new Color(78, 177, 61);
 
             // ---- DEFAULT/SENTINEL ----
-            private const string DEFAULT_KEY                  = "__DEFAULT__"; // Internal key, never equals a folder name.
-            private const string DEFAULT_LABEL                = "(default)";   // What the user sees.
-            private const string DEFAULT_ICON_RESOURCE_SUFFIX = "pack.png";    // Embedded resource to use as icon.
+            private const string DEFAULT_KEY                = "__DEFAULT__";                      // Internal key, never equals a folder name.
+            private const string DEFAULT_LABEL              = "(default)";                        // What the user sees.
+            private const string DEFAULT_ICON_RESOURCE_NAME = "TexturePacks.DefaultPackIcon.png"; // Embedded resource to use as icon.
 
             // Data: pack folder names (+ DEFAULT row).
-            private readonly List<string> _packs = new List<string>();         // Contains DEFAULT_KEY + folder names.
+            private readonly List<string> _packs = new List<string>();                            // Contains DEFAULT_KEY + folder names.
             private int _selectedIndex = -1;
 
             // Scroll state (pixel offset).
-            private int _scroll;                                               // Px.
+            private int _scroll;                                                                  // Px.
             private int RowH, RowPad;
 
-            private Rectangle _scrollbarTrackRect;                             // Track rectangle for the vertical scrollbar.
-            private Rectangle _scrollbarThumbRect;                             // Thumb rectangle that represents the visible portion of the list.
-            private bool      _scrollbarVisible;                               // True if the scrollbar should be drawn (content taller than view).
-            private bool      _draggingScrollbar;                              // True while the user is dragging the scrollbar thumb.
-            private int       _dragStartMouseY;                                // Mouse Y position when a thumb drag starts.
-            private int       _dragStartScroll;                                // Scroll offset at the start of a thumb drag.
+            private Rectangle _scrollbarTrackRect;                                                // Track rectangle for the vertical scrollbar.
+            private Rectangle _scrollbarThumbRect;                                                // Thumb rectangle that represents the visible portion of the list.
+            private bool      _scrollbarVisible;                                                  // True if the scrollbar should be drawn (content taller than view).
+            private bool      _draggingScrollbar;                                                 // True while the user is dragging the scrollbar thumb.
+            private int       _dragStartMouseY;                                                   // Mouse Y position when a thumb drag starts.
+            private int       _dragStartScroll;                                                   // Scroll offset at the start of a thumb drag.
 
             // Layout rectangles.
-            private Rectangle _panelRect;                                      // Main window.
-            private Rectangle _listRect;                                       // Scrolling list.
+            private Rectangle _panelRect;                                                         // Main window.
+            private Rectangle _listRect;                                                          // Scrolling list.
             private Rectangle _applyRect, _refreshRect, _closeRect;
-            private int PanelPad, TitleGap, ButtonsGap;                        // Inner panel padding, space under title, space above buttons.
+            private int PanelPad, TitleGap, ButtonsGap;                                           // Inner panel padding, space under title, space above buttons.
 
             // --- Pack icon support ---
             private readonly Dictionary<string, Texture2D> _icons =
@@ -13110,18 +13267,17 @@ namespace TexturePacks
                 try
                 {
                     var asm = typeof(TexturePackPickerScreen).Assembly;
-                    var rn = asm.GetManifestResourceNames()
-                                .FirstOrDefault(n => n.EndsWith(DEFAULT_ICON_RESOURCE_SUFFIX, StringComparison.OrdinalIgnoreCase));
-                    if (rn != null)
+
+                    using (var s = asm.GetManifestResourceStream(DEFAULT_ICON_RESOURCE_NAME))
                     {
-                        using (var s = asm.GetManifestResourceStream(rn))
-                        {
-                            if (s != null)
-                                _icons[DEFAULT_KEY] = Texture2D.FromStream(gd, s);
-                        }
+                        if (s != null)
+                            _icons[DEFAULT_KEY] = Texture2D.FromStream(gd, s);
                     }
                 }
-                catch { /* No embedded icon -> we'll draw the gray placeholder. */ }
+                catch
+                {
+                    // No embedded icon -> fall back to the gray placeholder.
+                }
 
                 // 2) Icons for real pack folders
                 var root = TexturePackManager.PacksRoot;

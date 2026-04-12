@@ -25,7 +25,10 @@ That means one pack can change the look and feel of nearly the entire game:
 - pack picker icons and metadata
 - author export tools for building packs from real game assets
 
-![TexturePacks overview placeholder](docs/images/texturepacks/overview-hero.png)
+<p align="center">
+  <img src="_Images/Preview1.gif" alt="TexturePacks Preview 1" width="49%" />
+  <img src="_Images/Preview2.gif" alt="TexturePacks Preview 2" width="49%" />
+</p>
 
 **Suggested screenshot:** A polished hero image showing the main menu pack picker, a themed HUD, and a custom world view from the same pack.
 
@@ -59,34 +62,19 @@ TexturePacks is not just a folder of PNG replacements. It is a **content-pack fr
 ## Showcase
 
 ### Main menu / pack picker
-![Texture pack picker](docs/images/texturepacks/picker-main-menu.png)
-
-**Image suggestion:** Show the Texture Packs menu opened from the main menu with at least three packs visible, including one with a custom icon and `about.json` description.
+![Texture Pack Picker](_Images/PickerMainMenu.gif)
 
 ### In-game pack switching
-![In-game pack switching](docs/images/texturepacks/picker-ingame.png)
-
-**Image suggestion:** Open the in-game menu and highlight the injected **Texture Packs** entry above **Inventory**.
+![In-game Pack Switching](_Images/PickerIngame.gif)
 
 ### Before / after environment comparison
-![Before and after world comparison](docs/images/texturepacks/before-after-world.png)
-
-**Image suggestion:** Split-screen comparison showing vanilla terrain on one side and a custom terrain/UI pack on the other.
-
-### UI / HUD overhaul
-![HUD and inventory reskin](docs/images/texturepacks/hud-inventory.png)
-
-**Image suggestion:** Show the HUD, inventory, and crafting screen using replaced crosshair, health bars, selectors, and inventory panels.
+![Before And After World Comparison](_Images/BeforeAfterWorld.png)
 
 ### Model swap / item geometry example
-![Custom held item model](docs/images/texturepacks/item-model-override.png)
-
-**Image suggestion:** Show a vanilla item next to a custom geometry override of the same item.
+![Custom held item model](_Images/ItemModelOverride.gif)
 
 ### Sky / screen / audio-themed pack
-![Sky and menu overhaul](docs/images/texturepacks/sky-menu-overhaul.png)
-
-**Image suggestion:** Capture a custom menu backdrop, logo, load screen, and a visible skybox change in-world.
+![Sky and menu overhaul](_Images/SkyMenuOverhaul.gif)
 
 ---
 
@@ -234,9 +222,7 @@ TexturePacks declares **ModLoaderExtensions** as a required dependency.
 
 5. Start the game and open **Texture Packs** from the main menu or in-game menu.
 
-![Installation placeholder](docs/images/texturepacks/install-layout.png)
-
-**Image suggestion:** Show the `!Mods\TexturePacks\` folder in Explorer with at least one pack folder visible.
+![Installation](_Images/InstallLayout.png)
 
 ---
 
@@ -274,9 +260,7 @@ By default, the export hotkey is also:
 Ctrl+Shift+F3
 ```
 
-![Quick start placeholder](docs/images/texturepacks/quick-start-ui.png)
-
-**Image suggestion:** Show the pack picker with one pack selected and the Apply button highlighted.
+![Quick Start](_Images/QuickStartUi.png)
 
 ---
 
@@ -340,10 +324,6 @@ FbxComp    = 0.01
 | `PickerUI` | `IconGap` | `10` | Gap between the icon and row text. |
 | `Models` | `FbxComp` | `0.01` | Root scale compensation for GLB → Blender → FBX → XNB model round-trips. Set `1.0` to disable. |
 
-![Config placeholder](docs/images/texturepacks/config-example.png)
-
-**Image suggestion:** Show the generated config file with `ActivePack`, `TileSize`, and `FbxComp` highlighted.
-
 ---
 
 ## Pack folder structure
@@ -381,9 +361,7 @@ A typical pack lives here:
   - `icon.*`, `pack.*`, `preview.*`, or `logo.*`
   - `about.json`
 
-![Pack structure placeholder](docs/images/texturepacks/pack-folder-structure.png)
-
-**Image suggestion:** Show the Example Pack expanded in Explorer so the root folders are visible at a glance.
+![Pack Structure](_Images/PackFolderStructure.png)
 
 <details>
 <summary><strong>Example Pack root files and folders</strong></summary>
@@ -476,9 +454,7 @@ Example:
 
 </details>
 
-![Picker metadata placeholder](docs/images/texturepacks/picker-description-example.png)
-
-**Image suggestion:** Show a pack entry with its root icon on the left and its `about.json` description visible on the right.
+![Picker Metadata](_Images/PickerDescriptionExample.png)
 
 ---
 
@@ -1006,9 +982,7 @@ Models\Items\0051_Pistol_model\
 - This helps avoid dependency collisions on generic names like `texture.xnb`.
 - Scale, origin, and bounds should remain compatible with vanilla expectations.
 
-![Held model placeholder](docs/images/texturepacks/example-held-model-layout.png)
-
-**Image suggestion:** Show one item model folder expanded with its `.xnb` and dependency files next to each other.
+![Held Model](_Images/ExampleHeldModelLayout.png)
 
 </details>
 
@@ -1262,9 +1236,7 @@ InventoryGrid
 
 </details>
 
-![UI placeholder](docs/images/texturepacks/example-ui-assets.png)
-
-**Image suggestion:** Show the Example Pack folder open beside a live screenshot of the matching HUD and inventory areas in-game.
+![UI](_Images/ExampleUiAssets.png)
 
 </details>
 
@@ -1606,15 +1578,19 @@ The picker is designed to feel like a proper front-end feature, not a debug menu
 - **Main Menu:** injects **Texture Packs** near the options area
 - **In-Game Menu:** injects **Texture Packs** above **Inventory**
 
-![Picker controls placeholder](docs/images/texturepacks/picker-controls.png)
-
-**Image suggestion:** Show the picker with one row selected and the Apply / Refresh / Close buttons visible.
+<p align="center">
+  <img src="_Images/MenuPlacement.png" alt="Menu Placement" width="49%" />
+  <img src="_Images/GamePlacement.png" alt="Game Placement" width="49%" />
+</p>
 
 ---
 
 ## Export tools for pack authors
 
-TexturePacks includes a full export pipeline intended to make pack creation easier.
+TexturePacks includes a full export pipeline intended to make pack creation easier. This also includes full model + bone support.
+
+![UI](_Images/AlienModel.png)
+
 
 ### Export command
 ```text
@@ -1649,16 +1625,12 @@ Ctrl+Shift+F3
 ### Why it matters
 Instead of guessing internal names or rebuilding lists by hand, authors can inspect actual exported references and build packs around real content.
 
-![Export tools placeholder](docs/images/texturepacks/exported-assets.png)
-
-**Image suggestion:** Show the `_Extracted` output folder with multiple categories visible after running `/tpexportall`.
+![Export Tools](_Images/ExportedAssets.png)
 
 ### Companion authoring tools
 TexturePacks also pairs well with the bundled **FBX → XNB** helper tooling used to turn edited models back into XNA-ready assets for packs.
 
-![Author tools placeholder](docs/images/texturepacks/author-tools-fbxtoxnb.png)
-
-**Image suggestion:** Show the `_FbxToXnb` folder opened in Explorer next to a custom FBX model and the generated per-model output folder.
+![Author Tools](_Images/AuthorToolsFbxtoxnb.png)
 
 **Multi-texture FBX note:** `_FbxToXnb` can stage multiple texture files for a single FBX.  
 Keep referenced textures beside the `.fbx` file, and if the FBX was exported with relative paths like `textures/texture_0.png`, keep that folder structure as well. The converter is designed to preserve common relative texture lookups during the XNB build process.
@@ -1778,9 +1750,7 @@ Models\Items\0051_Pistol_model\
   texture_0.xnb
 ```
 
-![Model workflow placeholder](docs/images/texturepacks/model-authoring-workflow.png)
-
-**Image suggestion:** A three-part visual showing GLB export, Blender editing, and final XNB placement into the pack folder.
+![Model Workflow](_Images/ModelAuthoringWorkflow.png)
 
 ---
 
@@ -1833,10 +1803,6 @@ The mod package is accompanied by an **Example Pack** that demonstrates:
 - a simple real replacement example (`Blocks\TNT_top.png`, `TNT_side.png`, `TNT_bottom.png`)
 
 This makes TexturePacks much easier to learn than a blank template.
-
-![Example pack placeholder](docs/images/texturepacks/example-pack-overview.png)
-
-**Image suggestion:** Show the Example Pack root beside a text editor open to `TexturePackAssetReference.txt`.
 
 **What the reference files are for:** the `.txt` files inside the Example Pack are there to document naming patterns, common stems, and supported categories. They are safe to delete from a real pack once you no longer need the notes.
 

@@ -176,7 +176,9 @@
     <EmbeddedResource Include="Embedded\SixLabors.ImageSharp.Drawing.dll" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="TexturePacks\Default\pack.png" />
+    <EmbeddedResource Include="Assets\DefaultPackIcon.png">
+      <LogicalName>TexturePacks.DefaultPackIcon.png</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Embedded\SharpGLTF.Core.dll" />

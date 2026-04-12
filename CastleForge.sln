@@ -109,6 +109,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Restore360Water", "CastleFo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QoLTweaks", "CastleForge\Mods\QoLTweaks\QoLTweaks.csproj", "{E64AEAE6-96E7-4805-8E3A-F99F279C90F3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CMZMaterialColors", "CastleForge\Mods\CMZMaterialColors\CMZMaterialColors.csproj", "{F6B3DB07-0FBA-49A2-9B43-667508724407}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -247,6 +249,10 @@ Global
 		{E64AEAE6-96E7-4805-8E3A-F99F279C90F3}.Debug|x86.Build.0 = Debug|x86
 		{E64AEAE6-96E7-4805-8E3A-F99F279C90F3}.Release|x86.ActiveCfg = Release|x86
 		{E64AEAE6-96E7-4805-8E3A-F99F279C90F3}.Release|x86.Build.0 = Release|x86
+		{F6B3DB07-0FBA-49A2-9B43-667508724407}.Debug|x86.ActiveCfg = Debug|x86
+		{F6B3DB07-0FBA-49A2-9B43-667508724407}.Debug|x86.Build.0 = Debug|x86
+		{F6B3DB07-0FBA-49A2-9B43-667508724407}.Release|x86.ActiveCfg = Release|x86
+		{F6B3DB07-0FBA-49A2-9B43-667508724407}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -285,6 +291,7 @@ Global
 		{EC59D57D-2B2F-62B8-9F67-2E2B24C3E69E} = {9CAF8F46-06A5-4A84-91CD-16B429534C2B}
 		{64D0FE4D-2CB7-47C1-8A03-868912B2D5D6} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{E64AEAE6-96E7-4805-8E3A-F99F279C90F3} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{F6B3DB07-0FBA-49A2-9B43-667508724407} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {AF8100CF-8E04-4D2F-BADD-0513D3614907}

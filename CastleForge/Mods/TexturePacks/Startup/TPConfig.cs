@@ -93,7 +93,7 @@ namespace TexturePacks
             return new TPConfig
             {
                 // General.
-                ActivePack    = ini.GetString("General", "ActivePack", "Default"),
+                ActivePack    = ini.GetString("General", "ActivePack", ""),
                 TileSize      = ini.GetClamp( "General", "TileSize",   64,64,1024),
                 ExportHotkey  = ini.GetString("Hotkeys", "Export",     "Ctrl+Shift+F3"),
 
@@ -164,7 +164,7 @@ namespace TexturePacks
         public static void SetActivePackAndSave(string pack)
         {
             var cfg = LoadOrCreate();
-            cfg.ActivePack = string.IsNullOrWhiteSpace(pack) ? "Default" : pack.Trim();
+            cfg.ActivePack = string.IsNullOrWhiteSpace(pack) ? "" : pack.Trim();
             cfg.Save();
         }
     }

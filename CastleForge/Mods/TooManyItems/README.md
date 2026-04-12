@@ -1,8 +1,6 @@
 # TooManyItems
 
-> A full-featured in-game item browser, block exposer, inventory helper, and quick-action overlay for CastleMiner Z.
-
-**Suggested repo path:** `CastleForge/Mods/TooManyItems/README.md`
+> A full-featured in-game item browser, hidden-block exposer, inventory helper, and quick-action overlay for CastleMiner Z.
 
 ---
 
@@ -20,9 +18,25 @@ Instead of stopping at the vanilla item list, this mod goes further by:
 
 For creators, testers, hosts, and sandbox players, this makes TooManyItems much more than “just an item giver.” It becomes a lightweight creative-control panel built directly into the game.
 
-![TooManyItems overview placeholder](docs/images/mods/toomanyitems/overview-main.png)
+![TooManyItems Preview](_Images/Preview.png)
 
-**Image suggestion:** Show the crafting/inventory screen with the TooManyItems overlay open, the left utility toolbar visible, the right Items panel open, and a few searched items displayed in the grid.
+---
+
+## A CastleMiner Z take on the original TooManyItems
+
+The original Marglyph TooManyItems for Minecraft became popular because it let players open their inventory, instantly grab items, save whole inventories, swap modes, and use quick world controls from one compact overlay.
+
+This CastleForge version keeps that same spirit while adapting it to CastleMiner Z:
+
+- **open inventory, browse items, and spawn them quickly**,
+- **left click for a stack / right click for one**,
+- **save and restore entire loadouts**,
+- **toggle or focus the overlay with a dedicated key**,
+- **switch modes and adjust time/difficulty from the same screen**,
+- **keep favorite items close at hand**,
+- **surface content the base game normally does not expose cleanly**.
+
+This is **not** a 1:1 Minecraft port, and that is intentional. CastleMiner Z does not map cleanly to features like Minecraft-style enchant, potion, firework, or weather panels, so this version focuses on the parts of TooManyItems that are the most useful for CastleMiner Z sandboxing, building, testing, and mod workflows.
 
 ---
 
@@ -31,13 +45,26 @@ For creators, testers, hosts, and sandbox players, this makes TooManyItems much 
 TooManyItems is not just a static cheat list. It is a carefully integrated overlay with quality-of-life behaviors that make it feel native to the game:
 
 - **Synthetic block exposure** so hidden or otherwise unavailable blocks can be surfaced as real inventory entries.
-- **Searchable item browser** with full-stack or single-item give behavior.
+- **Searchable item browser** with fast full-stack or single-item give behavior.
 - **Favorites workflow** for frequently used items.
 - **Persistent inventory snapshots** so you can save and restore loadouts.
 - **Quick world/session controls** like game mode, difficulty, time-of-day, and healing.
 - **Hard-block tuning** for specific building/testing scenarios.
 - **Multiplayer-safe pickup handling** for synthetic items.
 - **Hot-reloadable configuration** so you can tune the UI without restarting every time.
+
+---
+
+## Quick start
+
+1. Install **ModLoader** and **ModLoaderExtensions**.
+2. Drop `TooManyItems.dll` into your `!Mods` folder.
+3. Launch CastleMiner Z.
+4. Open the **inventory / crafting screen**.
+5. Press the configured **toggle key** if the overlay is hidden. By default, that key is **O**.
+6. Left click an item to receive a stack, or right click it to receive one.
+
+If the overlay does not appear at first, make sure you are actually inside the inventory screen. TooManyItems is meant to live there, just like the classic original mod.
 
 ---
 
@@ -166,7 +193,7 @@ TooManyItems can control whether torches drop as:
 
 ### 11) Item icon extraction for development
 
-A built-in debug export path can dump the game’s item atlases and extracted per-item PNGs for tooling or documentation work.
+A built-in debug export path can dump the game’s item atlases and extracted per-item PNGs for tooling, wiki work, pack authoring, or documentation screenshots.
 
 </details>
 
@@ -203,9 +230,7 @@ The left toolbar is the fast-action side of the mod.
 | Favorites | Opens the favorites grid. |
 | Settings | Opens TMI gameplay settings. |
 
-![Toolbar placeholder](docs/images/mods/toomanyitems/toolbar-breakdown.png)
-
-**Image suggestion:** Capture the left toolbar and right toolbar with callouts labeling delete mode, game mode buttons, time buttons, difficulty, heal, and the panel switcher.
+![Toolbar](_Images/ToolbarBreakdown.png)
 
 ---
 
@@ -220,7 +245,7 @@ The Items panel is the main browsing surface.
 - **Alt + click** an item to add or remove it from Favorites.
 - **Mouse wheel** inside the grid to page through results.
 - **Search box** supports focused text entry.
-- **ESC** clears/unfocuses the search box.
+- **ESC** clears or unfocuses the search box.
 
 ### Search behavior
 
@@ -237,14 +262,12 @@ The search box is designed to be simple and stable:
 
 The panel supports two useful behavior toggles:
 
-- **HideUnusable** – removes items the mod considers unsafe/unusable from the grid.
+- **HideUnusable** – removes items the mod considers unsafe or unusable from the grid.
 - **SortItems** – changes ordering behavior.
 
 When you search, results are kept stable and alphabetically useful.
 
-![Items panel placeholder](docs/images/mods/toomanyitems/items-panel.png)
-
-**Image suggestion:** Show the item browser open with a search term entered, page arrows visible, and at least one favorite-marked item in the grid.
+![Items Panel](_Images/ItemsPanel.png)
 
 ---
 
@@ -262,9 +285,7 @@ The Favorites panel gives you a compact list of your most-used items.
 
 This is ideal for builders and testers who keep using the same blocks, tools, torches, containers, or admin items repeatedly.
 
-![Favorites placeholder](docs/images/mods/toomanyitems/favorites-panel.png)
-
-**Image suggestion:** Show a curated favorites list of common build blocks and utility items, with a note or callout showing Alt+Click to favorite.
+![Favorites](_Images/FavoritesPanel.png)
 
 ---
 
@@ -295,9 +316,9 @@ This is one of the most useful quality-of-life features in the mod. It lets you 
 - a testing/debug loadout,
 - an event/admin loadout.
 
-![Save slots placeholder](docs/images/mods/toomanyitems/save-slots.png)
+This carries forward one of the best ideas from the original TooManyItems documentation: being able to save your “real” inventory, swap into a build or testing kit, and then restore yourself later without rebuilding everything by hand.
 
-**Image suggestion:** Show the left save-slot column with a mix of empty Save buttons and occupied Load buttons, including one clear-X button visible.
+![Save Slots](_Images/SaveSlots.png)
 
 ---
 
@@ -322,9 +343,7 @@ It also explicitly includes a small special-case group such as:
 
 When disabled, the mod restores the original defaults it captured earlier.
 
-![Settings panel placeholder](docs/images/mods/toomanyitems/settings-panel.png)
-
-**Image suggestion:** Show the Settings panel open to Hard Block Settings with the checkbox enabled and the Tool Tier value adjusted above default.
+![Settings Panel](_Images/SettingsPanel.png)
 
 ---
 
@@ -369,9 +388,9 @@ Give yourself or another player an item by item name or numeric item ID.
   - `health=75`
 - Large amounts are split internally into sane stack-sized chunks.
 
-![Command placeholder](docs/images/mods/toomanyitems/command-give.png)
+This command fills the same practical role the original Minecraft TMI docs described for multiplayer: when direct inventory insertion is not the right path, a command-based item give flow still provides a clean and flexible fallback.
 
-**Image suggestion:** Show an in-game chat example using `/give` and the resulting item appearing in inventory.
+![Command](_Images/CommandGive.gif)
 
 ---
 
@@ -388,7 +407,7 @@ TooManyItems declares **ModLoaderExtensions** as a required dependency and is in
 ### Install steps
 
 1. Install the CastleForge core loader and required dependencies.
-2. Place `TooManyItems.dll` into your game's `!Mods` folder.
+2. Place `TooManyItems.dll` into your game’s `!Mods` folder.
 3. Launch the game.
 4. Open the inventory/crafting screen and use the configured toggle key if needed.
 
@@ -576,7 +595,7 @@ TooManyItems stores per-user state here:
 
 - whether the overlay is enabled,
 - favorites,
-- save slot count/names metadata,
+- save slot count and slot metadata,
 - per-slot inventory snapshots,
 - hard-block setting state,
 - hard-block tool tier.
@@ -634,6 +653,44 @@ and per-item exports named like:
 0001_Dirt.png
 0042_Torch.png
 ```
+
+---
+
+## Troubleshooting
+
+### The overlay does not show up
+
+- Open the **inventory / crafting screen** first.
+- Press the configured toggle key. By default this is **O**.
+- Check that `Enabled=true` in `TooManyItems.Config.ini`.
+- If needed, delete `TooManyItems.UserData.ini` to reset persisted UI state.
+
+### Some items are missing or hidden
+
+- Disable `HideUnusable` if you want to see everything the mod is willing to surface.
+- Remember that some entries may be deliberately filtered or quarantined if they are unsafe to create or repeatedly error while drawing.
+- TooManyItems also loads late on purpose so it can capture more registered content, including content introduced by other mods.
+
+### The UI layout feels cramped or too large
+
+Adjust the layout values in:
+
+```text
+!Mods\TooManyItems\TooManyItems.Config.ini
+```
+
+The most useful keys are usually:
+
+- `ItemColumns`
+- `Cell`
+- `CellPad`
+- `TopbarH`
+- `SaveBtnW`
+- `SaveBtnH`
+
+### I changed config values and nothing happened
+
+Press the configured reload key. By default this is **F9**.
 
 ---
 
@@ -697,20 +754,7 @@ TooManyItems is especially useful for:
 - Favorites and save slots are intended to persist between sessions.
 - Hard-block settings are reversible because defaults are captured before they are changed.
 - Torch behavior is configurable because synthetic block-backed torch items are useful in some workflows, but vanilla torch drops are safer as a default.
-
----
-
-## Suggested gallery for this README
-
-If you want this GitHub page to really stand out, these are the best screenshots to add:
-
-1. **Main overview shot** – full overlay open in inventory.
-2. **Item browser shot** – searched results with favorite markers visible.
-3. **Favorites shot** – commonly used build items in a small curated list.
-4. **Save slot shot** – several saved loadouts visible in the left column.
-5. **Settings shot** – hard block settings enabled with a changed tier.
-6. **Command shot** – `/give` example in chat.
-7. **Debug export shot** – exported item PNG folders in Explorer.
+- Like the original TMI, the most natural way to use the mod is: **open inventory, browse, click, keep building**.
 
 ---
 
@@ -726,8 +770,31 @@ At minimum, make sure the following are available:
 
 ---
 
+## Uninstalling
+
+To remove TooManyItems, delete the mod from your `!Mods` folder.
+
+If you also want to clear its saved state, delete:
+
+```text
+!Mods\TooManyItems\TooManyItems.Config.ini
+!Mods\TooManyItems\TooManyItems.UserData.ini
+!Mods\TooManyItems\Textures\TMI.png
+!Mods\TooManyItems\Textures\MissingTexture.png
+```
+
+If you used the icon export/debug feature and want a completely clean removal, also delete:
+
+```text
+!Mods\TooManyItems\Extracted\
+```
+
+---
+
 ## Summary
 
 TooManyItems is a powerful utility mod for CastleMiner Z that combines item browsing, hidden block exposure, favorites, loadout snapshots, world/session quick actions, configurable hard-block behavior, and multiplayer-aware synthetic item handling into one polished in-game overlay.
+
+It also preserves the most useful ideas that made the original TooManyItems memorable: immediate inventory access, quick utility controls, favorites, and saved inventories that help you spend more time building and testing and less time fighting menus.
 
 If your goal is to build faster, test faster, debug faster, or just have a much more capable sandbox workflow, this is one of the most practical mods in the CastleForge collection.

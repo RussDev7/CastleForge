@@ -828,6 +828,36 @@ namespace TexturePacks
         #region Deferred Runners (Queued Work On Update)
 
         /// <summary>
+        /// Runs queued full item-icon rebuilds outside of Draw and outside of the reset window.
+        ///
+        /// Purpose:
+        /// - Rebuilds item icon baselines/work buffers when a simple atlas upload retry is not enough.
+        /// - Re-runs the full item icon replacement pipeline, including baseline capture and CPU-side PNG blits.
+        /// - Leaves simple GPU-only retry work to the queued icon swap runner.
+        /// </summary>
+        [HarmonyPatch(typeof(DNAGame), "Update")]
+        static class Patch_RunQueuedItemIconRebuild
+        {
+            [HarmonyPostfix]
+            static void Postfix()
+            {
+                if (_itemIconsRebuildQueued && !_gdResetting)
+                {
+                    _itemIconsRebuildQueued = false;
+                    try
+                    {
+                        CaptureItemsBaselineIfNeeded();
+                        ApplyItemIconReplacementsIfAny();
+                    }
+                    catch
+                    {
+                        _itemIconsRebuildQueued = true; // Try again next tick if something hiccups.
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Runs queued icon swaps/uploads outside of Draw and outside of the reset window.
         /// </summary>
         [HarmonyPatch(typeof(DNAGame), "Update")]
