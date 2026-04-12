@@ -95,13 +95,14 @@ namespace WorldEdit
         public static (int MinY,   int MaxY)    WorldHeights  = (-64, 64);
         public static (int MinID,  int MaxID)   BlockIDValues = (0, 94);
         public static (int WidthX, int LengthZ) ChunkSize     = (16, 16);
-        public static int WandItemID    = (int)DNA.CastleMinerZ.Inventory.InventoryItemIDs.CopperAxe; // ID: 35.
-        public static int NavWandItemID = (int)DNA.CastleMinerZ.Inventory.InventoryItemIDs.Compass;   // ID: 39.
-        public static int LeavesID      = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Leaves;         // ID: 18.
-        public static int LogID         = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Log;            // ID: 17.
-        public static int SurfaceLavaID = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.SurfaceLava;    // ID: 12.
-        public static int DeepLavaID    = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.DeepLava;       // ID: 13.
-        public static int AirID         = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Empty;          // ID: 0.
+        public static int WandItemID            = (int)DNA.CastleMinerZ.Inventory.InventoryItemIDs.CopperAxe; // ID: 35.
+        public static int NavWandItemID         = (int)DNA.CastleMinerZ.Inventory.InventoryItemIDs.Compass;   // ID: 39.
+        public static int NavWandItemPreviousID = (int)DNA.CastleMinerZ.Inventory.InventoryItemIDs.Compass;   // ID: 39.
+        public static int LeavesID              = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Leaves;         // ID: 18.
+        public static int LogID                 = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Log;            // ID: 17.
+        public static int SurfaceLavaID         = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.SurfaceLava;    // ID: 12.
+        public static int DeepLavaID            = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.DeepLava;       // ID: 13.
+        public static int AirID                 = (int)DNA.CastleMinerZ.Terrain.BlockTypeEnum.Empty;          // ID: 0.
 
         #region Definitions
 
@@ -1347,6 +1348,64 @@ namespace WorldEdit
                 return value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                     ? value.Substring(prefix.Length)
                     : value;
+            }
+
+            /// <summary>
+            /// Resolves a nav-wand token into both a display name and an inventory item ID.
+            /// Supports enum names like "Compass" and numeric IDs like "39".
+            /// Rejects disabled tokens such as "none".
+            /// </summary>
+            public static bool TryResolveInventoryItemToken(string token, out string normalized, out int itemID)
+            {
+                normalized = "";
+                itemID = -1;
+
+                if (string.IsNullOrWhiteSpace(token))
+                    return false;
+
+                token = token.Trim();
+
+                if (IsDisabledToken(token))
+                    return false;
+
+                // Numeric ID path.
+                if (int.TryParse(token, out int numericId))
+                {
+                    if (Enum.IsDefined(typeof(DNA.CastleMinerZ.Inventory.InventoryItemIDs), numericId))
+                    {
+                        itemID = numericId;
+                        normalized = ((DNA.CastleMinerZ.Inventory.InventoryItemIDs)numericId).ToString();
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                // Enum name path.
+                if (Enum.TryParse(token, true, out DNA.CastleMinerZ.Inventory.InventoryItemIDs parsed))
+                {
+                    itemID = (int)parsed;
+                    normalized = parsed.ToString();
+                    return true;
+                }
+
+                return false;
+            }
+
+            /// <summary>
+            /// Returns the inventory item enum name for a valid item ID.
+            /// Returns the numeric ID as text if the value is not a defined enum.
+            /// Returns "none" for -1.
+            /// </summary>
+            public static string GetInventoryItemNameSafe(int itemID)
+            {
+                if (itemID == -1)
+                    return "none";
+
+                if (Enum.IsDefined(typeof(DNA.CastleMinerZ.Inventory.InventoryItemIDs), itemID))
+                    return ((DNA.CastleMinerZ.Inventory.InventoryItemIDs)itemID).ToString();
+
+                return itemID.ToString();
             }
             #endregion
 

@@ -1,6 +1,5 @@
 ﻿/*
 Copyright (c) 2025 RussDev7
-This file is part of https://github.com/RussDev7/CastleForge.
 
 This source is subject to the GNU General Public License v3.0 (GPLv3).
 See https://www.gnu.org/licenses/gpl-3.0.html.
@@ -14,6 +13,11 @@ THIS PROGRAM IS DISTRIBUTED IN THE HOPE THAT IT WILL BE USEFUL,
 BUT WITHOUT ANY WARRANTY; WITHOUT EVEN THE IMPLIED WARRANTY OF
 MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. SEE THE
 GNU GENERAL PUBLIC LICENSE FOR MORE DETAILS.
+*/
+
+/*
+Sections of this class was taken from 'WorldEdit-CSharp' by RussDev7.
+Main Project: https://github.com/RussDev7/WorldEdit-CSharp.
 */
 
 using System.Collections.Generic;
