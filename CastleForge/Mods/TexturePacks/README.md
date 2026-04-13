@@ -26,7 +26,7 @@ That means one pack can change the look and feel of nearly the entire game:
 - author export tools for building packs from real game assets
 
 <p align="center">
-  <img src="_Images/Preview1.gif" alt="TexturePacks Preview 1" width="49%" />
+  <img src="_Images/Preview.gif" alt="TexturePacks Preview 1" width="49%" />
   <img src="_Images/Preview2.gif" alt="TexturePacks Preview 2" width="49%" />
 </p>
 
