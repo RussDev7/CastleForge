@@ -122,7 +122,7 @@ System requirements
 
 Credits / License
 -----------------
-This tool is part of CMZModSuite tooling.
+This tool is part of CastleForge tooling.
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 

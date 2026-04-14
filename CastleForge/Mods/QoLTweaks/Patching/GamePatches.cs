@@ -1,7 +1,7 @@
 ﻿/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
-This file is part of https://github.com/RussDev7/CMZModSuite - see LICENSE for details.
+This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
 */
 
 #pragma warning disable IDE0060         // Silence IDE0060.
@@ -629,17 +629,31 @@ namespace QoLTweaks
         #region Display The Targeted Block Name And Id
 
         /// <summary>
-        /// Replaces the default targeted block text with a custom "Name (ID)" label when enabled.
+        /// Replaces the default targeted block text with a custom "Name (ID)" label when enabled,
+        /// while still respecting the same vanilla HUD visibility rules.
         /// </summary>
         [HarmonyPatch]
         internal static class InGameHUD_DrawPatch
         {
+            private static readonly FieldInfo _fiConstructionProbe =
+                AccessTools.Field(typeof(InGameHUD), "ConstructionProbe");
+
+            private static readonly FieldInfo _fiHideUI =
+                AccessTools.Field(typeof(InGameHUD), "_hideUI");
+
+            private static readonly FieldInfo _fiShowPlayers =
+                AccessTools.Field(typeof(InGameHUD), "showPlayers");
+
+            private static readonly FieldInfo _fiMedFont =
+                AccessTools.Field(typeof(CastleMinerZGame), "_medFont");
+
             private static MethodBase TargetMethod()
                 => AccessTools.Method(typeof(InGameHUD), "OnDraw",
                        new[] { typeof(GraphicsDevice), typeof(SpriteBatch), typeof(GameTime) });
 
             /// <summary>
-            /// Either suppresses or forwards the original DrawString call based on the QoL feature toggle.
+            /// Forwards the original draw call when the tweak is disabled.
+            /// When enabled, the vanilla targeted-block string draw is suppressed and replaced in Postfix.
             /// </summary>
             public static void ForwardOrSuppressDrawString(
                 SpriteBatch sb,
@@ -661,7 +675,7 @@ namespace QoLTweaks
             }
 
             /// <summary>
-            /// Swaps the default DrawString call out for a helper that can suppress or forward it at runtime.
+            /// Swaps the vanilla targeted-block DrawString call for a helper that can suppress it.
             /// </summary>
             [HarmonyTranspiler]
             private static IEnumerable<CodeInstruction> DisableDefaultDraw(IEnumerable<CodeInstruction> instrs)
@@ -671,8 +685,8 @@ namespace QoLTweaks
                     "DrawString",
                     new[]
                     {
-                        typeof(SpriteFont), typeof(string), typeof(Vector2), typeof(Color), typeof(float),
-                        typeof(Vector2), typeof(float), typeof(SpriteEffects), typeof(float)
+                typeof(SpriteFont), typeof(string), typeof(Vector2), typeof(Color), typeof(float),
+                typeof(Vector2), typeof(float), typeof(SpriteEffects), typeof(float)
                     });
 
                 var redirect = AccessTools.Method(typeof(InGameHUD_DrawPatch), nameof(ForwardOrSuppressDrawString));
@@ -691,7 +705,28 @@ namespace QoLTweaks
             }
 
             /// <summary>
-            /// Draws the enhanced targeted block label after the original HUD draw logic.
+            /// Returns true only when the vanilla top-right HUD text area is visible.
+            /// This matches the same show/hide rules used by the distance/max label.
+            /// </summary>
+            private static bool ShouldDrawTopRightHud(InGameHUD hud)
+            {
+                if (hud == null)
+                    return false;
+
+                bool hideUI = _fiHideUI != null && (bool)_fiHideUI.GetValue(hud);
+                if (hideUI)
+                    return false;
+
+                bool showPlayers = _fiShowPlayers != null && (bool)_fiShowPlayers.GetValue(hud);
+                if (showPlayers)
+                    return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Draws the enhanced targeted block label after vanilla HUD rendering,
+            /// but only when the same vanilla HUD visibility rules allow it.
             /// </summary>
             [HarmonyPostfix]
             private static void Postfix(InGameHUD __instance, SpriteBatch spriteBatch)
@@ -699,14 +734,21 @@ namespace QoLTweaks
                 if (!FeatureEnabled(QoL_Settings.EnableTargetedBlockNameAndId))
                     return;
 
+                if (!ShouldDrawTopRightHud(__instance))
+                    return;
+
                 try
                 {
-                    var probeField = AccessTools.Field(typeof(InGameHUD), "ConstructionProbe");
-                    var probe = probeField?.GetValue(__instance);
-                    if (probe == null) return;
+                    var probe = _fiConstructionProbe?.GetValue(__instance);
+                    if (probe == null)
+                        return;
 
                     bool ableToBuild = (bool)AccessTools.Property(probe.GetType(), "AbleToBuild").GetValue(probe, null);
-                    if (!ableToBuild) return;
+                    if (!ableToBuild)
+                        return;
+
+                    if (__instance.PlayerInventory?.ActiveInventoryItem == null)
+                        return;
 
                     var worldIndex = (DNA.IntVector3)AccessTools.Field(probe.GetType(), "_worldIndex").GetValue(probe);
                     var blockEnum = InGameHUD.GetBlock(worldIndex);
@@ -715,17 +757,21 @@ namespace QoLTweaks
                     string text = $"{blockType.Name} ({(int)blockEnum})";
 
                     var game = CastleMinerZGame.Instance;
-                    if (game == null) return;
+                    if (game == null)
+                        return;
 
-                    var medFont = (SpriteFont)AccessTools.Field(typeof(CastleMinerZGame), "_medFont").GetValue(game);
+                    var medFont = (SpriteFont)_fiMedFont?.GetValue(game);
+                    if (medFont == null)
+                        return;
+
                     float scale = Screen.Adjuster.ScaleFactor.Y;
-
                     int screenW = Screen.Adjuster.ScreenRect.Width;
                     float textWidth = medFont.MeasureString(text).X * scale;
                     float x = screenW - (textWidth + 10f * scale);
                     float y = medFont.LineSpacing * 4 * scale;
 
                     Color menuAqua = new Color(53, 170, 253);
+
                     spriteBatch.Begin();
                     spriteBatch.DrawString(
                         medFont,

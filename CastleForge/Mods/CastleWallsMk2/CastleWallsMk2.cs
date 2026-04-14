@@ -1332,7 +1332,7 @@ namespace CastleWallsMk2
                         {
                             int worldZ = center.Z + z;
 
-                            IntVector3 newPos = (IntVector3)Vector3.Add(pos, new Vector3(worldX, worldY, worldZ));
+                            IntVector3 newPos = new IntVector3(worldX, worldY, worldZ);
 
                             BlockTypeEnum bt = InGameHUD.GetBlock(newPos);
                             if (!IsSpawnerBlock(bt))

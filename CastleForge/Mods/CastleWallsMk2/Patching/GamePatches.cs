@@ -7434,6 +7434,129 @@ namespace CastleWallsMk2
         }
         #endregion
 
+        /// <summary>
+        /// GHOST MODE: TAB PLAYER LIST INDICATOR
+        /// Rewrites the Tab player-list name lookup so the local ghosted player can show
+        /// a visual marker in the roster without changing the real network gamertag.
+        ///
+        /// Behavior:
+        /// - Only affects InGameHUD.DrawPlayerList(...).
+        /// - Leaves the actual gamer/session identity untouched.
+        /// - When ghost mode is disabled, preserves the normal roster name.
+        /// - When ghost mode is enabled, appends " [GHOST]" to the local player's
+        ///   displayed roster name only.
+        /// - When hide-name mode is enabled, prefers the backed-up real name before
+        ///   appending the roster indicator.
+        ///
+        /// Notes:
+        /// - The Gamertag property used by DrawPlayerList resolves from the base
+        ///   DNA.Net.GamerServices.Gamer type, not NetworkGamer directly.
+        /// - This patch rewrites only the in-method getter call and does not modify
+        ///   any saved or networked player identity.
+        /// </summary>
+        #region Ghost Mode - Tab Player List Indicator
+
+        [HarmonyPatch]
+        internal static class InGameHUD_DrawPlayerList_GhostIndicator
+        {
+            /// <summary>
+            /// Resolves the protected InGameHUD.DrawPlayerList(...) method explicitly
+            /// so Harmony can patch the correct roster draw path.
+            /// </summary>
+            private static MethodBase TargetMethod()
+            {
+                return AccessTools.Method(
+                    typeof(InGameHUD),
+                    "DrawPlayerList",
+                    new[] { typeof(GraphicsDevice), typeof(SpriteBatch), typeof(GameTime) });
+            }
+
+            /// <summary>
+            /// Validates that the target method was found before patching.
+            /// </summary>
+            private static bool Prepare()
+            {
+                MethodBase target = TargetMethod();
+                return target != null;
+            }
+
+            /// <summary>
+            /// Rewrites the DrawPlayerList(...) Gamertag getter call to a runtime-gated
+            /// helper that returns a roster-only display name for the local player.
+            /// </summary>
+            private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                MethodInfo getGamertag = AccessTools.PropertyGetter(
+                    typeof(DNA.Net.GamerServices.Gamer),
+                    "Gamertag");
+
+                MethodInfo helper = AccessTools.Method(
+                    typeof(InGameHUD_DrawPlayerList_GhostIndicator),
+                    nameof(GetRosterDisplayName));
+
+                var codes = new List<CodeInstruction>(instructions);
+
+                for (int i = 0; i < codes.Count; i++)
+                {
+                    CodeInstruction ci = codes[i];
+
+                    if ((ci.opcode == OpCodes.Call || ci.opcode == OpCodes.Callvirt) &&
+                        Equals(ci.operand, getGamertag))
+                    {
+                        ci.opcode = OpCodes.Call;
+                        ci.operand = helper;
+                    }
+                }
+
+                return codes;
+            }
+
+            /// <summary>
+            /// Returns the roster-only display name for the supplied gamer.
+            ///
+            /// Behavior:
+            /// - Non-network gamers are returned unchanged.
+            /// - Remote/networked non-local players are returned unchanged.
+            /// - The local player gains a " [GHOST]" suffix while ghost mode is enabled.
+            /// - When hide-name mode is enabled, the backed-up original name is used
+            ///   before adding the roster indicator.
+            /// </summary>
+            private static string GetRosterDisplayName(Gamer gamer)
+            {
+                string name = gamer?.Gamertag ?? string.Empty;
+
+                try
+                {
+                    if (!(gamer is NetworkGamer ng))
+                        return name;
+
+                    // Only decorate the local player's roster entry.
+                    if (!ng.IsLocal)
+                        return name;
+
+                    // Preserve vanilla roster text when ghost mode is disabled.
+                    if (!CastleWallsMk2._ghostModeEnabled)
+                        return name;
+
+                    // If hide-name mode spoofed the visible name elsewhere, prefer the
+                    // backed-up clean local name for the roster display.
+                    if (CastleWallsMk2._ghostModeHideNameEnabled &&
+                        !string.IsNullOrWhiteSpace(CastleWallsMk2._ghostModeNameBackup))
+                    {
+                        name = CastleWallsMk2._ghostModeNameBackup;
+                    }
+
+                    return name + " [GHOST]";
+                }
+                catch
+                {
+                    // Fail safe: Never break the player list over a cosmetic label.
+                    return name;
+                }
+            }
+        }
+        #endregion
+
         #endregion
 
         #region Rapid Place

@@ -75,7 +75,7 @@ namespace LanternLandMap
     {
         #region Paths / Status
 
-        /// <summary>Folder containing LanternLandMap.ini under the CMZModSuite !Mods output tree.</summary>
+        /// <summary>Folder containing LanternLandMap.ini under the CastleForge !Mods output tree.</summary>
         public static readonly string ModFolder =
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "!Mods", "LanternLandMap");
 
