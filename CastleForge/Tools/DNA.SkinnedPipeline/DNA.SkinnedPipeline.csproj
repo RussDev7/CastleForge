@@ -3,7 +3,7 @@
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProjectGuid>{5944835D-F09D-4490-8D62-33C3763D444B}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -13,9 +13,13 @@
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <PropertyGroup>
+    <CMZModsRootDir>$(BuildOutputRoot)$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsRootDir>
+    <CMZSkinnedProcDir>$(CMZModsRootDir)SkinedModelProcessor\</CMZSkinnedProcDir>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x86\Debug\</OutputPath>
+    <OutputPath>$(CMZSkinnedProcDir)</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <PlatformTarget>x86</PlatformTarget>
@@ -23,10 +27,10 @@
     <ErrorReport>prompt</ErrorReport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
-    <OutputPath>bin\x86\Release\</OutputPath>
+    <OutputPath>$(CMZSkinnedProcDir)</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
-    <DebugType>pdbonly</DebugType>
+    <DebugType>none</DebugType>
     <PlatformTarget>x86</PlatformTarget>
     <LangVersion>7.3</LangVersion>
     <ErrorReport>prompt</ErrorReport>
@@ -37,7 +41,7 @@
     </Reference>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\CMZModSuite\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
+      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline">
       <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
@@ -59,24 +63,14 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="FbxToXnb_Drop_Skinned.bat">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- ===================================================================================== -->
-  <!-- CMZModSuite Deploy (keeps normal bin output AND copies into Build\Release\!Mods)       -->
+  <!-- CastleForge Deploy (keeps normal bin output AND copies into Build\Release\!Mods)       -->
   <!-- DNA.SkinnedPipeline -> !Mods\TexturePacks\_FbxToXnb\SkinedModelProcessor\              -->
   <!-- FbxToXnb_Drop_Skinned.bat -> !Mods\TexturePacks\_FbxToXnb\                             -->
   <!-- ===================================================================================== -->
-  <PropertyGroup>
-    <!-- Root: ...\Build\<Configuration>\!Mods\TexturePacks\_FbxToXnb\ -->
-    <CMZModsRootDir Condition="'$(SolutionDir)' != ''">$(SolutionDir)Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsRootDir>
-    <!-- Fallback when building the .csproj directly (no SolutionDir).
-         Your project lives under ...\TOOLS\DNA.SKINNEDPIPELINE, so root is typically two levels up. -->
-    <CMZModsRootDir Condition="'$(SolutionDir)' == ''">$(MSBuildProjectDirectory)\..\..\Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsRootDir>
-    <!-- Output folder for this pipeline assembly -->
-    <CMZSkinnedProcDir>$(CMZModsRootDir)SkinedModelProcessor\</CMZSkinnedProcDir>
-  </PropertyGroup>
   <Target Name="DeployToCmzMods_SkinnedPipeline" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <Message Importance="High" Text="Deploying $(MSBuildProjectName) -&gt; $(CMZSkinnedProcDir)" />
     <MakeDir Directories="$(CMZModsRootDir)" />

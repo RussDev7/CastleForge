@@ -66,20 +66,11 @@ namespace WorldEditPixelart
             var wrote = EmbeddedExporter.ExtractFolder(ns, dest);
             if (wrote > 0) Log($"Extracted {wrote} file(s) to {dest}.");
 
-            // Load or create config once at mod startup.
-            // Then push values into ConfigGlobals (the shared, global "truth" the mod reads everywhere).
-            var cfg = WEPConfig.LoadOrCreate();
-            ApplyConfig(cfg);
-
-            // NOTE: ConfigGlobals are read across the whole mod (ticks, patches, UI).
-            void ApplyConfig(WEPConfig c)
-            {
-                ConfigGlobals.ToggleKey    = c.ToggleKey;
-                ConfigGlobals.EmbedAsChild = c.EmbedAsChild;
-            }
-
             // Apply game patches.
             GamePatches.ApplyAllPatches();
+
+            // Load or create config.
+            WEPConfig.LoadApply();
 
             // Register this plugin's command dispatcher with the interceptor.
             // Each time a player types "/command", our dispatcher will be invoked.

@@ -10,6 +10,8 @@ using System.Windows.Forms;
 using System.IO;
 using System;
 
+using static WorldEditPixelart.GamePatches;
+
 namespace WorldEditPixelart
 {
     /// <summary>
@@ -27,8 +29,12 @@ namespace WorldEditPixelart
     /// </summary>
     internal sealed class WEPConfig
     {
-        // --- General ---
+        // Last applied config snapshot (set by LoadApply) for fast runtime reads without disk I/O.
+        internal static volatile WEPConfig Active;
+
+        // --- Hotkeys ---
         public Keys? ToggleKey = null;
+        public string ReloadConfigHotkey = "Ctrl+Shift+R";
 
         // --- Behavior ---
         public bool EmbedAsChild = true;
@@ -61,6 +67,8 @@ namespace WorldEditPixelart
                     $@"; Set to 'None' to disable the hotkey entirely.",
                     $@"; Examples: F10, F4, Insert, Delete, OemTilde, None",
                     $@"ToggleKey=None",
+                    $@"; Reload this config while in-game:",
+                    $@"ReloadConfig=Ctrl+Shift+R",
                     $@"",
                     $@"[Behavior]",
                     $@"; Overlay host mode:",
@@ -88,11 +96,36 @@ namespace WorldEditPixelart
             // NOTE: Keep key names consistent with the default file ("ToggleKey").
             // Null => disabled.
             c.ToggleKey = ParseKey(ini.GetString("Hotkeys", "ToggleKey", c.ToggleKey.ToString()));
+            c.ReloadConfigHotkey = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R");
 
             // [Behavior].
             c.EmbedAsChild = ini.GetBool("Behavior", "EmbedAsChild", c.EmbedAsChild);
 
             return c;
+        }
+
+        public static void LoadApply()
+        {
+            try
+            {
+                bool oldEmbed = ConfigGlobals.EmbedAsChild;
+
+                var cfg = LoadOrCreate();
+                Active = cfg;
+
+                ConfigGlobals.ToggleKey = cfg.ToggleKey;
+                ConfigGlobals.EmbedAsChild = cfg.EmbedAsChild;
+
+                WEPHotkeys.SetReloadBinding(cfg.ReloadConfigHotkey);
+
+                if (oldEmbed != cfg.EmbedAsChild)
+                    WinFormsOverlay.RebuildFromConfig();
+                // ModLoader.LogSystem.Log($"[Config] Applied from {PathShortener.ShortenForLog(ConfigPath)}.");
+            }
+            catch (Exception ex)
+            {
+                ModLoader.LogSystem.Log($"[WEConfig] Failed to load/apply: {ex.Message}.");
+            }
         }
 
         private static Keys? ParseKey(string s)
@@ -115,15 +148,19 @@ namespace WorldEditPixelart
     }
 
     /// <summary>
-    /// Very small, case-insensitive INI reader.
-    /// Supports: sections [S], key=value lines, ';' and '#' comments.
-    /// No escaping, no multi-line values.
+    /// Tiny, case-insensitive INI reader.
+    /// Supports [Section], key=value, ';' or '#' comments. No escaping, no multi-line.
     /// </summary>
     internal sealed class SimpleIni
     {
-        private readonly Dictionary<string, Dictionary<string, string>> _data
-            = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<string, string>> _data =
+            new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Loads an INI file from disk into a simple nested dictionary:
+        ///   section -> (key -> value).
+        /// Unknown / malformed lines are ignored.
+        /// </summary>
         public static SimpleIni Load(string path)
         {
             var ini = new SimpleIni();
@@ -135,6 +172,7 @@ namespace WorldEditPixelart
                 if (line.Length == 0) continue;
                 if (line.StartsWith(";") || line.StartsWith("#")) continue;
 
+                // Section header: [SectionName].
                 if (line.StartsWith("[") && line.EndsWith("]"))
                 {
                     section = line.Substring(1, line.Length - 2).Trim();
@@ -143,6 +181,7 @@ namespace WorldEditPixelart
                     continue;
                 }
 
+                // Key/value pair: key = value.
                 int eq = line.IndexOf('=');
                 if (eq <= 0) continue;
 
@@ -160,16 +199,41 @@ namespace WorldEditPixelart
             return ini;
         }
 
+        /// <summary>
+        /// Reads an int from the INI and clamps it to the inclusive range [min..max].
+        /// Returns <paramref name="def"/> if missing/invalid before clamping.
+        /// </summary>
+        public int GetClamp(string sec, string key, int def, int min, int max)
+        {
+            var v = GetInt(sec, key, def);
+            if (v < min) v = min;
+            if (v > max) v = max;
+            return v;
+        }
+
+        /// <summary>
+        /// Reads a string value from [section] key=... and returns <paramref name="def"/> if missing.
+        /// </summary>
         public string GetString(string section, string key, string def)
             => (_data.TryGetValue(section, out var d) && d.TryGetValue(key, out var v)) ? v : def;
 
+        /// <summary>
+        /// Reads an int value from [section] key=... using invariant culture; returns <paramref name="def"/> on failure.
+        /// </summary>
         public int GetInt(string section, string key, int def)
-            => int.TryParse(GetString(section, key, def.ToString()), out var v) ? v : def;
+            => int.TryParse(GetString(section, key, def.ToString(CultureInfo.InvariantCulture)), NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out var v) ? v : def;
 
+        /// <summary>
+        /// Reads a double value from [section] key=... using invariant culture; returns <paramref name="def"/> on failure.
+        /// </summary>
         public double GetDouble(string section, string key, double def)
             => double.TryParse(GetString(section, key, def.ToString(CultureInfo.InvariantCulture)),
                                NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : def;
 
+        /// <summary>
+        /// Reads a double value from [section] key=... using invariant culture; returns <paramref name="def"/> on failure.
+        /// </summary>
         public bool GetBool(string section, string key, bool def)
         {
             var s = GetString(section, key, def ? "true" : "false");

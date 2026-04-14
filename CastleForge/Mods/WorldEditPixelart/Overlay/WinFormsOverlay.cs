@@ -74,6 +74,12 @@ internal static class WinFormsOverlay
     // Default client size for the tool when not maximized.
     private static readonly Size DefaultClientSize = new Size(1774, 881);
 
+    /// <summary>
+    /// Remembers whether we temporarily forced the game out of fullscreen
+    /// when opening the WinForms editor, so Hide() can restore it later.
+    /// </summary>
+    private static bool _restoreFullscreenOnHide;
+
     #endregion
 
     #region Creation & Setup
@@ -171,6 +177,18 @@ internal static class WinFormsOverlay
         var netInstance  = gameInstance?.CurrentNetworkSession;
         if (netInstance == null) return;
 
+        // WinForms overlays commonly disappear behind true fullscreen swap-chain output.
+        // Move to windowed first so the editor remains visible and interactive.
+        if (gameInstance.IsFullScreen)
+        {
+            _restoreFullscreenOnHide  = true;
+            gameInstance.IsFullScreen = false;
+        }
+        else
+        {
+            _restoreFullscreenOnHide = false;
+        }
+
         EnsureCreated();
         if (_form == null) return;
 
@@ -202,9 +220,37 @@ internal static class WinFormsOverlay
         // Release Harmony gates.
         CaptureInput = false;
 
+        // Restore fullscreen only if Show() temporarily changed it.
+        var gameInstance = CastleMinerZGame.Instance;
+        if (_restoreFullscreenOnHide && gameInstance != null)
+        {
+            try
+            {
+                gameInstance.IsFullScreen = true;
+            }
+            catch
+            {
+                // Swallow restore failures; focus handoff below is still safe/useful.
+            }
+
+            _restoreFullscreenOnHide = false;
+        }
+
         // Hand focus back to the game immediately (don't rely on Windows heuristics).
         if (_gameHwnd != IntPtr.Zero)
             SetForegroundWindow(_gameHwnd);
+    }
+
+    /// <summary>
+    /// Rebuild the overlay form so config-driven host changes apply cleanly.
+    /// </summary>
+    public static void RebuildFromConfig()
+    {
+        bool wasOpen = IsOpen;
+        Dispose();
+
+        if (wasOpen)
+            Show();
     }
 
     /// <summary>Close and dispose the overlay. Safe to call multiple times.</summary>

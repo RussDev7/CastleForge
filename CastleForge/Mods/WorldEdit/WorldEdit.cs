@@ -565,7 +565,8 @@ namespace WorldEdit
 
             try
             {
-                switch (ResolveToggle(args, _enableCLU))
+                bool? enable = ResolveToggle(args, _wandEnabled);
+                switch (enable)
                 {
                     case true:
                         // if (args.Length != 1) { SendFeedback("ERROR: Missing parameter. Usage: /cui [on/off]"); return; }
@@ -1517,7 +1518,8 @@ namespace WorldEdit
 
             try
             {
-                switch (ResolveToggle(args, _wandEnabled))
+                bool? enable = ResolveToggle(args, _wandEnabled);
+                switch (enable)
                 {
                     case true:
                         // if (args.Length != 1) { SendFeedback("ERROR: Missing parameter. Usage: /wand [on/off]"); return; }
@@ -6795,6 +6797,24 @@ namespace WorldEdit
             _navWandTimer = new Timer() { Interval = 16 };
             _navWandTimer.Tick += WorldNavWand_Tick;
             _navWandTimer.Start();
+        }
+
+        /// <summary>
+        /// Stops and clears the nav-wand timer.
+        /// Summary: Fully shuts down nav-wand ticking and resets its click/busy state.
+        /// </summary>
+        private void StopNavWandTimer()
+        {
+            if (_navWandTimer == null)
+                return;
+
+            _navWandTimer.Stop();
+            _navWandTimer.Tick -= WorldNavWand_Tick;
+            _navWandTimer.Dispose();
+            _navWandTimer = null;
+
+            _navWandBusy = false;
+            _navWandRunTimes = 0;
         }
 
         /// <summary>

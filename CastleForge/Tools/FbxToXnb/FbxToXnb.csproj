@@ -3,7 +3,7 @@
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <ProjectGuid>{4701B211-6D43-4B00-9A9E-DB618A21C126}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>FbxToXnb</RootNamespace>
@@ -13,9 +13,12 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <PropertyGroup>
+    <CMZModsDir>$(BuildOutputRoot)$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsDir>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
     <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x86\Debug\</OutputPath>
+    <OutputPath>$(CMZModsDir)</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <PlatformTarget>x86</PlatformTarget>
@@ -24,7 +27,7 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
-    <OutputPath>bin\x86\Release\</OutputPath>
+    <OutputPath>$(CMZModsDir)</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>none</DebugType>
@@ -100,16 +103,11 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- ===================================================================================== -->
-  <!-- CMZModSuite Deploy (keeps normal bin output AND copies into Build\Release\!Mods)       -->
+  <!-- CastleForge Deploy (keeps normal bin output AND copies into Build\Release\!Mods)      -->
   <!-- ===================================================================================== -->
-  <PropertyGroup>
-    <CMZModsDir Condition="'$(SolutionDir)' != ''">$(SolutionDir)Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsDir>
-    <CMZModsDir Condition="'$(SolutionDir)' == ''">$(MSBuildProjectDirectory)\..\..\..\Build\$(Configuration)\!Mods\TexturePacks\_FbxToXnb\</CMZModsDir>
-  </PropertyGroup>
   <Target Name="DeployToCmzMods" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <Message Importance="High" Text="Deploying $(MSBuildProjectName) -&gt; $(CMZModsDir)" />
     <MakeDir Directories="$(CMZModsDir)" />
-    <!-- Copy only root output files (exe + ReadMe + dll/config if any). No subfolders. -->
     <ItemGroup>
       <_DeployFiles Include="$(TargetDir)*.*" Exclude="$(TargetDir)*.pdb;$(TargetDir)*.xml;$(TargetDir)*.vshost.*" />
     </ItemGroup>

@@ -6,6 +6,8 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 
 // #pragma warning disable IDE0060 // Silence IDE0060.
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using DNA.CastleMinerZ.UI;
 using System.Reflection;
 using DNA.CastleMinerZ;
 using DNA.Drawing.UI;
@@ -208,6 +210,231 @@ namespace WorldEditPixelart
             {
                 // Fallback if reflection blows up for any reason.
                 return m.ToString();
+            }
+        }
+        #endregion
+
+        #endregion
+
+        #region Hotkey: Reload Config (Configurable)
+
+        /// <summary>
+        /// SUMMARY
+        /// -------
+        /// Adds a configurable hotkey (Ctrl/Alt/Shift/Win + 1 main key) to hot-reload the
+        /// mod's config at runtime. We hook inside InGameHUD.OnPlayerInput so it runs on
+        /// the main game thread (safe for content ops and Harmony-driven skin updates).
+        ///
+        /// DESIGN NOTES
+        /// ------------
+        /// • Parsing: Forgiving tokenizer; accepts "Ctrl+Shift+F3", "ctrl f3", "Control+F3",
+        ///   "Win+R", "Alt+0", "A", "F12", etc. Case-insensitive. Unknown tokens are ignored.
+        /// • Binding: Keys.None disables the hotkey.
+        /// • Detection: Rising-edge detector (fires once when keys go from "not pressed" -> "pressed").
+        /// • Input source: XNA KeyboardState (polling). The Windows key is checked via
+        ///   LeftWindows/RightWindows-be aware some OS/game overlays swallow Win keys.
+        /// • Threading: Runs in the HUD input tick (game thread). Keep work lightweight.
+        ///
+        /// USAGE
+        /// -----
+        /// WEPHotkeys.SetReloadBinding("Ctrl+Shift+F3");
+        /// // ... each frame (via Harmony patch) -> if (WEPHotkeys.ReloadPressedThisFrame()) { WEPConfig.LoadApply(); ... }
+        ///
+        /// EXAMPLES
+        /// --------
+        /// "F9"                 -> F9.
+        /// "Ctrl+F3"            -> Ctrl + F3.
+        /// "Control Shift F12"  -> Ctrl + Shift + F12.
+        /// "Win+R"              -> Windows + R.
+        /// "Alt+0"              -> Alt + D0 (top-row zero).
+        /// "" or null           -> Disabled (Keys.None).
+        /// </summary>
+
+        #region Hotkey Binding Model
+
+        /// <summary>
+        /// Minimal (Ctrl/Alt/Shift/Win) + one main key binding.
+        /// <para>Use <see cref="Parse(string)"/> to create from strings like: "Ctrl+Shift+F3".</para>
+        /// </summary>
+        internal struct HotkeyBinding
+        {
+            /// <summary>Modifier flags. Plain fields on purpose (no recursion in property setters).</summary>
+            public bool Ctrl, Alt, Shift, Win;
+
+            /// <summary>Main key; Keys.None disables the binding.</summary>
+            public Microsoft.Xna.Framework.Input.Keys Key;
+
+            /// <summary>
+            /// Parses a human-friendly hotkey like "Ctrl+Shift+F3", "Alt+0", "Win+R".
+            /// Unknown tokens are ignored; if no main key is recognized -> Keys.None.
+            /// </summary>
+            /// <remarks>
+            /// Accepts: "ctrl/control", "alt", "shift", "win/windows", F1..F24, A..Z, 0..9, or any <see cref="Microsoft.Xna.Framework.Input.Keys"/> name.
+            /// </remarks>
+            public static HotkeyBinding Parse(string s)
+            {
+                var hk = new HotkeyBinding { Key = Microsoft.Xna.Framework.Input.Keys.None };
+                if (string.IsNullOrWhiteSpace(s)) return hk;
+
+                var tokens = s.Split(new[] { '+', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var raw in tokens)
+                {
+                    var t = raw.Trim().ToLowerInvariant();
+                    switch (t)
+                    {
+                        case "ctrl":
+                        case "control": hk.Ctrl = true; break;
+                        case "alt": hk.Alt = true; break;
+                        case "shift": hk.Shift = true; break;
+                        case "win":
+                        case "windows": hk.Win = true; break;
+
+                        default:
+                            // F-keys (F1..F24).
+                            if (t.Length >= 2 && t[0] == 'f' && int.TryParse(t.Substring(1), out var f) && f >= 1 && f <= 24)
+                            {
+                                hk.Key = (Microsoft.Xna.Framework.Input.Keys)((int)Microsoft.Xna.Framework.Input.Keys.F1 + (f - 1));
+                            }
+                            // A..Z.
+                            else if (t.Length == 1 && t[0] >= 'a' && t[0] <= 'z')
+                            {
+                                hk.Key = (Microsoft.Xna.Framework.Input.Keys)((int)Microsoft.Xna.Framework.Input.Keys.A + (t[0] - 'a'));
+                            }
+                            // 0..9 (top row).
+                            else if (t.Length == 1 && t[0] >= '0' && t[0] <= '9')
+                            {
+                                hk.Key = (Microsoft.Xna.Framework.Input.Keys)((int)Microsoft.Xna.Framework.Input.Keys.D0 + (t[0] - '0'));
+                            }
+                            // Any XNA Keys enum name (e.g., "PageUp", "Insert").
+                            else if (Enum.TryParse(raw, ignoreCase: true, out Microsoft.Xna.Framework.Input.Keys k))
+                            {
+                                hk.Key = k;
+                            }
+                            break;
+                    }
+                }
+                return hk;
+            }
+
+            /// <summary>
+            /// Returns true while the binding is currently depressed in the given <see cref="KeyboardState"/>.
+            /// Checks both left/right modifier variants (e.g., LeftControl/RightControl).
+            /// </summary>
+            public bool IsDown(Microsoft.Xna.Framework.Input.KeyboardState ks)
+            {
+                if (Key == Microsoft.Xna.Framework.Input.Keys.None) return false;
+
+                bool ctrl = ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftControl) || ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightControl);
+                bool alt = ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftAlt) || ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightAlt);
+                bool shift = ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftShift) || ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightShift);
+                bool win = ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftWindows) || ks.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightWindows);
+
+                if (Ctrl && !ctrl) return false;
+                if (Alt && !alt) return false;
+                if (Shift && !shift) return false;
+                if (Win && !win) return false;
+
+                return ks.IsKeyDown(Key);
+            }
+        }
+        #endregion
+
+        #region Hotkey Utility (Edge Detection + Binding)
+
+        /// <summary>
+        /// Runtime hotkey manager for "reload config".
+        /// <para>Call <see cref="SetReloadBinding(string)"/> after reading INI, then poll <see cref="ReloadPressedThisFrame"/> each HUD tick.</para>
+        /// </summary>
+        internal static class WEPHotkeys
+        {
+            private static HotkeyBinding _reload;
+            private static bool _hasPrev;
+            private static Microsoft.Xna.Framework.Input.KeyboardState _prev;
+
+            /// <summary>
+            /// Sets (or disables) the reload binding. Resets the edge detector to avoid a spurious trigger right after change.
+            /// </summary>
+            public static void SetReloadBinding(string s)
+            {
+                _reload = HotkeyBinding.Parse(s);
+                _hasPrev = false; // Reset edge detector so we don't fire instantly after changing binding.
+                Log($"[WEditP] Reload hotkey set to \"{s}\".");
+            }
+
+            /// <summary>
+            /// Returns true exactly once when the binding transitions to pressed this frame.
+            /// </summary>
+            public static bool ReloadPressedThisFrame()
+            {
+                var now = Microsoft.Xna.Framework.Input.Keyboard.GetState();
+                if (!_hasPrev) { _prev = now; _hasPrev = true; return false; }
+
+                bool nowDown = _reload.IsDown(now);
+                bool prevDown = _reload.IsDown(_prev);
+                _prev = now;
+
+                return nowDown && !prevDown; // Rising edge -> one-shot.
+            }
+        }
+        #endregion
+
+        #region Hotkey: Reload Config (Main-Thread)
+
+        /// <summary>
+        /// Listens for the reload hotkey inside InGameHUD.OnPlayerInput so all work executes on the main thread.
+        /// Keeps the body small; heavy lifting should be inside WEPConfig.LoadApply().
+        /// </summary>
+        [HarmonyPatch]
+        static class Patch_Hotkey_ReloadConfig_WorldEditPixelart
+        {
+            static MethodBase TargetMethod() =>
+                AccessTools.Method(typeof(InGameHUD), "OnPlayerInput",
+                    new[] { typeof(InputManager), typeof(GameController), typeof(KeyboardInput), typeof(GameTime) });
+
+            /// <summary>
+            /// On rising-edge press: Reload INI.
+            /// </summary>
+            static void Postfix(InGameHUD __instance)
+            {
+                if (!WEPHotkeys.ReloadPressedThisFrame()) return;
+
+                try
+                {
+                    // Reload INI and apply runtime statics.
+                    WEPConfig.LoadApply();
+
+                    SendFeedback($"[WEditP] Config hot-reloaded from \"{PathShortener.ShortenForLog(WEPConfig.ConfigPath)}\".");
+                }
+                catch (Exception ex)
+                {
+                    SendFeedback($"[WEditP] Hot-reload failed: {ex.Message}.");
+                }
+            }
+        }
+        #endregion
+
+        #region Path Helper (Logs)
+
+        /// <summary>
+        /// Shortens absolute paths for logs (prefers trimming to \!Mods\... if present).
+        /// </summary>
+        internal static class PathShortener
+        {
+            public static string ShortenForLog(string fullPath)
+            {
+                if (string.IsNullOrEmpty(fullPath))
+                    return string.Empty;
+
+                // Normalize slashes.
+                var p = fullPath.Replace('/', '\\');
+
+                // Prefer showing from "\!Mods\..."
+                int idx = p.IndexOf(@"\!Mods\", StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0)
+                    return p.Substring(idx);
+
+                // Fallback: Full path.
+                return p;
             }
         }
         #endregion
