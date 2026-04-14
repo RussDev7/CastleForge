@@ -80,9 +80,9 @@
     <Block Id="16" Name="Ice" Color="#FFD9F5FB" />
 
     <!--Dark Orange-->
-    <Block Id="52" Name="GoldCrate" Color="#FFB26501" />
-    <Block Id="52" Name="GoldCrate" Color="#FFB7742A" />
-    <Block Id="52" Name="GoldCrate" Color="#FFB88353" />
+    <Block Id="19" Name="GoldCrate" Color="#FFB26501" />
+    <Block Id="19" Name="GoldCrate" Color="#FFB7742A" />
+    <Block Id="19" Name="GoldCrate" Color="#FFB88353" />
 
     <!--Light Gray-->
     <Block Id="6" Name="Rock" Color="#FFA9A9A9" />

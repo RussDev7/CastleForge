@@ -1,15 +1,14 @@
 # WorldEditPixelart
 
 <div align="center">
-    <img src="_Images/Preview.gif" alt="WorldEditPixelart Preview">
+    <b>🖼️ Image ➔ 🎨 Pixel Art Editor ➔ 🏗️ Schematic.</b>
 </div>
 <div align="center">
-    <b>🖼️ Image ➔ 🎨 Pixel Art Editor ➔ 🏗️ Schematic.</b> Convert source images into CastleMiner Z block art directly inside the game, preview the result, tune the palette, and send the finished build to WorldEdit.
+    Convert source images into CastleMiner Z block art directly inside the game, preview the result, tune the palette, and send the finished build to WorldEdit.
 </div>
-
-![Editor overview placeholder](_Images/EditorOverview.png)
-
-> **Image suggestion:** Show the full editor open in-game with the source image on the left, converted output on the right, and the schematic / scaling controls visible.
+<div align="center">
+    <img src="_Images/Preview.gif" alt="WorldEditPixelart Preview">
+</div>
 
 ---
 
@@ -139,9 +138,7 @@ Tools/DNA.SkinnedPipeline
 
 `ImageColorsToXml` covers palette generation / brightness-adjustment workflows, while `DNA.SkinnedPipeline` is the actual skinned-model processor used by the repo's skinned FBX toolchain.
 
-![Installation placeholder](_Images/Installation.png)
-
-> **Image suggestion:** Show the CastleForge mod folder with `WorldEdit`, `WorldEditPixelart`, and the generated runtime `!Mods/WorldEditPixelart` folder visible.
+![Installation](_Images/WorldEditPixelartInstall.png)
 
 ---
 
@@ -205,10 +202,6 @@ EmbedAsChild=true
 #### `[Behavior]`
 - `EmbedAsChild`  
   Controls whether the editor is embedded inside the game window or shown as a separate owned window.
-
-![Configuration placeholder](_Images/Configuration.png)
-
-> **Image suggestion:** Show the generated INI file open in a text editor with `ToggleKey` and `EmbedAsChild` highlighted.
 
 ---
 
@@ -277,9 +270,7 @@ Once the result looks right, you can:
 - **Save Image** to keep the rendered preview as a normal image
 - **Save Color Filter** to preserve the palette you used
 
-![Quick start placeholder](_Images/QuickStart.png)
-
-> **Image suggestion:** Show a 4-panel sequence: open editor → load source image → convert preview → copy to WorldEdit or save schematic.
+![Quick Start](_Images/QuickStart.gif)
 
 ---
 
@@ -323,9 +314,7 @@ The editor is built around two main panes:
 
 The source pane supports drag-and-drop image loading and can also accept XML color-filter files, while the output pane reflects the currently selected conversion settings.
 
-![Input-output placeholder](_Images/InputOutput.png)
-
-> **Image suggestion:** Show the same image on the left and its converted block-art preview on the right.
+![Input-Output](_Images/InputOutput.png)
 
 ### Basic configurations
 The main configuration area includes controls for:
@@ -370,9 +359,7 @@ Supported options include:
 
 This makes it easier to prepare a build for different placement styles before pasting it into the world.
 
-![Rotation placeholder](_Images/RotationAndOrientation.png)
-
-> **Image suggestion:** Show the rotation controls with two small example outputs, one standing and one flat.
+![Rotation](_Images/RotationAndOrientation.png)
 
 ### Grid and preview options
 Preview helpers include:
@@ -404,8 +391,6 @@ Additional tuning controls include:
 That makes the addon flexible enough for both crisp low-resolution sprite work and smoother photo-based conversions.
 
 ![Scaling placeholder](_Images/ScalingModes.png)
-
-> **Image suggestion:** Show the same source image converted with 3 or 4 different scaling modes side by side.
 
 ### Statistics and progress
 The tool can display or update:
@@ -487,7 +472,7 @@ Consider adjusting your XML filter when:
 - you want a brighter or more stylized variant of the same palette
 - you are building art for a different content pack or project
 
-![Palette placeholder](_Images/PaletteTools.png)
+![Palette placeholder](_Images/PaletteTools.gif)
 
 > **Image suggestion:** Show the color filter manager, custom color picker flow, and a small XML palette preview.
 
@@ -510,7 +495,7 @@ You can also save the generated result to disk as a schematic file for reuse lat
 - You can overwrite the previously saved schematic file directly from the editor.
 - Rotation and orientation settings affect how the schematic is produced.
 
-![Export placeholder](_Images/ExportWorkflow.png)
+![Export placeholder](_Images/ExportWorkflow.gif)
 
 > **Image suggestion:** Show the copy-to-clipboard button, a `.schem` save dialog, and the result pasted into the world with WorldEdit.
 
@@ -538,11 +523,11 @@ The convert button can switch into a cancel state while a render is running, so 
 
 ---
 
-## Companion XML palette-building workflow
+## Companion XML palette-building tool
 
-Your original project documentation also covered a lightweight workflow for generating XML color data from screenshots of blocks.
+Also included in this projects source, is a very lightweight and simple tool for mass gathering the average color for images, and automatically porting the data to an XML file. This is a quick method to build the color filter for your game or project.
 
-That is useful when you want to build or refine palettes for:
+This is useful when you want to build or refine palettes for:
 
 - new content packs
 - modded blocks
@@ -550,16 +535,23 @@ That is useful when you want to build or refine palettes for:
 - brighter or rebalanced palette variants
 
 ### `ImageColorsToXml`
-In the current CastleForge tree, the lightweight palette-builder tool lives under:
+In the current mod, the lightweight palette-builder tool lives under:
 
 ```text
-Tools/ImageColorsToXml
+\!Mods\WorldEditPixelart\_ImageColorsToXml\imageColorsToXml.exe
 ```
 
-This is the streamlined companion workflow for mass-gathering average colors from block screenshots and automatically writing them into an XML palette file.
+This is the streamlined companion tool for mass-gathering average colors from block screenshots and automatically writing them into an XML palette file.
 
-### Naming format
-The original workflow used filenames in this format:
+### Getting started
+Simply follow these directions below:
+
+1. Take / gather screenshots of your blocks.
+2. Rename screenshots using the formatting explained below.
+3. Select screenshot(s) and drop and drop them onto the executable.
+   * An .XML file named `BlockColors.xml` will be created.
+
+The conversion tool is designed to use the image name to dynamically gather the required **name** and **id**. Use the naming format below for your images:
 
 ```text
 blockname,id.*
@@ -578,15 +570,15 @@ bloodstone,20.bmp
 - `.png`
 - `.bmp`
 
+![Palette Builder](_Images/PaletteBuilder.png)
+
 ### Result
 Those images can then be dropped onto the executable to build a `BlockColors.xml` file for later loading into the editor.
 
-![Palette builder placeholder](_Images/PaletteBuilder.png)
+![Palette Builder Result](_Images/ImageColorsToXmlTool.png)
 
-> **Image suggestion:** Show a folder of block screenshots named `name,id.png`, plus the resulting XML palette file.
-
-### Optional luminosity-adjustment workflow
-The same lightweight workflow also supports adjusting palette brightness by reprocessing an existing XML file.
+### Optional luminosity-adjustment
+The same lightweight tool also supports adjusting palette brightness by reprocessing an existing XML file.
 
 1. Drag and drop `BlockColors.xml` onto the executable.
 2. Enter the luminosity percentage increase.
@@ -601,27 +593,38 @@ AdjustedBlockColors.xml
 
 This is helpful when your palette is technically correct but the in-game result is too dark and you want a brighter variant without manually rewriting every color entry.
 
-![Luminosity tool placeholder](_Images/LuminosityTool.png)
-
-> **Image suggestion:** Show `BlockColors.xml` being dropped into the tool and `AdjustedBlockColors.xml` appearing after the brightness increase.
+![Luminosity Tool](_Images/LuminosityTool.png)
 
 ---
 
 ## Python palette visualization script
 
-Your original docs also included a simple Python script for previewing the colors inside either `BlockColors.xml` or `AdjustedBlockColors.xml`.
+Below is a simple Python script for previewing the colors inside either `BlockColors.xml` or `AdjustedBlockColors.xml`.
 
 This is very useful when you want to visually inspect palette changes before loading the XML back into the editor.
+
+> **Note:** You can now drag and drop an XML file onto the script to preview that specific file. If no file is dropped onto it, the script will fall back to `BlockColors.xml` automatically.
 
 <details>
   <summary><strong>Show Python script</strong></summary>
 
 ```py
+import os
+import sys
 import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 
+# Use dropped file if one was provided, otherwise fall back to the default.
+xml_path = sys.argv[1] if len(sys.argv) > 1 else "BlockColors.xml"
+
+# Optional safety check.
+if not os.path.isfile(xml_path):
+    print(f"File not found: {xml_path}")
+    print("Falling back to BlockColors.xml")
+    xml_path = "BlockColors.xml"
+
 # Load and parse the XML file.
-tree = ET.parse("BlockColors.xml")
+tree = ET.parse(xml_path)
 root = tree.getroot()
 
 # Extract color values, names, and IDs from the XML.
@@ -661,38 +664,154 @@ plt.show()
 
 </details>
 
-![Python preview placeholder](_Images/PythonPalettePreview.png)
+<p align="center">
+  <img src="_Images/CMZBlockColors.png" alt="Vanilla Block Colors" width="49%" />
+  <img src="_Images/CMZBlockColors25Brighter.png" alt="25% Brighter Block Colors" width="49%" />
+</p>
 
-> **Image suggestion:** Show the generated horizontal color-bar preview with block names on the left and IDs on the right.
+> **NOTE:** The left side shows the vanilla block color averages while the right has 25% increased luminosity.
 
----
+### Color-sorted palette preview script
 
-## DNA.SkinnedPipeline and skinned FBX authoring
+If you want to inspect your palette in a more visually organized way, this alternate version sorts entries by color before drawing them.
 
-The repo now also includes the actual skinned-model content-pipeline library used by the broader CastleForge asset workflow:
+This can make it easier to spot hue groups, brightness transitions, and duplicate or out-of-place entries when refining a `BlockColors.xml` file.
 
-```text
-Tools/DNA.SkinnedPipeline
+> **Note:** Just like the standard preview script, this version also supports drag-and-drop. Drop an XML file onto the script to preview that file, or run it normally to fall back to `BlockColors.xml`.
+
+<details>
+  <summary><strong>Show color-sorted Python script</strong></summary>
+
+```py
+import os
+import sys
+import math
+import colorsys
+import xml.etree.ElementTree as ET
+import matplotlib.pyplot as plt
+
+
+# Use dropped file if one was provided, otherwise fall back to the default.
+xml_path = sys.argv[1] if len(sys.argv) > 1 else "BlockColors.xml"
+
+# Optional safety check.
+if not os.path.isfile(xml_path):
+    print(f"File not found: {xml_path}")
+    print("Falling back to BlockColors.xml")
+    xml_path = "BlockColors.xml"
+
+
+def xml_color_to_rgb(xml_color):
+    """
+    Convert Terraria/XML color strings like:
+    #FFRRGGBB -> #RRGGBB for matplotlib
+    #RRGGBB   -> #RRGGBB
+    """
+    if not xml_color:
+        return None, None
+
+    value = xml_color.strip().lstrip("#")
+
+    if len(value) == 8:      # AARRGGBB
+        value = value[2:]
+    elif len(value) != 6:    # Unsupported format
+        return None, None
+
+    display_color = "#" + value.upper()
+
+    r = int(value[0:2], 16) / 255.0
+    g = int(value[2:4], 16) / 255.0
+    b = int(value[4:6], 16) / 255.0
+
+    return display_color, (r, g, b)
+
+
+def step_sort_key(rgb, repetitions=8):
+    """
+    Visually smoother color sort:
+    - groups by hue
+    - blends in perceived luminance/value
+    - flips alternating hue bands to reduce harsh jumps
+    """
+    r, g, b = rgb
+
+    # Perceived luminance approximation.
+    lum = math.sqrt(0.241 * r + 0.691 * g + 0.068 * b)
+
+    # HSV gives a natural rainbow-like hue order.
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+
+    h2 = int(h * repetitions)
+    lum2 = int(lum * repetitions)
+    v2 = int(v * repetitions)
+
+    # Flip every other hue band so nearby shades stay smoother.
+    if h2 % 2 == 1:
+        lum2 = repetitions - lum2
+        v2 = repetitions - v2
+
+    return (h2, lum2, v2, s)
+
+
+# Load and parse the XML file.
+tree = ET.parse(xml_path)
+root = tree.getroot()
+
+blocks_node = root.find("Blocks")
+if blocks_node is None:
+    raise ValueError("Could not find <Blocks> in the XML.")
+
+entries = []
+
+for block in blocks_node.findall("Block"):
+    xml_color = block.get("Color")
+    name = block.get("Name", "Unknown")
+    block_id = block.get("Id", "??")
+
+    display_color, rgb = xml_color_to_rgb(xml_color)
+    if display_color is None or rgb is None:
+        continue
+
+    entries.append({
+        "color": display_color,
+        "name": name,
+        "id": block_id,
+        "sort_key": step_sort_key(rgb, repetitions=8)
+    })
+
+# Sort entries by visual color order.
+entries.sort(key=lambda entry: entry["sort_key"])
+
+colors = [entry["color"] for entry in entries]
+names = [entry["name"] for entry in entries]
+ids = [entry["id"] for entry in entries]
+
+# Plot the colors as horizontal bars.
+fig, ax = plt.subplots(figsize=(8, max(2, len(colors) * 0.4)))
+ax.set_ylim(0, len(colors))
+ax.set_xlim(-0.5, 1.5)
+ax.axis("off")
+
+# Display each color as a horizontal bar.
+for i, (color, name, block_id) in enumerate(zip(colors, names, ids)):
+    ax.add_patch(plt.Rectangle((0, i), 1, 1, color=color))
+    ax.text(-0.1, i + 0.5, name, ha="right", va="center", fontsize=10)
+    ax.text(1.1, i + 0.5, block_id, ha="left", va="center", fontsize=10, fontweight="bold")
+
+# Invert the y-axis so that the first element is at the top.
+ax.invert_yaxis()
+
+plt.title(f"Sorted by color: {os.path.basename(xml_path)}")
+plt.tight_layout()
+plt.show()
+
 ```
 
-This is **not required** for normal WorldEditPixelart usage, but it is important for source users working on skinned or rigged assets in the same repository.
+</details>
 
-### What it is for
-`DNA.SkinnedPipeline` is the XNA content-pipeline processor used with the skinned FBX toolchain, including:
+![Vanilla Block Colors 25% Sorted](_Images/CMZBlockColors25Sorted.png)
 
-- the `FbxToXnb_Drop_Skinned.bat` workflow
-- the repo's `_FbxToXnb/SkinedModelProcessor/` deployment path
-- skeleton and inverse bind-pose metadata packaging for CMZ/DNA-style runtime loading
-
-### What it does
-At a high level, it lets creators process skinned FBX assets so they can be converted into XNB content using the runtime structures the game expects.
-
-### Current limitation
-The processor builds the minimum viable skinning metadata, but animation clip extraction is not implemented yet. In other words, it is the real skinned processor pipeline, but it is not a full animation-authoring replacement by itself.
-
-![Skinned pipeline placeholder](_Images/SkinnedPipeline.png)
-
-> **Image suggestion:** Show the `DNA.SkinnedPipeline` project beside the `_FbxToXnb` folder and `FbxToXnb_Drop_Skinned.bat`, with a simple rigged FBX authoring example.
+> **Tip:** Use the standard script when you want to inspect the palette in its original XML order, and use the color-sorted version when you want to visually group similar shades together.
 
 ---
 
@@ -748,6 +867,15 @@ EmbedAsChild
 
 ### "My pasted build faces the wrong way"
 Check the rotation, flat/standing mode, and X-axis/Y-axis settings before exporting.
+
+---
+
+## Gallery
+
+<p align="center">
+  <img src="_Images/PixelArtRender1.png" alt="Pixelart Render 1" width="49%" />
+  <img src="_Images/PixelArtRender2.png" alt="Pixelart Render 2" width="49%" />
+</p>
 
 ---
 
