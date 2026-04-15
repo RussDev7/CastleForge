@@ -1,207 +1,366 @@
-# CMZDedicatedServer
+# CMZServerHost
 
-A dedicated server host for **CastleMiner Z** built in **C# / .NET Framework 4.8.1**.
+> Host a **dedicated CastleMiner Z server** outside the normal game client, keep world state on the server, and pair it with mods like **DirectConnect** for a much smoother custom multiplayer workflow.
+
+**CMZServerHost** is the dedicated-server companion project for CastleForge. It is built in **C# / .NET Framework 4.8.1**, loads the original CastleMiner Z runtime through **reflection**, starts a **Lidgren-backed compatible host**, and manages world, chunk, inventory, and time flow on the server side.
 
 ![Preview](_Images/Preview.png)
 
-This project loads the original game/runtime assemblies through reflection, starts a Lidgren-backed compatible server, and hosts persistent world state outside the normal game client.
+---
 
-## What it does
+## Why use CMZServerHost?
 
-- Starts a dedicated CastleMiner Z compatible server by IP and port
-- Loads the original game assemblies at runtime via reflection
-- Supports a configurable `game-path` instead of requiring the game under a hardcoded local `Game` folder
-- Loads Harmony from a local `libs` folder instead of next to the executable
-- Handles connection approval, discovery/session metadata, and gameplay packet relay
-- Hosts world state server-side through `ServerWorldHandler`
-- Loads `world.info`, chunk delta data, and player inventories from disk
-- Relays player visibility, movement, text, block edits, chunk requests, pickups, and inventory flow
-- Keeps authoritative day/time progression server-side and periodically broadcasts it to clients
-- Supports a configurable bind IP, port, player count, world GUID, view distance, and tick rate
+CastleMiner Z was never designed around a clean standalone server-hosting experience for modded or custom direct-IP workflows. **CMZServerHost** fills that gap by moving core hosting responsibilities out of the normal game client and into a dedicated executable.
 
-## Project layout
+That gives you a cleaner setup for:
+- private servers
+- local testing
+- development workflows
+- persistent hosted worlds
+- pairing with **DirectConnect** for quick manual joining
 
-```text
-CMZDedicatedServer-main/
-├─ LICENSE
-├─ README.md
-├─ build.bat
-├─ clean.bat
-└─ src/
-   ├─ CMZServerHost.sln
-   └─ CMZServerHost/
-      ├─ App.config
-      ├─ CMZServerHost.csproj
-      ├─ CmzMessageCodec.cs
-      ├─ LidgrenServer.cs
-      ├─ Program.cs
-      ├─ ServerAssemblyLoader.cs
-      ├─ ServerConfig.cs
-      ├─ ServerPatches.cs
-      ├─ ServerRuntime.cs
-      ├─ ServerWorldHandler.cs
-      ├─ lib/
-      │  └─ 0Harmony.dll
-      └─ build/
-         └─ ServerHost/
-            ├─ CMZServerHost.exe
-            ├─ server.properties
-            ├─ Libs/
-            │  └─ 0Harmony.dll
-            └─ Game/
-               ├─ CastleMinerZ.exe
-               ├─ DNA.Common.dll
-               └─ game content files...
-```
+### Highlights
+- **Dedicated executable host** for CastleMiner Z.
+- **Direct-IP friendly** workflow for compatible clients.
+- Loads the original game/runtime assemblies through **reflection**.
+- Supports a configurable **`game-path`** instead of forcing a hardcoded local game folder.
+- Loads Harmony from a local **`Libs`** folder.
+- Handles **discovery, approvals, session metadata, and gameplay relay**.
+- Hosts **world state server-side** through `ServerWorldHandler`.
+- Loads **`world.info`**, chunk delta files, and saved player inventories.
+- Handles **chunk requests, inventory retrieval/storage, terrain edits, and pickup flow**.
+- Keeps **authoritative day/time progression** on the host.
+- Includes a packaged **server layout** with sample config, sample world data, and a default inventory template.
 
-## Main components
+---
 
-### `Program.cs`
-Entry point for the dedicated host.
+## What this project does
 
-It:
-- loads `server.properties`
-- resolves the game binaries folder from `game-path` or falls back to `./game`
-- resolves support libraries from `./libs`
-- loads `CastleMinerZ.exe` and related assemblies
-- applies Harmony patches
-- prints a startup summary
-- starts the server and enters the update loop
+### 1) Starts a dedicated CastleMiner Z-compatible server host
+This project boots a server process that binds to your configured IP and port, validates compatible clients, and hosts a CastleMiner Z-compatible multiplayer session outside the normal playable client.
 
-### `LidgrenServer.cs`
-The dedicated networking host.
+### 2) Loads game/runtime assemblies dynamically
+Instead of compiling directly against the full game as a normal shared project dependency, the host loads:
+- `CastleMinerZ.exe`
+- `DNA.Common.dll`
+- related runtime dependencies
 
-It is responsible for:
-- binding the socket
+This keeps the host flexible and lets it work from a configurable game install path.
+
+### 3) Keeps world flow on the server
+The host reads the target world, responds to world/chunk requests, processes terrain mutation messages, and keeps the world-side state centered on the server process rather than trusting a normal in-game host.
+
+### 4) Handles inventory persistence
+The server can retrieve and store player inventory data, and it falls back to a packaged default inventory template when a player save is not yet present.
+
+### 5) Tracks and relays important multiplayer packets
+The host currently handles the important flow for:
+- discovery/session info
 - connection approval
-- session startup
-- direct-IP traffic handling
-- channel 0 / channel 1 packet handling
-- relay of gameplay and bootstrap messages
-- player-exists cache/replay for new joiners
-- live connection enumeration for outgoing sends
-- pickup consume relay support
-- authoritative day/time progression and periodic world time broadcasts
+- player presence bootstrap
+- gameplay relay
+- chunk delivery
+- pickup creation/request/consume flow
+- periodic time-of-day broadcasts
 
-### `ServerWorldHandler.cs`
-Host-side world and persistence bridge.
+### 6) Pairs well with DirectConnect
+While this project is documented separately, it is an especially strong match for **DirectConnect**, since that mod gives players a much cleaner in-game direct-IP join path for compatible dedicated hosts.
+
+---
+
+## Feature Breakdown
+
+<details>
+<summary><strong>Reflection-Based Dedicated Hosting</strong></summary>
+
+### What it does
+CMZServerHost resolves CastleMiner Z and DNA runtime assemblies at startup, then uses reflection to construct and interact with the networking and world systems the dedicated host needs.
+
+### Why this matters
+This avoids requiring the host to be structured like a normal game client build while still staying compatible with the game's original message types and runtime behavior.
+
+### Practical result
+- The host checks for required files early.
+- It can use a custom `game-path`.
+- It can probe both the local `Libs` folder and the configured game folder for dependencies.
+
+</details>
+
+<details>
+<summary><strong>Discovery, Approval, and Session Metadata</strong></summary>
+
+The server is responsible for more than just opening a socket.
+
+It also handles:
+- compatible discovery replies
+- connection approval
+- session/game metadata
+- join-state flow for newly connecting clients
+
+This helps clients see and join the server using the expected CastleMiner Z-compatible network/session information.
+
+</details>
+
+<details>
+<summary><strong>Server-Side World Handling</strong></summary>
+
+`ServerWorldHandler` is the main bridge for world-related server behavior.
 
 It handles:
-- message ID/type lookup
-- `world.info` loading
-- save device initialization
-- chunk list / chunk request handling
-- terrain mutation handling
-- inventory persistence
+- loading `world.info`
+- initializing save-device access
+- reading a spawn hint from the world
+- chunk list generation around spawn
+- chunk delta loading and caching
 - host-consumed world messages
-- pickup request/create/consume support
-- raw `TimeOfDayMessage` payload construction
+- terrain mutation persistence
 
-### `CmzMessageCodec.cs`
-Maps CastleMiner Z message IDs to reflected message types and back.
+This is a major reason the project feels like a real host instead of only a thin packet relay.
 
-### `ServerConfig.cs`
-Loads typed config values from `server.properties`.
+</details>
 
-## Requirements
+<details>
+<summary><strong>Inventory Retrieval and Storage</strong></summary>
 
+The server supports host-side inventory flow.
+
+That includes:
+- loading saved inventory data for a connecting player
+- sending inventory data back to the client
+- using a default inventory template when needed
+- saving inventory updates back to storage
+
+Packaged default inventory template:
+
+```text
+Inventory\default.inv
+```
+
+</details>
+
+<details>
+<summary><strong>Chunk Loading and Caching</strong></summary>
+
+The host builds a chunk list around the world's spawn hint and serves chunk data back to clients as requested.
+
+Notable behavior includes:
+- spawn-based chunk list generation
+- chunk delta file loading
+- in-memory LRU-style chunk caching
+- chunk response payload construction through the original message registry
+
+</details>
+
+<details>
+<summary><strong>Pickup Flow Support</strong></summary>
+
+The server tracks spawned pickups and can resolve request/consume flow on the host.
+
+This includes:
+- create pickup handling
+- pending pickup tracking
+- request pickup handling
+- consume pickup payload creation and relay
+
+That helps keep loot flow authoritative enough for basic dedicated play instead of relying entirely on client-side assumptions.
+
+</details>
+
+<details>
+<summary><strong>Authoritative Time / Day Progression</strong></summary>
+
+CMZServerHost advances world time using **real elapsed time** rather than assuming a normal client-host frame cadence.
+
+It also periodically broadcasts time-of-day updates so connected players stay synchronized.
+
+There is also a config toggle:
+
+```properties
+allow-client-time-sync=false
+```
+
+When left disabled, the server remains authoritative for time progression.
+
+</details>
+
+<details>
+<summary><strong>Player Presence Recovery</strong></summary>
+
+The host caches `PlayerExistsMessage` payloads and can replay them to newly joined clients.
+
+This improves reliability for player bootstrap/presence flow if the original handshake timing is missed or races during join.
+
+</details>
+
+---
+
+## How to use it
+
+### Quick start
+1. Build or obtain `CMZServerHost.exe`.
+2. Place your CastleMiner Z game files in the expected location, or point `game-path` to your install.
+3. Edit `server.properties`.
+4. Launch `CMZServerHost.exe` or `RunServer.bat`.
+5. Connect from a compatible client using the configured IP and port.
+6. For a nicer client workflow, pair it with **DirectConnect**.
+
+### Typical local test flow
+1. Set `server-ip=0.0.0.0` or your local interface.
+2. Keep `server-port=61903` unless you need a custom port.
+3. Start the host.
+4. Connect locally using:
+   - `127.0.0.1:61903`
+   - or your LAN IP and chosen port
+5. Validate world loading, player join, inventory flow, and chunk streaming.
+
+## Local Test Workflow
+![Local Test](_Images/LocalTest.gif)
+
+---
+
+## Installation
+
+### Requirements
 - Windows
 - **.NET Framework 4.8.1**
-- Visual Studio / MSBuild capable of building .NET Framework projects
-- The original CastleMiner Z game files available somewhere on disk
+- CastleMiner Z game files available somewhere on disk
+- A compatible CastleForge workflow or manual deployment layout
+- Optional but recommended: **DirectConnect** for smoother joining
 
-The game files do **not** have to live under a folder literally named `Game` as long as `game-path` points to the correct location.
+### Build output / packaged layout
+The project is configured to output into a CastleForge-style runtime folder like this:
+
+```text
+!Mods\CMZServerHost\
+```
+
+A typical packaged runtime layout looks like:
+
+```text
+!Mods\CMZServerHost\
+├─ CMZServerHost.exe
+├─ RunServer.bat
+├─ server.properties
+├─ Libs/
+│  └─ 0Harmony.dll
+├─ Game/
+│  └─ README.txt
+├─ Inventory/
+│  └─ default.inv
+└─ Worlds/
+   └─ {world-guid}/
+      └─ world.info
+```
+
+### Game files
+This repository/package intentionally does **not** ship the original CastleMiner Z game files.
+
+You can either:
+- copy the game files into the local `Game` folder structure used by your runtime package, or
+- point `game-path` to your real CastleMiner Z install folder elsewhere on disk
+
+---
 
 ## Configuration
 
 The server reads configuration from `server.properties` in the server root.
 
-Example:
+### Example
 
 ```properties
+# Server identity / compatibility
 server-name=CMZ Server
 game-name=CastleMinerZSteam
 network-version=4
 
+# Game files
 game-path=C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
 
+# Bind / limits
 server-ip=0.0.0.0
 server-port=61903
 max-players=8
 
-steam-user-id=76561198296842857
+# Save / world identity
+save-owner-steam-id=76561198296842857
 world-guid=b8c81243-b6ac-48fe-a782-1e2dc5a44d17
 
+# Runtime tuning
 view-distance-chunks=8
 tick-rate-hz=60
 
+# Session properties
 game-mode=1
 pvp-state=0
 difficulty=1
+
+# Optional behavior
+allow-client-time-sync=false
 ```
 
 ### Config fields
 
 | Key | Purpose |
-|---|---|
-| `server-name` | Display name shown to clients |
-| `game-name` | Expected network game name |
-| `network-version` | Expected protocol version |
-| `game-path` | Optional path to the CastleMiner Z binaries folder; defaults to `./game` when omitted |
-| `server-ip` | Bind address (`0.0.0.0` or `any` binds all interfaces) |
-| `server-port` | Port clients connect to |
-| `max-players` | Maximum connected players |
-| `steam-user-id` | Save-device / world key identity used for storage access |
-| `world-guid` | GUID used to locate the world folder |
-| `view-distance-chunks` | Chunk radius used by the host |
-| `tick-rate-hz` | Server update loop rate |
-| `game-mode` | Session game mode value |
-| `pvp-state` | Session PVP state value |
-| `difficulty` | Session difficulty value |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `server-name`            | Display name shown to players in server/session info.                                                                                          |
+| `game-name`              | Expected CastleMiner Z network game name.                                                                                                      |
+| `network-version`        | Expected protocol/network version.                                                                                                             |
+| `game-path`              | Optional path to the CastleMiner Z binaries folder. Can be absolute or relative.                                                               |
+| `server-ip`              | Bind address. `0.0.0.0` and `any` both bind all interfaces.                                                                                    |
+| `server-port`            | Port clients connect to.                                                                                                                       |
+| `max-players`            | Maximum number of connected players.                                                                                                           |
+| `save-owner-steam-id`    | Steam ID used for save-device key derivation and storage access.                                                                               |
+| `world-guid`             | GUID of the world folder to load under `Worlds\{guid}`.                                                                                        |
+| `view-distance-chunks`   | Host-side chunk view radius used for chunk-related behavior.                                                                                   |
+| `tick-rate-hz`           | Main update loop rate in Hz.                                                                                                                   |
+| `game-mode`              | Session game mode numeric value.                                                                                                               |
+| `pvp-state`              | Session PVP numeric value.                                                                                                                     |
+| `difficulty`             | Session difficulty numeric value.                                                                                                              |
+| `allow-client-time-sync` | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior. |
+
+---
 
 ## Building
 
-### Option 1: Use the included batch script
-
-```bat
-build.bat
-```
-
-This script:
-- locates MSBuild using `vswhere`
-- restores and builds the solution
-- collects release files
-- creates a zip package
-
-### Option 2: Build from Visual Studio / MSBuild
-
-Solution:
-
-```text
-src/CMZServerHost.sln
-```
-
+### Visual Studio / MSBuild
 Project file:
 
 ```text
-src/CMZServerHost/CMZServerHost.csproj
+CastleForge\CastleForge\Servers\CMZServerHost\CMZServerHost.csproj
 ```
 
 Important project settings:
 - Target framework: `net481`
 - Platform target: `x86`
-- Output path: `build\ServerHost\`
-- Harmony copied to `build\ServerHost\libs\0Harmony.dll`
+- Output path: `!Mods\CMZServerHost\`
+- Harmony copied to `Libs\0Harmony.dll`
+
+### What gets copied into the runtime folder
+The project is set up to copy runtime support content such as:
+- `Libs\0Harmony.dll`
+- `RunServer.bat`
+- `Game\README.txt`
+- `Inventory\default.inv`
+- `Worlds\...`
+- `Templates\server.properties` as the runtime `server.properties`
+
+---
 
 ## Running
 
-After building, run:
+After deployment, start the server with either:
 
 ```bat
-src\CMZServerHost\build\ServerHost\CMZServerHost.exe
+CMZServerHost.exe
 ```
 
-On startup the server prints a summary similar to:
+or:
+
+```bat
+RunServer.bat
+```
+
+On startup, the host prints a summary similar to:
 
 ```text
 CMZ Server Host
@@ -212,108 +371,219 @@ Bind             : 0.0.0.0:61903
 ServerName       : CMZ Server
 MaxPlayers       : 8
 SaveOwnerSteamId : 76561198296842857
-WorldGuid        : ...
-WorldFolder      : Worlds\...
+WorldGuid        : b8c81243-b6ac-48fe-a782-1e2dc5a44d17
+WorldFolder      : Worlds\b8c81243-b6ac-48fe-a782-1e2dc5a44d17
 WorldPath        : ...
 WorldInfo file   : ...\world.info
 World loaded     : True
 ```
 
-Then connect using the server IP and the configured `server-port`.
+Then connect with a compatible client using the configured IP and port.
 
-## Game binaries and support libraries
+---
 
-### Game folder
-The server needs access to the real CastleMiner Z binaries and content.
+## Compatibility Notes
 
-By default it looks for them under:
+CMZServerHost is intended for a **CastleMiner Z-compatible dedicated hosting workflow** built around the original runtime and compatible network/session expectations.
+
+It is especially useful with:
+- **DirectConnect**
+- local multiplayer testing
+- private dedicated worlds
+- development/debug workflows
+- custom hosted sessions that benefit from a cleaner direct-IP path
+
+### Important notes
+- The project expects access to the original CastleMiner Z runtime files.
+- It does **not** bundle the original game files.
+- The current runtime is built around the game's original message registry and reflected types.
+- Session compatibility still depends on matching client/server expectations such as `game-name` and `network-version`.
+
+---
+
+## Troubleshooting
+
+<details>
+<summary><strong>The server says the game folder or CastleMinerZ.exe is missing</strong></summary>
+
+Make sure the host can find the real CastleMiner Z files either:
+- under the local runtime `Game` path you are using, or
+- through `game-path` in `server.properties`
+
+Expected core file:
 
 ```text
-build\ServerHost\game\
+CastleMinerZ.exe
 ```
 
-But you can point it somewhere else with `game-path`, for example:
+</details>
+
+<details>
+<summary><strong>The server says 0Harmony.dll is missing</strong></summary>
+
+Make sure Harmony exists under:
+
+```text
+Libs\0Harmony.dll
+```
+
+This project expects Harmony in the local `Libs` folder used by the server runtime package.
+
+</details>
+
+<details>
+<summary><strong>Clients cannot join</strong></summary>
+
+Check:
+- `server-ip`
+- `server-port`
+- firewall / router rules
+- that the client is using the same IP and port
+- `game-name`
+- `network-version`
+
+If you are using DirectConnect, verify the typed address matches the actual dedicated host endpoint.
+
+</details>
+
+<details>
+<summary><strong>The wrong world loads</strong></summary>
+
+Verify:
 
 ```properties
-game-path=C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
+world-guid=...
 ```
 
-### Harmony
-`0Harmony.dll` is expected under:
-
-```text
-build\ServerHost\libs\0Harmony.dll
-```
-
-It does not need to live next to `CMZServerHost.exe`.
-
-## World and save data
-
-The host derives the world folder from `world-guid` and expects it under:
+and make sure the matching folder exists under:
 
 ```text
 Worlds\{world-guid}
 ```
 
-Typical files used by the host include:
-- `world.info`
-- chunk delta data
-- player inventory saves
+</details>
 
-## Networking notes
+<details>
+<summary><strong>Inventory or save access is not behaving as expected</strong></summary>
 
-The current implementation includes:
-- channel 0 / channel 1 packet handling compatible with the reflected game runtime
-- direct send and broadcast wrapper handling
-- player visibility bootstrap via cached/replayed `PlayerExistsMessage`
-- relay of text/chat-style packets and gameplay updates
-- server-side pickup resolution for create/request/consume flow
-- live connection enumeration to avoid stale connection lists on outbound sends
+Check that:
+- `save-owner-steam-id` is populated correctly
+- your world and inventory folders exist in the runtime layout
+- the host has permission to read/write those folders
 
-## Time / day progression
+The save-owner Steam ID is used for save-device/storage identity handling.
 
-The dedicated host advances world time using **real elapsed time** rather than fixed loop iterations.
+</details>
 
-This is important because the server loop may run faster or slower than a normal 60 FPS client host. The current implementation keeps authoritative day progression on the server and periodically broadcasts the current world day/time to clients.
+<details>
+<summary><strong>Time sync behaves strangely</strong></summary>
 
-## Notes and current implementation details
+By default, the host keeps time authoritative and advances it using real elapsed time.
 
-- The server is built around **reflection** rather than direct game project references.
-- The host uses the original game message types and message registry where possible.
-- The server update loop is driven by `tick-rate-hz`.
-- Pickup, inventory, chunk, and terrain flow are now handled server-side well enough for basic dedicated play.
-- The repository includes source plus a ready-to-run `build/ServerHost/` layout.
+If you changed this:
 
-## Troubleshooting
-
-### The server says the game folder is missing
-Make sure `CastleMinerZ.exe` exists either under the default local folder:
-
-```text
-build\ServerHost\game\
+```properties
+allow-client-time-sync=true
 ```
 
-or at the path specified by `game-path`.
+client-sent time packets may influence server time.
 
-### The server says `0Harmony.dll` is missing
-Make sure Harmony exists under:
+For most stable dedicated setups, leaving this `false` is the safer default.
 
-```text
-build\ServerHost\libs\0Harmony.dll
-```
+</details>
 
-### Clients cannot join
-Check:
-- `server-port`
-- firewall rules
-- that both clients are using the same IP and port
-- `game-name` and `network-version`
+---
 
-### The wrong world loads
-Check the `world-guid` value in `server.properties` and verify the folder exists under `Worlds\`.
+## Technical Overview
 
-### Save access fails
-Check that `steam-user-id` is populated correctly, because the current save-device setup still uses it as the storage identity/key seed.
+<details>
+<summary><strong>Main Components</strong></summary>
+
+### `Program.cs`
+Entry point for the dedicated host.
+
+It:
+- loads `server.properties`
+- resolves the game binaries folder from `game-path` or falls back to a local game folder layout
+- resolves support libraries from `Libs`
+- loads `CastleMinerZ.exe` and related assemblies
+- applies Harmony patches
+- prints a startup summary
+- starts the server and enters the update loop
+
+### `Hosting/LidgrenServer.cs`
+The dedicated networking host.
+
+It is responsible for:
+- binding the socket
+- discovery handling
+- connection approval
+- status changes
+- channel 0 / channel 1 packet handling
+- gameplay/bootstrap relay
+- cached/replayed `PlayerExistsMessage` support
+- live connection enumeration for outbound sends
+- pickup consume relay support
+- authoritative time/day progression and periodic time broadcasts
+
+### `World/ServerWorldHandler.cs`
+Host-side world and persistence bridge.
+
+It handles:
+- message ID/type lookup
+- `world.info` loading
+- save device initialization
+- spawn hint loading
+- chunk list / chunk request handling
+- chunk caching
+- terrain mutation handling
+- inventory persistence
+- host-consumed world messages
+- pickup request/create/consume support
+- raw `TimeOfDayMessage` payload construction
+
+### `Networking/CmzMessageCodec.cs`
+Maps CastleMiner Z message IDs to reflected message types and back, and builds raw message payloads in the expected CMZ format.
+
+### `Config/ServerConfig.cs`
+Loads and validates typed config values from `server.properties`, supplies defaults, and derives world-related paths.
+
+### `Patching/ServerPatches.cs`
+Central Harmony bootstrap that applies runtime patches once per process.
+
+</details>
+
+<details>
+<summary><strong>Implementation Notes</strong></summary>
+
+### Core design
+CMZServerHost is designed around:
+- runtime reflection
+- compatibility with the original message registry
+- host-authoritative world/inventory flow
+- packaged deployment for repeatable server setups
+
+### Included runtime support files
+The project includes support content so a release package can be much easier to stand up:
+- config template
+- runtime `server.properties`
+- a game-files README
+- a default inventory template
+- a sample world folder structure
+- Harmony in the local runtime layout
+
+### Why this matters
+That makes the project much easier to showcase and distribute as part of CastleForge than a bare technical source dump.
+
+</details>
+
+---
+
+## Original standalone project
+
+This CastleForge version of **CMZServerHost** is based on and evolves the earlier standalone dedicated-server project:
+
+- [CMZDedicatedServer](https://github.com/RussDev7/CMZDedicatedServer)
 
 ## License
 

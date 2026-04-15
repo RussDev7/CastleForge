@@ -1591,6 +1591,12 @@ The current implementation uses Windows file dialogs. Make sure the game/mod env
 
 ---
 
+## Original standalone project
+
+This CastleForge version of **WorldEdit** is based on and evolves the earlier standalone WorldEdit-CSharp project:
+
+- [WorldEdit-CSharp](https://github.com/RussDev7/WorldEdit-CSharp)
+
 ## Credits
 
 - **RussDev7** — original WorldEdit-CSharp project and CMZ/CastleForge integration

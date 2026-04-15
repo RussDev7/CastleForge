@@ -1,362 +1,403 @@
-# CastleForge - A Powerful Open Source CMZ ModLoader
+# CastleForge
 
-A **config‑bootstrapped, in‑process mod-loader** for **CastleMiner Z**.
+![CastleForge Preview](CastleForge/ModLoaderFramework/ModLoader/_Images/Preview.png)
 
-This loader does **not** use native “DLL injection” (no external injector, no `CreateRemoteThread`, no code caves). Instead, it uses **CastleMinerZ.exe.config** so the .NET **CLR** (Common Language Runtime) loads a custom **AppDomainManager** at startup. That manager attaches a small XNA `GameComponent`, which then discovers, loads, and ticks mod DLLs.
+> **CastleForge** is an open-source modding framework, mod catalog, dedicated-server stack, and creator toolset for **CastleMiner Z**.
 
----
+CastleForge is more than a single loader DLL. It is a full ecosystem built around a config-bootstrapped runtime loader, shared framework services, large gameplay and utility mods, in-game editors, world-generation overhauls, content-pack systems, a dedicated host path, and supporting creator tools.
 
-## Table of contents
-
-- [How it works](#how-it-works)
-- [Folder layout](#folder-layout)
-- [Installation](#installation)
-- [Uninstall](#uninstall)
-- [Writing a mod](#writing-a-mod)
-  - [Using Harmony (runtime patching)](#using-harmony-runtime-patching)
-  - [Bundling dependencies and assets (EmbeddedResolver / EmbeddedExporter)](#bundling-dependencies-and-assets-embeddedresolver--embeddedexporter)
-- [Optional: ModLoaderExtensions (shared services)](#optional-modloaderextensions-shared-services)
-  - [Slash commands and /help](#slash-commands-and-help)
-  - [Exception capture](#exception-capture)
-  - [Shared quality-of-life patches](#shared-quality-of-life-patches)
-- [Load order and dependencies](#load-order-and-dependencies)
-- [Startup prompt and ModLoader.ini](#startup-prompt-and-modloaderini)
-- [Logging](#logging)
+This root README is now the **main landing page and catalog** for the whole repository.
+For the deep loader internals that used to live here, go to **[CastleForge/ModLoaderFramework/ModLoader/README.md](CastleForge/ModLoaderFramework/ModLoader/README.md)**.
 
 ---
 
-## How it works
+## What lives in this repository
 
-### 1) Config‑based bootstrap (no injector)
+- **2 core framework projects**: `ModLoader` and `ModLoaderExtensions`
+- **29 gameplay / utility / world-building mods**
+- **1 dedicated server project**: `CMZServerHost`
+- **3 creator tools** for pipelines and asset preparation
 
-The game is started normally. The only “bootstrap” step is adding an `AppDomainManager` entry to the game’s config so the CLR loads the loader assembly during startup.
+### Why CastleForge stands out
 
-Your current config looks like this:
+- **No external injector required** — the core loader starts through `CastleMinerZ.exe.config` and a custom `AppDomainManager`.
+- **In-process, mod-author-friendly runtime** — discover DLLs from `!Mods`, apply Harmony patches, and tick mods from the live game.
+- **A real ecosystem instead of isolated experiments** — many projects share common infrastructure, shared helpers, and consistent packaging patterns.
+- **Both player-facing and creator-facing** — the repo includes in-game mods, a dedicated server path, content-pack systems, and offline tools.
+- **Strong emphasis on usability** — many projects expose clean in-game UIs, config reload workflows, or menu-integrated entry points instead of forcing external setup.
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <runtime>
-    <!-- Point to the mod-loader's custom AppDomainManager type and its assembly. -->
-    <appDomainManagerType value="ModLoader.ModDomainManager" />
-    <appDomainManagerAssembly value="ModLoader, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+---
 
-    <!-- Optional: Allow the CLR to probe !Mods for assemblies (ex: if you place ModLoader.dll inside !Mods). -->
-    <!--
-    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
-      <probing privatePath="!Mods" />
-    </assemblyBinding>
-    -->
-  </runtime>
-</configuration>
+## Start here
+
+| I want to... | Go here |
+|--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Understand how the loader works      | [ModLoader README](CastleForge/ModLoaderFramework/ModLoader/README.md)                                                                                                                                                                     |
+| See the shared framework layer       | [ModLoaderExtensions README](CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md)                                                                                                                                                 |
+| Browse gameplay and utility mods     | [Full project catalog](#full-project-catalog)                                                                                                                                                                                              |
+| Run a dedicated server               | [CMZServerHost README](CastleForge/Servers/CMZServerHost/README.md)                                                                                                                                                                        |
+| Build content packs or custom assets | [WeaponAddons](CastleForge/Mods/WeaponAddons/README.md), [TexturePacks](CastleForge/Mods/TexturePacks/README.md), [FbxToXnb](CastleForge/Tools/FbxToXnb/README.md), [DNA.SkinnedPipeline](CastleForge/Tools/DNA.SkinnedPipeline/README.md) |
+| Build palettes for pixel art         | [WorldEditPixelart](CastleForge/Mods/WorldEditPixelart/README.md) and [ImageColorsToXml](CastleForge/Tools/ImageColorsToXml/README.md)                                                                                                     |
+| Start writing a new mod              | [Example](CastleForge/Mods/Example/README.md)                                                                                                                                                                                              |
+
+---
+
+## Quick install flow
+
+1. Install **[ModLoader](CastleForge/ModLoaderFramework/ModLoader/README.md)**.
+2. Drop **`ModLoaderExtensions.dll`** and the mods you want into `!Mods`.
+3. Launch CastleMiner Z and choose whether to start **with mods** or **without mods**.
+4. Open each project README for install notes, config keys, commands, hotkeys, screenshots, and troubleshooting.
+
+> `ModLoaderExtensions` is technically optional, but many CastleForge projects are designed to work best with it.
+
+---
+
+## Repository layout
+
+<details>
+<summary>Open a simplified repository map</summary>
+
+```text
+CastleForge/
+├─ README.md
+├─ CastleForge/
+│  ├─ ModLoaderFramework/
+│  │  ├─ ModLoader/
+│  │  └─ ModLoaderExtensions/
+│  ├─ Mods/
+│  │  ├─ BruteForceJoin/
+│  │  ├─ CastleWallsMk2/
+│  │  ├─ ChatTranslator/
+│  │  ├─ CMZMaterialColors/
+│  │  ├─ DirectConnect/
+│  │  ├─ Example/
+│  │  ├─ FastBoot/
+│  │  ├─ InfiniteGPS/
+│  │  ├─ LanternLandMap/
+│  │  ├─ Minimap/
+│  │  ├─ MoreAchievements/
+│  │  ├─ NetworkSniffer/
+│  │  ├─ PhysicsEngine/
+│  │  ├─ QoLTweaks/
+│  │  ├─ RegionProtect/
+│  │  ├─ RenderDistancePlus/
+│  │  ├─ Restore360Water/
+│  │  ├─ SetHomes/
+│  │  ├─ TacticalNuke/
+│  │  ├─ TexturePacks/
+│  │  ├─ TooManyItems/
+│  │  ├─ TreeFeller/
+│  │  ├─ VeinMiner/
+│  │  ├─ VoiceChat/
+│  │  ├─ WeaponAddons/
+│  │  ├─ WorldEdit/
+│  │  ├─ WorldEditCUI/
+│  │  ├─ WorldEditPixelart/
+│  │  └─ WorldGenPlus/
+│  ├─ Servers/
+│  │  └─ CMZServerHost/
+│  └─ Tools/
+│     ├─ DNA.SkinnedPipeline/
+│     ├─ FbxToXnb/
+│     └─ ImageColorsToXml/
+└─ ReferenceAssemblies/
 ```
 
-**How `CastleMinerZ.exe.config` works (plain English):**
-
-- For .NET Framework apps, the CLR looks for a file named **`<exe name>.config`** next to the EXE (here: `CastleMinerZ.exe.config`).
-- The CLR reads this file during startup to configure managed runtime behavior (assembly binding, version redirects, startup hooks, etc.).
-- It does **not** patch or rewrite `CastleMinerZ.exe`. It only influences how the CLR loads/starts managed code inside the process.
-
-> **CLR (Common Language Runtime):** The .NET runtime that loads assemblies, JIT-compiles IL, manages memory/GC, and executes managed code.
-
-Notes:
-- If you keep `ModLoader.dll` next to `CastleMinerZ.exe`, you can leave the probing block commented out.
-- If you want to store `ModLoader.dll` (or other referenced assemblies) under `!Mods`, uncomment the probing block (or use `codeBase` hints).
-- Probing affects **CLR dependency resolution only**. It does **not** control where CastleForge scans for mods (CastleForge scans `!Mods`).
-
-**Dependency resolution without `<probing>` (CastleForge fallback):**
-- CastleForge installs a minimal `AssemblyResolve` fallback early (via the AppDomainManager) so the CLR can locate common referenced assemblies during mod discovery.
-- This fallback is **top-level only**: it checks `!Mods\<AssemblyName>.dll` and does **not** scan subfolders.
-- If you disable `<probing>`, place shared dependencies (ex: `HarmonyLib.dll`) directly in `!Mods` (or embed dependencies inside each mod via `EmbeddedResolver`).
-
-### 2) AppDomainManager attaches the bootstrap component
-
-When the CLR initializes the AppDomain, `ModDomainManager.InitializeNewDomain(...)` runs. It queues a background retry loop that waits for `CastleMinerZGame.Instance`, then injects a `ModBootstrapComponent` into the game’s `Components` collection.
-
-### 3) Bootstrap component initializes once, then ticks mods every frame
-
-`ModBootstrapComponent.Update(...)` is called every frame by XNA.
-
-On the **first** update it:
-- Determines whether to launch **with mods**, **without mods**, or **abort** (exit).
-- Optionally performs a “core hash guard” check (if present) and can fall back to *without mods*.
-- Loads mods from `!Mods` (relative to the game directory) via `ModManager.LoadMods(...)`.
-
-On **subsequent** updates it:
-- Calls `ModManager.TickAll(...)` once per frame (only if you launched with mods).
-
-### 4) Mod discovery, ordering, and dependency‑aware loading
-
-`ModManager.LoadMods("<GameDir>\\!Mods")`:
-
-- Scans `!Mods` for `*.dll` (non‑recursive).
-- `Assembly.LoadFrom(...)` loads each DLL.
-- Finds public, non-abstract types deriving from `ModBase`.
-- Reads optional `[Priority(...)]` (defaults to `Priority.Normal`).
-- Performs a dependency‑aware load pass using `[RequiredDependencies(...)]`.
-- Instantiates mods and calls `Start()`.
-
-### 5) Mod startup + Harmony patching (hooks beyond the frame loop)
-
-After a mod is instantiated, CastleForge calls `Start()` once. This is where mods typically:
-- Initialize state, read configs, register UI/commands, etc.
-- **Apply Harmony patches** to hook CastleMiner Z methods (Prefix/Postfix/Transpiler).
-
-Harmony is important because it lets mods run code **at the exact moment a target method executes** (not just once per frame). Once patched, those hooks fire whenever the game calls the method—input handlers, networking, crafting, terrain edits, HUD rendering, and so on.
-
-**How early can a mod patch?** CastleForge itself is bootstrapped at CLR startup via `AppDomainManager`, but this implementation waits until `CastleMinerZGame.Instance` exists (so it can add the XNA component) and then loads mods on the first `Update(...)`. In practice that’s “early in runtime” (before most gameplay activity), and you can ensure a mod patches as early as possible by giving it a high `[Priority(...)]` (or using a bootstrap utility mod like `ModLoaderExtensions`).
-
-### 6) Runtime execution: per-frame `Tick(...)` + patched entrypoints
-
-Each frame, `ModManager.TickAll(...)` calls `Tick(...)` for each loaded mod. Exceptions are caught per-mod so one failing mod doesn’t necessarily take down the whole loader (though mods still run in-process, so hard crashes are always possible).
-
-Separately, **Harmony patches execute wherever their target methods run**, which can be multiple times per frame—or not tied to the frame loop at all. This means a mod can be purely patch-driven (no `Tick`) or use both: `Tick` for ongoing behavior + Harmony for precise hooks.
+</details>
 
 ---
 
-## Folder layout
+## Full project catalog
 
-Typical layout next to `CastleMinerZ.exe`:
+The catalog below is organized so the root README stays friendly to browse while still surfacing the full scope of the repo.
 
-```
-<CastleMinerZ Install Dir>
-│  CastleMinerZ.exe
-│  CastleMinerZ.exe.config         <-- contains the AppDomainManager bootstrap entries
-│  ModLoader.dll                   <-- the loader assembly (contains ModDomainManager)
-│  ModLoader.ini                   <-- optional; stores remembered launch choice, loader preferences, and accepted core-hash state
-│
-├─ !Mods\                          <-- mods you want to load (scanned by ModManager)
-│   ├─ ModLoaderExtensions.dll     <-- optional companion mod (recommended)
-│   ├─ SomeMod.dll
-│   └─ AnotherMod.dll
-│
-└─ !Logs\                          <-- created automatically
-    └─ ModLoader.log
-```
+### Core framework
 
-If you prefer placing `ModLoader.dll` inside `!Mods`, enable the commented `<probing privatePath="!Mods" />` in the config (or use an explicit `<codeBase>`). The loader will still scan mods from `!Mods`.
+<details open>
+<summary>Open core framework table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/ModLoaderFramework/ModLoader/README.md"><img src="CastleForge/ModLoaderFramework/ModLoader/_Images/Preview.png" alt="ModLoader preview" width="280"></a><br><b>ModLoader</b></td>
+    <td valign="top">The config-bootstrapped core loader for CastleForge. It starts through `CastleMinerZ.exe.config`, installs early assembly resolution, prompts for startup mode, optionally verifies core hashes, loads mods from `!Mods`, and ticks them in-process.</td>
+    <td valign="top"><a href="CastleForge/ModLoaderFramework/ModLoader/README.md">README</a><br><a href="CastleForge/ModLoaderFramework/ModLoader/Deployment/CastleMinerZ.exe.config">Sample config</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md"><img src="CastleForge/ModLoaderFramework/ModLoaderExtensions/_Images/Preview.png" alt="ModLoaderExtensions preview" width="280"></a><br><b>ModLoaderExtensions</b></td>
+    <td valign="top">The shared companion layer that most CastleForge setups will want. It adds slash-command infrastructure, hot-reloadable config, exception capture hooks, fullscreen/UI safety patches, chat and networking hardening, and reusable embedded dependency helpers.</td>
+    <td valign="top"><a href="CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md">README</a><br><a href="CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md#overview">Overview</a></td>
+  </tr>
+</table>
+
+</details>
+
+### Gameplay, QoL & progression
+
+<details>
+<summary>Open gameplay, QoL & progression table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/CMZMaterialColors/README.md"><img src="CastleForge/Mods/CMZMaterialColors/_Images/Preview.png" alt="CMZMaterialColors preview" width="280"></a><br><b>CMZMaterialColors</b></td>
+    <td valign="top">A config-first recolor mod for material-based tools and weapons. It overrides body and laser/emissive colors from an INI file, refreshes cached item classes, rebuilds affected icons, and supports hot reloading while the game is running.</td>
+    <td valign="top"><a href="CastleForge/Mods/CMZMaterialColors/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/FastBoot/README.md"><img src="CastleForge/Mods/FastBoot/_Images/FastBootInstall.png" alt="FastBoot preview" width="280"></a><br><b>FastBoot</b></td>
+    <td valign="top">A tiny startup-speed mod that short-circuits load-screen delays and fade timers so launches feel dramatically faster while still preserving the game’s expected screen-stack behavior.</td>
+    <td valign="top"><a href="CastleForge/Mods/FastBoot/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/InfiniteGPS/README.md"><img src="CastleForge/Mods/InfiniteGPS/_Images/Preview.png" alt="InfiniteGPS preview" width="280"></a><br><b>InfiniteGPS</b></td>
+    <td valign="top">Prevents GPS-based items from taking durability damage, so normal GPS and GPS-derived items stay usable for the entire session.</td>
+    <td valign="top"><a href="CastleForge/Mods/InfiniteGPS/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/MoreAchievements/README.md"><img src="CastleForge/Mods/MoreAchievements/_Images/Browser.png" alt="MoreAchievements preview" width="280"></a><br><b>MoreAchievements</b></td>
+    <td valign="top">Expands progression with a large custom achievement set, a full browser UI, custom icons and sounds, reward support, helper/admin commands, and config-driven rules for when progress can be earned.</td>
+    <td valign="top"><a href="CastleForge/Mods/MoreAchievements/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/PhysicsEngine/README.md"><img src="CastleForge/Mods/PhysicsEngine/_Images/Preview.gif" alt="PhysicsEngine preview" width="280"></a><br><b>PhysicsEngine</b></td>
+    <td valign="top">A configurable lava-simulation mod that turns placed lava into a live spreading hazard, with bounded simulation budgets, runtime tuning, and clean in-game reload support.</td>
+    <td valign="top"><a href="CastleForge/Mods/PhysicsEngine/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/QoLTweaks/README.md"><img src="CastleForge/Mods/QoLTweaks/_Images/Preview.png" alt="QoLTweaks preview" width="280"></a><br><b>QoLTweaks</b></td>
+    <td valign="top">A lightweight quality-of-life patch pack that improves building reach, offline chat, text input, targeted block labels, chat usability, HUD readability, paste support, and vertical freedom without adding bulky menus.</td>
+    <td valign="top"><a href="CastleForge/Mods/QoLTweaks/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/RenderDistancePlus/README.md"><img src="CastleForge/Mods/RenderDistancePlus/_Images/Showcase.png" alt="RenderDistancePlus preview" width="280"></a><br><b>RenderDistancePlus</b></td>
+    <td valign="top">Extends terrain draw distance beyond vanilla Ultra with a safer graphics-menu workflow. It removes internal clamps, adds a 10-step slider, and protects the menu path from higher saved values.</td>
+    <td valign="top"><a href="CastleForge/Mods/RenderDistancePlus/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/Restore360Water/README.md"><img src="CastleForge/Mods/Restore360Water/_Images/Showcase1.png" alt="Restore360Water preview" width="280"></a><br><b>Restore360Water</b></td>
+    <td valign="top">Revives the Xbox 360-style water feel with biome-aware water bands, optional reflections, custom water audio, live config reloads, and WorldGenPlus-aware surface detection.</td>
+    <td valign="top"><a href="CastleForge/Mods/Restore360Water/README.md">README</a><br><a href="CastleForge/Mods/WorldGenPlus/README.md">WorldGenPlus</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/SetHomes/README.md"><img src="CastleForge/Mods/SetHomes/_Images/Preview.png" alt="SetHomes preview" width="280"></a><br><b>SetHomes</b></td>
+    <td valign="top">Lets players save named homes per world, teleport back instantly, jump to spawn, and preserve exact facing direction on arrival.</td>
+    <td valign="top"><a href="CastleForge/Mods/SetHomes/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/TacticalNuke/README.md"><img src="CastleForge/Mods/TacticalNuke/_Images/Preview.png" alt="TacticalNuke preview" width="280"></a><br><b>TacticalNuke</b></td>
+    <td valign="top">Adds a custom nuke item and full explosive workflow with custom icons and block skinning, longer fuses, warning announcements, configurable crater shaping, chain reactions, and optional async blast processing.</td>
+    <td valign="top"><a href="CastleForge/Mods/TacticalNuke/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/TooManyItems/README.md"><img src="CastleForge/Mods/TooManyItems/_Images/Preview.png" alt="TooManyItems preview" width="280"></a><br><b>TooManyItems</b></td>
+    <td valign="top">An in-game item browser and creative-control overlay that exposes hidden items, supports search and favorites, saves inventory snapshots, and adds quick world utilities for testing and sandbox play.</td>
+    <td valign="top"><a href="CastleForge/Mods/TooManyItems/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/TreeFeller/README.md"><img src="CastleForge/Mods/TreeFeller/_Images/Preview.gif" alt="TreeFeller preview" width="280"></a><br><b>TreeFeller</b></td>
+    <td valign="top">Automatically fells connected natural trees when you cut into the trunk with an axe or chainsaw, while using safety heuristics and caps to avoid tearing through player builds.</td>
+    <td valign="top"><a href="CastleForge/Mods/TreeFeller/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/VeinMiner/README.md"><img src="CastleForge/Mods/VeinMiner/_Images/Preview.gif" alt="VeinMiner preview" width="280"></a><br><b>VeinMiner</b></td>
+    <td valign="top">Mines the rest of a connected ore vein after the first valid block breaks, with pick-only behavior, per-ore toggles, safety caps, and config hot reloading.</td>
+    <td valign="top"><a href="CastleForge/Mods/VeinMiner/README.md">README</a></td>
+  </tr>
+</table>
+
+</details>
+
+### Multiplayer, networking, moderation & hosting
+
+<details>
+<summary>Open multiplayer, networking, moderation & hosting table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/BruteForceJoin/README.md"><img src="CastleForge/Mods/BruteForceJoin/_Images/Preview.gif" alt="BruteForceJoin preview" width="280"></a><br><b>BruteForceJoin</b></td>
+    <td valign="top">A proof-of-concept password-testing mod for servers you own or are authorized to audit. It adds a native-feeling browser button, runs an asynchronous word-list join loop, rate-limits attempts, shows progress, and cancels cleanly.</td>
+    <td valign="top"><a href="CastleForge/Mods/BruteForceJoin/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/CastleWallsMk2/README.md"><img src="CastleForge/Mods/CastleWallsMk2/_Images/Preview.gif" alt="CastleWallsMk2 preview" width="280"></a><br><b>CastleWallsMk2</b></td>
+    <td valign="top">A massive all-in-one overlay and sandbox toolkit with live editors, session utilities, moderation workflows, networking tools, diagnostics, visual helpers, and experimental gameplay controls for power users.</td>
+    <td valign="top"><a href="CastleForge/Mods/CastleWallsMk2/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/ChatTranslator/README.md"><img src="CastleForge/Mods/ChatTranslator/_Images/TranslatedLines.png" alt="ChatTranslator preview" width="280"></a><br><b>ChatTranslator</b></td>
+    <td valign="top">Live in-game chat translation for multilingual sessions. Read incoming messages in your language, translate replies before sending, and switch between manual and auto-detect workflows without leaving CastleMiner Z.</td>
+    <td valign="top"><a href="CastleForge/Mods/ChatTranslator/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/DirectConnect/README.md"><img src="CastleForge/Mods/DirectConnect/_Images/Preview.png" alt="DirectConnect preview" width="280"></a><br><b>DirectConnect</b></td>
+    <td valign="top">Adds a proper direct IP join flow to the multiplayer browser. It remembers the last address you used, adds a real cancel path while joining, and can launch a compatible dedicated server or a second client from the menu.</td>
+    <td valign="top"><a href="CastleForge/Mods/DirectConnect/README.md">README</a><br><a href="CastleForge/Servers/CMZServerHost/README.md">Dedicated server</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/NetworkSniffer/README.md"><img src="CastleForge/Mods/NetworkSniffer/_Images/Preview.gif" alt="NetworkSniffer preview" width="280"></a><br><b>NetworkSniffer</b></td>
+    <td valign="top">A developer-facing network logger that hooks CastleMiner Z message flow, captures incoming and outgoing traffic, and writes readable logs with filtering, sampling, and optional raw hex dumps.</td>
+    <td valign="top"><a href="CastleForge/Mods/NetworkSniffer/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/RegionProtect/README.md"><img src="CastleForge/Mods/RegionProtect/_Images/Preview.gif" alt="RegionProtect preview" width="280"></a><br><b>RegionProtect</b></td>
+    <td valign="top">A host-friendly protection system for spawn and named regions. It can block griefing actions like mining, placing, explosions, and crate tampering while allowing trusted-player whitelists.</td>
+    <td valign="top"><a href="CastleForge/Mods/RegionProtect/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/VoiceChat/README.md"><img src="CastleForge/Mods/VoiceChat/_Images/Preview.png" alt="VoiceChat preview" width="280"></a><br><b>VoiceChat</b></td>
+    <td valign="top">Modernizes CastleMiner Z voice with push-to-talk, self-mute, speaker HUD feedback, safer packet handling, and cleaner session cleanup without replacing the game’s built-in voice path.</td>
+    <td valign="top"><a href="CastleForge/Mods/VoiceChat/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Servers/CMZServerHost/README.md"><img src="CastleForge/Servers/CMZServerHost/_Images/Preview.png" alt="CMZServerHost preview" width="280"></a><br><b>CMZServerHost</b></td>
+    <td valign="top">A dedicated CastleMiner Z server host that runs outside the normal game client, keeps world state server-side, and pairs naturally with mods like DirectConnect for smoother custom multiplayer hosting.</td>
+    <td valign="top"><a href="CastleForge/Servers/CMZServerHost/README.md">README</a><br><a href="CastleForge/Mods/DirectConnect/README.md">Pairs with DirectConnect</a></td>
+  </tr>
+</table>
+
+</details>
+
+### World editing, mapping & generation
+
+<details>
+<summary>Open world editing, mapping & generation table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/LanternLandMap/README.md"><img src="CastleForge/Mods/LanternLandMap/_Images/Showcase.png" alt="LanternLandMap preview" width="280"></a><br><b>LanternLandMap</b></td>
+    <td valign="top">A full-screen Lantern Land analysis overlay that visualizes ring walls, gaps, spawn-tower rings, biome boundaries, and optional WorldGenPlus surfaces on a practical world-scale map.</td>
+    <td valign="top"><a href="CastleForge/Mods/LanternLandMap/README.md">README</a><br><a href="CastleForge/Mods/WorldGenPlus/README.md">WorldGenPlus</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/Minimap/README.md"><img src="CastleForge/Mods/Minimap/_Images/Showcase.png" alt="Minimap preview" width="280"></a><br><b>Minimap</b></td>
+    <td valign="top">A lightweight biome-aware HUD minimap with player, enemy, dragon, and multiplayer markers, plus optional chunk grids, biome edges, compass helpers, and WorldGenPlus-aware surface rendering.</td>
+    <td valign="top"><a href="CastleForge/Mods/Minimap/README.md">README</a><br><a href="CastleForge/Mods/WorldGenPlus/README.md">WorldGenPlus</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/WorldEdit/README.md"><img src="CastleForge/Mods/WorldEdit/_Images/Preview.png" alt="WorldEdit preview" width="280"></a><br><b>WorldEdit</b></td>
+    <td valign="top">A high-speed in-game map editor with selections, schematics, copy/paste, brushes, scripting, async block placement, undo/redo history, and deep world-building workflows.</td>
+    <td valign="top"><a href="CastleForge/Mods/WorldEdit/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/WorldEditCUI/README.md"><img src="CastleForge/Mods/WorldEditCUI/_Images/Preview.png" alt="WorldEditCUI preview" width="280"></a><br><b>WorldEditCUI</b></td>
+    <td valign="top">A visual frontend addon for WorldEdit that renders your active selection in-world, with outline modes and chunk-grid helpers so large edits are easier to see before you commit them.</td>
+    <td valign="top"><a href="CastleForge/Mods/WorldEditCUI/README.md">README</a><br><a href="CastleForge/Mods/WorldEdit/README.md">Requires WorldEdit</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/WorldEditPixelart/README.md"><img src="CastleForge/Mods/WorldEditPixelart/_Images/Preview.gif" alt="WorldEditPixelart preview" width="280"></a><br><b>WorldEditPixelart</b></td>
+    <td valign="top">An in-game image-to-block-art editor that converts real images into CastleMiner Z pixel art, previews results, tunes palettes, and exports finished work into a WorldEdit-ready schematic workflow.</td>
+    <td valign="top"><a href="CastleForge/Mods/WorldEditPixelart/README.md">README</a><br><a href="CastleForge/Tools/ImageColorsToXml/README.md">Palette tool</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/WorldGenPlus/README.md"><img src="CastleForge/Mods/WorldGenPlus/_Images/Preview.png" alt="WorldGenPlus preview" width="280"></a><br><b>WorldGenPlus</b></td>
+    <td valign="top">A world-generation framework and overhaul that replaces the default builder with configurable surface modes, custom biome loading, seed control, multiplayer sync, overlays, and an in-game tuning screen.</td>
+    <td valign="top"><a href="CastleForge/Mods/WorldGenPlus/README.md">README</a></td>
+  </tr>
+</table>
+
+</details>
+
+### Content systems, packs & creator tooling
+
+<details>
+<summary>Open content systems, packs & creator tooling table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/TexturePacks/README.md"><img src="CastleForge/Mods/TexturePacks/_Images/Preview.png" alt="TexturePacks preview" width="280"></a><br><b>TexturePacks</b></td>
+    <td valign="top">A full runtime content-pack framework for re-skinning CastleMiner Z far beyond block textures, including terrain, icons, HUD, menus, fonts, audio, skyboxes, models, and more.</td>
+    <td valign="top"><a href="CastleForge/Mods/TexturePacks/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/WeaponAddons/README.md"><img src="CastleForge/Mods/WeaponAddons/_Images/Preview.png" alt="WeaponAddons preview" width="280"></a><br><b>WeaponAddons</b></td>
+    <td valign="top">Turns weapons into data-driven content packs. Define custom weapons with `.clag` files, custom models, icons, sounds, optional recipes, and runtime-safe synthetic item IDs.</td>
+    <td valign="top"><a href="CastleForge/Mods/WeaponAddons/README.md">README</a><br><a href="CastleForge/Tools/FbxToXnb/README.md">FbxToXnb</a><br><a href="CastleForge/Tools/DNA.SkinnedPipeline/README.md">DNA.SkinnedPipeline</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Tools/DNA.SkinnedPipeline/README.md"><img src="CastleForge/Tools/DNA.SkinnedPipeline/_Images/Preview1.png" alt="DNA.SkinnedPipeline preview" width="280"></a><br><b>DNA.SkinnedPipeline</b></td>
+    <td valign="top">A custom pipeline helper for compiling CastleMiner Z / DNA-style skinned FBX models into runtime-friendly `.xnb` assets for packs and mods.</td>
+    <td valign="top"><a href="CastleForge/Tools/DNA.SkinnedPipeline/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Tools/FbxToXnb/README.md"><img src="CastleForge/Tools/FbxToXnb/_Images/Preview.png" alt="FbxToXnb preview" width="280"></a><br><b>FbxToXnb</b></td>
+    <td valign="top">A creator-facing conversion tool that turns one or more `.fbx` models into XNA-ready `.xnb` output with a workflow built around CastleForge content creation.</td>
+    <td valign="top"><a href="CastleForge/Tools/FbxToXnb/README.md">README</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Tools/ImageColorsToXml/README.md"><img src="CastleForge/Tools/ImageColorsToXml/_Images/Preview.png" alt="ImageColorsToXml preview" width="280"></a><br><b>ImageColorsToXml</b></td>
+    <td valign="top">A palette-building companion tool that turns screenshot colors into XML palette files for WorldEditPixelart and related workflows, with optional brightness and rebalance utilities.</td>
+    <td valign="top"><a href="CastleForge/Tools/ImageColorsToXml/README.md">README</a></td>
+  </tr>
+</table>
+
+</details>
+
+### Developer reference
+
+<details>
+<summary>Open developer reference table</summary>
+
+<table>
+  <tr>
+    <th width="28%">Preview</th>
+    <th width="52%">Description</th>
+    <th width="20%">Links</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Mods/Example/README.md"><img src="CastleForge/Mods/Example/_Images/Preview.png" alt="Example preview" width="280"></a><br><b>Example</b></td>
+    <td valign="top">A clean starter/reference mod that shows CastleForge best practices: config loading, command registration, startup and shutdown flow, Harmony patch bootstrap, and embedded dependency handling.</td>
+    <td valign="top"><a href="CastleForge/Mods/Example/README.md">README</a><br><a href="CastleForge/ModLoaderFramework/ModLoader/README.md">Loader docs</a></td>
+  </tr>
+</table>
+
+</details>
 
 ---
 
-## Installation
+## Recommended reading order
 
-1) Back up your original `CastleMinerZ.exe.config`.
-2) Copy `ModLoader.dll` next to `CastleMinerZ.exe`.
-3) Edit `CastleMinerZ.exe.config` to include your `appDomainManagerType` and `appDomainManagerAssembly` entries (see snippet above).
-4) Create `!Mods\` next to the EXE and drop mod DLLs inside.
-5) Launch the game.
+If you are new to the repo, this is a good flow:
 
----
-
-## Uninstall
-
-- Restore/remove the `appDomainManagerType` / `appDomainManagerAssembly` entries from `CastleMinerZ.exe.config`.
-- Delete `ModLoader.dll`.
-- Optionally delete `!Mods\`, `!Logs\`, and `ModLoader.ini`.
+1. **[ModLoader](CastleForge/ModLoaderFramework/ModLoader/README.md)** — understand how CastleForge boots and loads mods.
+2. **[ModLoaderExtensions](CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md)** — see the shared layer many projects depend on.
+3. **[Example](CastleForge/Mods/Example/README.md)** — use it as the cleanest reference for authoring your own mod.
+4. Move into the specific mod, server, or tool README that matches what you want to build or use.
 
 ---
 
-## Writing a mod
+## Notes
 
-Mods are .NET assemblies that contain a concrete class deriving from `ModBase`.
-
-Minimal example:
-
-```csharp
-using System;
-using Microsoft.Xna.Framework;
-using DNA.Input;
-using ModLoader;
-
-public sealed class ExampleMod : ModBase
-{
-    public ExampleMod() : base("ExampleMod", new Version(1,0,0,0)) { }
-
-    public override void Start()
-    {
-        // One-time initialization.
-    }
-
-    public override void Tick(InputManager inputManager, GameTime gameTime)
-    {
-        // Runs every frame.
-    }
-}
-```
-
-> **Note:** In the current implementation, `Tick(...)` is called with `inputManager = null`, so mods should null-check or fetch input through their own game references.
-
-Drop the compiled `ExampleMod.dll` into `!Mods\`.
-
-### Using Harmony (runtime patching)
-
-**Harmony** is the standard way to *hook* CastleMiner Z’s compiled methods at runtime without modifying the game files.
-
-At a high level:
-- **Prefix**: run your code *before* the original method (optionally skip the original).
-- **Postfix**: run your code *after* the original method.
-- **Transpiler**: rewrite the method’s IL for deeper changes (advanced, but powerful).
-
-CastleForge doesn’t mandate how you patch, but a clean pattern (used in example mods) is:
-1) Keep all patches in a dedicated `GamePatches` helper.
-2) Give each mod its own **unique Harmony ID** so unpatching is scoped to that mod.
-3) Patch at `Start()` (when the game instance is live), and unpatch during shutdown.
-
-Example pattern (simplified):
-
-```csharp
-// Unique ID per mod to avoid collisions.
-_harmonyId = $"castleminerz.mods.{typeof(GamePatches).Namespace}.patches";
-_harmony   = new Harmony(_harmonyId);
-
-// Patch every class in this assembly marked with [HarmonyPatch].
-foreach (var patchType in EnumeratePatchTypes(typeof(GamePatches).Assembly))
-    _harmony.CreateClassProcessor(patchType).Patch();
-
-// Later (shutdown): only undo our own patches.
-_harmony.UnpatchAll(_harmonyId);
-```
-
-Nice-to-haves:
-- **Best-effort patching**: patch each `[HarmonyPatch]` container inside a try/catch so one bad patch doesn’t block the rest.
-- **Patch reporting**: list what methods were patched by *this* Harmony ID.
-- **Noisy containers**: optionally hide “utility” patch containers from reports (example: a custom marker attribute).
-
-### Bundling dependencies and assets (EmbeddedResolver / EmbeddedExporter)
-
-CastleForge mods run in-process, so **keeping each mod self-contained** makes installs and updates dramatically simpler.
-
-Two helpers commonly used inside mods:
-
-#### EmbeddedResolver
-
-`EmbeddedResolver` is a **unified dependency loader** for embedded DLL resources:
-
-- **Native DLLs** (P/Invoke) must be on disk for Windows to load them. The resolver:
-  - Scans embedded `*.dll` resources.
-  - Detects whether each payload is managed or native by reading PE headers.
-  - Extracts native DLLs under `!Mods/<YourNamespace>/Natives`.
-  - Calls `LoadLibrary(...)` to preload/pin the exact native copy so P/Invoke binds reliably.
-
-- **Managed DLLs** can be loaded from memory. The resolver:
-  - Hooks `AppDomain.CurrentDomain.AssemblyResolve`.
-  - When the CLR can’t find a dependency, it loads embedded managed DLL bytes via `Assembly.Load(bytes)`.
-  - Reuses already-loaded assemblies by full name to reduce duplication.
-
-In practice, that means you can ship a **single mod DLL** that includes its own managed dependencies, while still supporting native dependencies when required.
-
-#### EmbeddedExporter
-
-Some payloads are not DLLs at all (PNG icons, fonts, default INI files, JSON, etc.) and the game (or your mod) may need them **on disk**.
-
-`EmbeddedExporter` provides a simple “extract a folder from embedded resources” utility:
-- Compile files as **Embedded Resource**.
-- At runtime, call `ExtractFolder(folderName, destRoot)`.
-- Dot-separated manifest names are converted into directories, and the real extension (text after the last dot) is preserved.
-
-**Result:** each mod stays “one DLL to install”, while still supporting disk-based assets when needed.
+- This root page is intentionally focused on **showcasing and organizing the entire repository**.
+- The old low-level loader deep dive has been moved into the dedicated **[ModLoader README](CastleForge/ModLoaderFramework/ModLoader/README.md)** so the root page can stay more discoverable.
+- Each subproject README is where command lists, config details, workflow notes, and troubleshooting should continue to live.
 
 ---
 
+## License
 
-## Optional: ModLoaderExtensions (shared services)
-
-`ModLoaderExtensions` is an **optional companion mod** that you can drop into `!Mods\` like any other mod DLL. It is designed to load **first** (it uses `Priority.Bootstrap`) and provide shared, cross-mod infrastructure that is annoying to duplicate in every project.
-
-When present, it effectively acts as a “services layer” on top of CastleForge:
-
-- **Self-contained dependencies/assets**: calls `EmbeddedResolver.Init()` early (so the mod can embed its managed/native dependencies) and can extract embedded files to `!Mods/<Namespace>` via `EmbeddedExporter`.
-- **Central slash commands**: installs a Harmony prefix on the game’s chat send method so `/commands` can be handled locally instead of being broadcast.
-- **Built-in `/help`**: aggregates commands across mods and renders a paged help list in chat.
-- **Diagnostics**: can arm centralized exception capture/logging (caught-only or first-chance) based on `ModLoader.ini`.
-- **Common patch hub**: a natural home for shared Harmony patches (QoL, stability, instrumentation) used by many mods.
-
-### Slash commands and /help
-
-`ModLoaderExtensions` implements a shared “slash command” pipeline:
-
-1) A **Harmony** prefix patches `BroadcastTextMessage.Send(...)` to intercept chat before it goes to the server.
-2) Messages starting with `/` are treated as commands.
-3) The interceptor fans the command string out to registered handlers; if any handler returns `true`, the original chat send is suppressed.
-4) If nobody handles it, the player sees “Unknown command.” (and it’s still suppressed so it doesn’t spam the server).
-
-Command handlers are simple methods discovered by reflection:
-
-- Methods are annotated with `[Command("/name")]`.
-- Supported signatures are `void Method()` and `void Method(string[] args)`.
-- A small dispatcher splits the raw string (`"/help 2"`) into `command` + `args` and invokes the attributed method.
-
-It also ships a built-in `/help` command that:
-- Lists commands across all mods.
-- Supports pagination.
-- Supports filtering by mod name.
-
-If a mod wants to appear in `/help`, it can register its commands into the shared registry:
-
-```csharp
-// In your mod's Start():
-HelpRegistry.Register(
-    modName: Name,
-    items: new (string command, string description)[]
-    {
-        ("/foo", "Does the thing."),
-        ("/bar <n>", "Does the other thing."),
-    }
-);
-```
-
-> Note: using the shared chat interceptor / registry requires referencing the companion assembly (or copying the small helper classes into your own mod).
-
-### Exception capture
-
-`ModLoaderExtensions` can arm a centralized exception logger based on `ModLoader.ini`:
-- **Off**: no extra hooks.
-- **CaughtOnly**: logs unhandled/unobserved/task/UI thread exceptions.
-- **FirstChance**: logs every thrown exception (very noisy; throttled).
-
-This is intended to help diagnose modded sessions and (optionally) suppress upstream crash-reporting behavior.
-
-### Shared quality-of-life patches
-
-`ModLoaderExtensions` can also apply a bundle of “core” Harmony patches (a `GamePatches.ApplyAllPatches()` style hub). This is where you put:
-- global stability fixes,
-- shared hooks used by many mods,
-- chat/UI tweaks,
-- instrumentation (diagnostics),
-- and any other “foundation” patches you don’t want every mod re-implementing.
-
-Because these patches live in one optional companion mod, you can keep CastleForge itself lean, and users can opt-in to the extra behavior by dropping one DLL into `!Mods\`.
-
-
----
-
-## Load order and dependencies
-
-### Priority
-
-Use `[Priority(...)]` to influence load ordering (higher loads earlier). If omitted, the loader treats it as `Priority.Normal`.
-
-Recommended bands include:
-- `Priority.Bootstrap` (reserved)
-- `Priority.First`, `VeryHigh`, `High` ... `Normal` ... `Low`, `VeryLow`, `Last`
-
-### Dependencies
-
-Use `[RequiredDependencies("SomeOtherModName")]` to require another mod to be loaded *first*. Dependencies are matched against `ModBase.Name` (case‑insensitive).
-
----
-
-## Startup prompt and ModLoader.ini
-
-On first launch (or when not remembered), the loader shows a small WinForms dialog:
-- **Play CastleMiner Z** (with mods)
-- **Play CastleMiner Z (no mods)**
-- Optional: **Always use this option**
-
-That choice is resolved by `StartupModeSelector` (dialog runs on a temporary STA thread), and can be persisted into `ModLoader.ini` in the game directory.
-
----
-
-## Logging
-
-The loader writes logs to `!Logs\ModLoader.log` using a tag‑aware, column‑aligned logger. Logging is designed to be thread‑safe and “never‑throw” (logging failures are swallowed so they don’t break gameplay).
+CastleForge is open source. See the repository **LICENSE** file and the individual project files where applicable.
