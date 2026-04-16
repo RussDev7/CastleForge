@@ -393,9 +393,29 @@ The catalog below is organized so the root README stays friendly to browse while
 
 Looking for third-party creations from the CastleForge community?
 
-Browse the **CastleForge Community Mods** repository for user-made mods, previews, links, and download information:
+### Just want to browse mods?
 
-➡️ **[Visit the Community Mod Repository](https://github.com/RussDev7/CastleForge-CommunityMods)**
+The easiest way to explore community submissions is through the live **CastleForge Community Mod Browser**:
+
+➡️ **[Open the Mod Browser](https://russdev7.github.io/CastleForge-CommunityMods/)**
+
+Use the browser if you want to:
+- preview community mods
+- open each mod's README
+- jump to source repositories
+- find release/download links
+
+### Want to contribute, submit, or maintain a listing?
+
+Visit the **CastleForge Community Mods** repository:
+
+➡️ **[Open the Community Mod Repository](https://github.com/RussDev7/CastleForge-CommunityMods)**
+
+Use the repository if you want to:
+- submit a new community mod
+- edit metadata or previews
+- update README entries
+- maintain an existing listing
 
 > Community mods are maintained separately from the main CastleForge repository so official projects and community submissions stay organized and easier to support.
 
