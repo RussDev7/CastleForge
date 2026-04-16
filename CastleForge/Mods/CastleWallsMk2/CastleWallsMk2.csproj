@@ -33,51 +33,51 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\ReferenceAssemblies\Patching\0Harmony.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Patching\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="CastleMinerZ">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\CastleMinerZ.exe</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="DNA.Common">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\DNA.Common.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="DNA.Steam">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Steam.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\DNA.Steam.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="ImGui.NET">
-      <HintPath>..\..\..\ReferenceAssemblies\UI\ImGui.NET.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)UI\ImGui.NET.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\Microsoft.Xna.Framework.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Game, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Game.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\Microsoft.Xna.Framework.Game.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Graphics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Graphics.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\Microsoft.Xna.Framework.Graphics.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Xact, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\ReferenceAssemblies\RuntimeSupport\Microsoft.Xna.Framework.Xact.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\Microsoft.Xna.Framework.Xact.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="PacketDotNet">
-      <HintPath>..\..\..\ReferenceAssemblies\Networking\PacketDotNet.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Networking\PacketDotNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="SharpPcap">
-      <HintPath>..\..\..\ReferenceAssemblies\Networking\SharpPcap.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Networking\SharpPcap.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
@@ -85,7 +85,7 @@
     <Reference Include="System.Numerics" />
     <Reference Include="System.Numerics.Vectors, Version=4.1.4.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\ReferenceAssemblies\RuntimeSupport\System.Numerics.Vectors.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)RuntimeSupport\System.Numerics.Vectors.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Windows.Forms" />

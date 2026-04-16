@@ -41,35 +41,35 @@
     <Reference Include="Microsoft.Build.Utilities.v4.0" />
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.AudioImporters">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.AudioImporters.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.AudioImporters.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.EffectImporter">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.EffectImporter.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.EffectImporter.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.FBXImporter">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.FBXImporter.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.FBXImporter.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.TextureImporter">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.TextureImporter.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.TextureImporter.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.VideoImporters">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.VideoImporters.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.VideoImporters.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline.XImporter">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.XImporter.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.XImporter.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />

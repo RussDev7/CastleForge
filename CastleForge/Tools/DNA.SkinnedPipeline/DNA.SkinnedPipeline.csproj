@@ -37,14 +37,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="DNA.Common">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\DNA.Common.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework.Content.Pipeline">
-      <HintPath>..\..\..\ReferenceAssemblies\XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)XnaGameStudio\Microsoft.Xna.Framework.Content.Pipeline.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

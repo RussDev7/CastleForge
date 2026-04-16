@@ -33,15 +33,15 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\ReferenceAssemblies\Patching\0Harmony.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Patching\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="CastleMinerZ">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\CastleMinerZ.exe</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\CastleMinerZ.exe</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="DNA.Common">
-      <HintPath>..\..\..\ReferenceAssemblies\Core\DNA.Common.dll</HintPath>
+      <HintPath>$(ReferenceAssembliesRoot)Core\DNA.Common.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86" />

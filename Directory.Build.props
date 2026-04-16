@@ -1,11 +1,19 @@
 <Project>
   <PropertyGroup>
-    <!-- Root build output folder. -->
-    <BuildOutputRoot>$(MSBuildThisFileDirectory)Build\</BuildOutputRoot>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Repo root -->
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
 
-    <!-- Default build config/platform when nothing else sets them. -->
+    <!-- Shared roots -->
+    <ReferenceAssembliesRoot>$(RepoRoot)ReferenceAssemblies\</ReferenceAssembliesRoot>
+    <BuildOutputRoot>$(RepoRoot)Build\</BuildOutputRoot>
+
+    <!-- Shared defaults -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
     <Platform Condition="'$(Platform)' == ''">x86</Platform>
+
+    <!-- Optional: centralize output folders -->
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">$(BuildOutputRoot)</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">obj\</BaseIntermediateOutputPath>
   </PropertyGroup>
 </Project>
