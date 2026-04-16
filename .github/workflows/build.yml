@@ -26,16 +26,9 @@ jobs:
       - name: Build solution (Release)
         run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=x86
 
-      - name: Collect build outputs
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Get-ChildItem -Recurse -Path . -Include *.dll,*.exe |
-            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
-            Copy-Item -Destination artifacts -Force
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: castleforge-build
-          path: artifacts
+          name: CastleForge-Build-Release
+          path: Build/Release
+          if-no-files-found: error
