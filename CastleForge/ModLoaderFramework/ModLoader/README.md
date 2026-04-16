@@ -63,11 +63,26 @@ For the full repository showcase, mod catalog, servers, and tools, go back to th
 
 ## How it works
 
-### 1) Config‑based bootstrap (no injector)
+### 1) Config-based bootstrap (no injector)
 
-The game is started normally. The only "bootstrap" step is adding an `AppDomainManager` entry to the game’s config so the CLR loads the loader assembly during startup.
+The game is started normally. The only bootstrap step is editing `CastleMinerZ.exe.config` so the CLR loads the mod loader during startup.
 
-Your current config looks like this:
+### Original `CastleMinerZ.exe.config`
+
+This is what the default file usually looks like:
+
+```xml
+<?xml version="1.0"?>
+<configuration>
+  <startup>
+    <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0,Profile=Client"/>
+  </startup>
+</configuration>
+````
+
+### ModLoader version of `CastleMinerZ.exe.config`
+
+After installing ModLoader, the file should look like this:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -78,16 +93,12 @@ Your current config looks like this:
     <appDomainManagerAssembly value="ModLoader, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
 
     <!-- Optional: Allow the CLR to probe !Mods for assemblies (ex: if you place ModLoader.dll inside !Mods). -->
-    <!--
-    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
-      <probing privatePath="!Mods" />
-    </assemblyBinding>
-    -->
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1"><probing privatePath="!Mods" /></assemblyBinding>
   </runtime>
 </configuration>
 ```
 
-**How `CastleMinerZ.exe.config` works (plain English):**
+**How `CastleMinerZ.exe.config` works (plain English version):**
 
 - For .NET Framework apps, the CLR looks for a file named **`<exe name>.config`** next to the EXE (here: `CastleMinerZ.exe.config`).
 - The CLR reads this file during startup to configure managed runtime behavior (assembly binding, version redirects, startup hooks, etc.).
@@ -176,19 +187,240 @@ If you prefer placing `ModLoader.dll` inside `!Mods`, enable the commented `<pro
 
 ## Installation
 
-1) Back up your original `CastleMinerZ.exe.config`.
-2) Copy `ModLoader.dll` next to `CastleMinerZ.exe`.
-3) Edit `CastleMinerZ.exe.config` to include your `appDomainManagerType` and `appDomainManagerAssembly` entries (see snippet above).
-4) Create `!Mods\` next to the EXE and drop mod DLLs inside.
-5) Launch the game.
+These steps only need to be done once.
+
+### Step 1: Open your CastleMiner Z folder
+
+For most Steam installs, it is here:
+
+```text
+C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
+````
+
+You should see files like:
+
+* `CastleMinerZ.exe`
+* `CastleMinerZ.exe.config`
+
+### Step 2: Back up your original config file
+
+Make a copy of:
+
+```text
+CastleMinerZ.exe.config
+```
+
+For example, rename the copy to:
+
+```text
+CastleMinerZ.exe.config.backup
+```
+
+### Step 3: Copy `ModLoader.dll` into the game folder
+
+Place `ModLoader.dll` in the same folder as:
+
+```text
+CastleMinerZ.exe
+```
+
+So it should look like this:
+
+```text
+CastleMiner Z
+│   CastleMinerZ.exe
+│   CastleMinerZ.exe.config
+│   ModLoader.dll
+```
+
+### Step 4: Edit `CastleMinerZ.exe.config`
+
+Open `CastleMinerZ.exe.config` with Notepad.
+
+If the file currently looks like this:
+
+```xml
+<?xml version="1.0"?>
+<configuration>
+<startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0,Profile=Client"/></startup></configuration>
+```
+
+Replace it with this:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <runtime>
+    <!-- Point to the mod-loader's custom AppDomainManager type and its assembly. -->
+    <appDomainManagerType value="ModLoader.ModDomainManager" />
+    <appDomainManagerAssembly value="ModLoader, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+
+    <!-- Optional: Allow the CLR to probe !Mods for assemblies (ex: if you place ModLoader.dll inside !Mods). -->
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1"><probing privatePath="!Mods" /></assemblyBinding>
+  </runtime>
+</configuration>
+```
+
+> You do not need to understand what these lines do. Just make sure the file matches the example above.
+
+### Step 5: Create the mods folder
+
+In the same folder as `CastleMinerZ.exe`, create a new folder named:
+
+```text
+!Mods
+```
+
+> If you launch the game before adding any mods, ModLoader will usually create this folder for you automatically.
+
+### Step 6: Put your mods into `!Mods`
+
+Example:
+
+```text
+CastleMiner Z
+│   CastleMinerZ.exe
+│   CastleMinerZ.exe.config
+│   ModLoader.dll
+│
+├───!Mods
+│       ModLoaderExtensions.dll
+│       YourOtherMod.dll
+```
+
+### Step 7: Launch the game
+
+Start CastleMiner Z normally through Steam or by opening `CastleMinerZ.exe`.
+
+If ModLoader is installed correctly, it should show a small launch options window before the game fully starts.
+
+![Launch Options](_Images/LaunchOptions.png)
+
+### Important: If you downloaded the release as a ZIP
+
+Windows may block downloaded DLL files, which can prevent ModLoader from loading any mods.
+
+Before extracting the ZIP:
+
+1. Right-click the downloaded ZIP
+2. Click **Properties**
+3. Check **Unblock** (if shown)
+4. Click **Apply**
+5. Extract the ZIP
+6. Copy the extracted files into your CastleMiner Z folder
+
+If you already extracted the files, you can also unblock the copied DLLs with PowerShell:
+
+```powershell
+Get-ChildItem "C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z\!Mods" -Recurse | Unblock-File
+````
+
+> If all mods fail with `FileLoadException` and `HRESULT: 0x80131515`, Windows likely blocked the downloaded files.
+
+---
+
+## What should happen when you launch the game?
+
+If everything is installed correctly:
+
+- CastleMiner Z should open normally
+- before the game fully starts, ModLoader should show a small startup window
+- that window lets you choose:
+  - **Play CastleMiner Z**
+  - **Play CastleMiner Z (no mods)**
+  - optionally **Always use this option**
+- choose **Play CastleMiner Z** to start the game with mods enabled
+- if `ModLoaderExtensions.dll` is installed, you should also see an in-game mods-loaded indicator
+
+![Mods Loaded TopLeft](_Images/ModsLoadedTopLeft.gif)
+> In-game mods-loaded indicator provided by `ModLoaderExtensions.dll`
+
+If nothing appears at all, double-check:
+
+- `ModLoader.dll` is next to `CastleMinerZ.exe`
+- `CastleMinerZ.exe.config` was replaced correctly
+- your mods are inside `!Mods`
+- if every mod fails to load with `0x80131515`, right-click the downloaded ZIP, open **Properties**, click **Unblock**, then extract it again
+
+> If there are no mods installed yet, the loader may flash by very quickly.
+
+---
+
+## Where do the files go?
+
+Typical Steam install location:
+
+```text
+C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
+````
+
+Put these files here:
+
+* `CastleMinerZ.exe.config`
+* `ModLoader.dll`
+
+Put mods here:
+
+```text
+C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z\!Mods
+```
+
+Example final layout:
+
+```text
+C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
+│   CastleMinerZ.exe
+│   CastleMinerZ.exe.config
+│   ModLoader.dll
+│
+├───!Mods
+│       ModLoaderExtensions.dll
+│       ExampleMod.dll
+│
+├───Content
+├───de
+├───es
+├───fr
+├───it
+├───ja
+├───pt
+└───ru
+```
 
 ---
 
 ## Uninstall
 
-- Restore/remove the `appDomainManagerType` / `appDomainManagerAssembly` entries from `CastleMinerZ.exe.config`.
-- Delete `ModLoader.dll`.
-- Optionally delete `!Mods\`, `!Logs\`, and `ModLoader.ini`.
+You have 2 easy ways to remove CastleForge.
+
+### Option 1: Restore your original config manually
+
+1. Delete `ModLoader.dll`
+2. Delete the `!Mods` folder if you no longer want any mods installed
+3. Open `CastleMinerZ.exe.config`
+4. Change it back to the original file contents:
+
+```xml
+<?xml version="1.0"?>
+<configuration>
+<startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0,Profile=Client"/></startup></configuration>
+````
+
+### Option 2: Let Steam restore the game files
+
+Steam can automatically put the original files back for you:
+
+1. Open **Steam**
+2. Go to **Library**
+3. Right-click **CastleMiner Z**
+4. Click **Properties**
+5. Open **Installed Files**
+6. Click **Verify integrity of game files**
+
+Steam will redownload any changed or missing original files.
+
+> If you used Steam verify, it is still a good idea to remove your `!Mods` folder afterward if you want a completely clean install.
+
 
 ---
 
@@ -290,7 +522,7 @@ Some payloads are not DLLs at all (PNG icons, fonts, default INI files, JSON, et
 - At runtime, call `ExtractFolder(folderName, destRoot)`.
 - Dot-separated manifest names are converted into directories, and the real extension (text after the last dot) is preserved.
 
-**Result:** each mod stays "one DLL to install”, while still supporting disk-based assets when needed.
+**Result:** each mod stays "one DLL to install", while still supporting disk-based assets when needed.
 
 ---
 
@@ -314,7 +546,7 @@ When present, it effectively acts as a "services layer" on top of CastleForge:
 1) A **Harmony** prefix patches `BroadcastTextMessage.Send(...)` to intercept chat before it goes to the server.
 2) Messages starting with `/` are treated as commands.
 3) The interceptor fans the command string out to registered handlers; if any handler returns `true`, the original chat send is suppressed.
-4) If nobody handles it, the player sees "Unknown command.” (and it’s still suppressed so it doesn’t spam the server).
+4) If nobody handles it, the player sees "Unknown command." (and it’s still suppressed so it doesn’t spam the server).
 
 Command handlers are simple methods discovered by reflection:
 

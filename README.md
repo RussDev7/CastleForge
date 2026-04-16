@@ -54,12 +54,19 @@ If CastleForge has been useful to you and you’d like to support continued deve
 
 ## Quick install flow
 
-1. Install **[ModLoader](CastleForge/ModLoaderFramework/ModLoader/README.md)**.
-2. Drop **`ModLoaderExtensions.dll`** and the mods you want into `!Mods`.
-3. Launch CastleMiner Z and choose whether to start **with mods** or **without mods**.
-4. Open each project README for install notes, config keys, commands, hotkeys, screenshots, and troubleshooting.
+1. Install **[ModLoader](CastleForge/ModLoaderFramework/ModLoader/README.md)** first.
+2. Open your CastleMiner Z game folder.
+3. Create a folder named **`!Mods`** if it does not already exist.
+4. Put **`ModLoaderExtensions.dll`** and any other mod `.dll` files into the **`!Mods`** folder.
+5. Start CastleMiner Z.
+6. The first time the loader runs, you should see a small startup window asking whether to launch:
+   - **Play CastleMiner Z**
+   - **Play CastleMiner Z (no mods)**
+   - optionally **Always use this option**
+7. Choose **Play CastleMiner Z** to start the game with mods enabled.
+8. Open each mod README for screenshots, config options, commands, hotkeys, and troubleshooting.
 
-> `ModLoaderExtensions` is technically optional, but many CastleForge projects are designed to work best with it.
+> `ModLoaderExtensions` is optional, but it is strongly recommended because many CastleForge mods are built to work best with it.
 
 ---
 
