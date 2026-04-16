@@ -48,22 +48,22 @@ jobs:
           Copy-Item "Build\Release\CastleMinerZ.exe.config" "pkg\ModLoader\" -Force
           Copy-Item "Build\Release\Update&Launch.bat" "pkg\ModLoader\" -Force
 
-          if (Test-Path "CastleForge\ModLoaderFramework\ModLoader\README.md") {
-            Copy-Item "CastleForge\ModLoaderFramework\ModLoader\README.md" "pkg\ModLoader\" -Force
-          }
-          if (Test-Path "LICENSE") {
-            Copy-Item "LICENSE" "pkg\ModLoader\" -Force
-          }
+          # if (Test-Path "CastleForge\ModLoaderFramework\ModLoader\README.md") {
+          #   Copy-Item "CastleForge\ModLoaderFramework\ModLoader\README.md" "pkg\ModLoader\" -Force
+          # }
+          # if (Test-Path "LICENSE") {
+          #   Copy-Item "LICENSE" "pkg\ModLoader\" -Force
+          # }
 
           # ModLoaderExtensions package
           Copy-Item "Build\Release\!Mods\ModLoaderExtensions.dll" "pkg\ModLoaderExtensions\" -Force
 
-          if (Test-Path "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md") {
-            Copy-Item "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md" "pkg\ModLoaderExtensions\" -Force
-          }
-          if (Test-Path "LICENSE") {
-            Copy-Item "LICENSE" "pkg\ModLoaderExtensions\" -Force
-          }
+          # if (Test-Path "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md") {
+          #   Copy-Item "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md" "pkg\ModLoaderExtensions\" -Force
+          # }
+          # if (Test-Path "LICENSE") {
+          #   Copy-Item "LICENSE" "pkg\ModLoaderExtensions\" -Force
+          # }
 
           Compress-Archive -Path "pkg\ModLoader\*" -DestinationPath "release\CastleForge-ModLoader-$version.zip" -Force
           Compress-Archive -Path "pkg\ModLoaderExtensions\*" -DestinationPath "release\CastleForge-ModLoaderExtensions-$version.zip" -Force

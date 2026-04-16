@@ -1,0 +1,70 @@
+name: Release Full
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, e.g. full-v0.1.0"
+        required: true
+      prerelease:
+        description: "Mark as prerelease"
+        required: true
+        default: "true"
+
+permissions:
+  contents: write
+
+jobs:
+  release-full:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore solution
+        run: nuget restore CastleForge.sln
+
+      - name: Build solution (Release)
+        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=x86
+
+      - name: Package full release
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          $releaseName = "CastleForge-FullRelease-$version"
+          $stageDir = Join-Path "pkg" $releaseName
+          $zipPath = Join-Path "release" "$releaseName.zip"
+
+          New-Item -ItemType Directory -Force -Path "pkg" | Out-Null
+          New-Item -ItemType Directory -Force -Path "release" | Out-Null
+
+          if (Test-Path $stageDir) {
+            Remove-Item $stageDir -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+
+          Copy-Item "Build\Release\*" $stageDir -Recurse -Force
+
+          Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath -Force
+
+      - name: Upload packaged release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CastleForge-FullRelease
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          files: release/*.zip
