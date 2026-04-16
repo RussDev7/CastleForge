@@ -11,6 +11,16 @@ For the deep loader internals that used to live here, go to **[CastleForge/ModLo
 
 ---
 
+## Support CastleForge
+
+If CastleForge has been useful to you and you’d like to support continued development, documentation, fixes, and new tools/mods, you can support the project here:
+
+[![Buy Me A Coffee](https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png)](https://buymeacoffee.com/castleforge)
+
+> Donations help support ongoing work across the CastleForge ecosystem, including the loader, official mods, tools, documentation, and repository infrastructure.
+
+---
+
 ## What lives in this repository
 
 - **2 core framework projects**: `ModLoader` and `ModLoaderExtensions`
