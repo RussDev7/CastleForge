@@ -24,7 +24,7 @@ jobs:
         run: nuget restore CastleForge.sln
 
       - name: Build solution (Release)
-        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=AnyCPU
+        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=x86
 
       - name: Collect build outputs
         shell: pwsh
