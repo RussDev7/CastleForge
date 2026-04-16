@@ -108,7 +108,7 @@ CastleForge/
 
 ---
 
-## Full project catalog
+## Official mod catalog
 
 The catalog below is organized so the root README stays friendly to browse while still surfacing the full scope of the repo.
 
@@ -376,6 +376,18 @@ The catalog below is organized so the root README stays friendly to browse while
 </table>
 
 </details>
+
+---
+
+## Community Mods
+
+Looking for third-party creations from the CastleForge community?
+
+Browse the **CastleForge Community Mods** repository for user-made mods, previews, links, and download information:
+
+➡️ **[Visit the Community Mod Repository](https://github.com/RussDev7/CastleForge-CommunityMods)**
+
+> Community mods are maintained separately from the main CastleForge repository so official projects and community submissions stay organized and easier to support.
 
 ---
 

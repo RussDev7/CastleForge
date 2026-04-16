@@ -49,16 +49,16 @@ namespace WorldGenPlus
         #region Fields: Vanilla-Style Overlay Stack
 
         // Vanilla overlay stack (same types CastleMinerZBuilder uses).
-        private readonly CustomCrashSiteDepositor _crash;
-        private readonly CaveBiome                _caves;
-        private readonly CustomOreDepositor       _ore;
-        private readonly HellCeilingBiome         _hellCeiling;
-        private readonly HellFloorBiome           _hellFloor;
-        private readonly CustomBedrockDepositor   _bedrock;
-        private readonly OriginBiome              _origin;
+        private readonly CustomCrashSiteDepositor   _crash;
+        private readonly WorldGenPlusCaveBiome      _caves;
+        private readonly CustomOreDepositor         _ore;
+        private readonly HellCeilingBiome           _hellCeiling;
+        private readonly WorldGenPlusHellFloorBiome _hellFloor;
+        private readonly CustomBedrockDepositor     _bedrock;
+        private readonly OriginBiome                _origin;
 
         // Vanilla tree pass.
-        private readonly CustomTreeDepositor      _trees;
+        private readonly CustomTreeDepositor        _trees;
 
         #endregion
 
@@ -129,6 +129,7 @@ namespace WorldGenPlus
         /// Notes:
         /// - Seed override is applied BEFORE constructing biome/depositer objects to keep deterministic results.
         /// - Caves loot modifiers are configured the same way vanilla does in its builder constructor.
+        /// - Cave and hell spawner generation are controlled separately from the overlay toggles.
         /// - Ring biome cache is "primed" (optional optimization) to front-load reflection cost.
         /// - CustomBiomeRegistry is refreshed and discovered types are logged.
         /// </summary>
@@ -141,6 +142,10 @@ namespace WorldGenPlus
             // Custom water rendering depth.
             // Vanilla-style builders can override this from the WorldBuilder default.
             this.WaterDepth = 12f;
+
+            // Notes:
+            // - Cave / hell overlay terrain can stay enabled while spawner block generation is independently gated.
+            // - This keeps world-shape toggles separate from gameplay-density toggles.
 
             // APPLY SEED OVERRIDE FIRST (before constructing any Biome/Depositer)
             if (_cfg.SeedOverrideEnabled)
@@ -173,7 +178,7 @@ namespace WorldGenPlus
                 SlimeThresholdBlendMul        = _cfg.Crash_SlimeThresholdBlendMul,
                 SlimeTopPadding               = _cfg.Crash_SlimeTopPadding
             });
-            _caves = new CaveBiome(worldInfo);
+            _caves = new WorldGenPlusCaveBiome(worldInfo, _cfg.EnableCaveSpawners);
             _ore = new CustomOreDepositor(worldInfo, new CustomOreDepositor.Settings
             {
                 MaxY                          = _cfg.Ore_MaxY,
@@ -220,7 +225,7 @@ namespace WorldGenPlus
                 LootScavengerRegularThreshold = _cfg.Ore_LootScavengerRegularThreshold
             });
             _hellCeiling = new HellCeilingBiome(worldInfo);
-            _hellFloor = new HellFloorBiome(worldInfo);
+            _hellFloor = new WorldGenPlusHellFloorBiome(worldInfo, _cfg.EnableHellBossSpawners);
             _bedrock = new CustomBedrockDepositor(worldInfo, new CustomBedrockDepositor.Settings
             {
                 CoordDiv = _cfg.Bedrock_CoordDiv,

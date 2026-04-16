@@ -546,6 +546,13 @@ namespace WorldGenPlus
 
                     #endregion
 
+                    #region [Spawners]
+
+                    bw.Write(s.EnableCaveSpawners);
+                    bw.Write(s.EnableHellBossSpawners);
+
+                    #endregion
+
                     #region [Bedrock]
 
                     bw.Write(s.Bedrock_CoordDiv);
@@ -745,6 +752,13 @@ namespace WorldGenPlus
                     s.EnableOrigin             = br.ReadBoolean();
                     s.EnableWater              = br.ReadBoolean();
                     s.EnableTrees              = br.ReadBoolean();
+
+                    #endregion
+
+                    #region [Spawners]
+
+                    s.EnableCaveSpawners     = br.ReadBoolean();
+                    s.EnableHellBossSpawners = br.ReadBoolean();
 
                     #endregion
 

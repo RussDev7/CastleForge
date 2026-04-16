@@ -1,0 +1,55 @@
+name: Official mod proposal
+description: Propose a mod for inclusion as an official CastleForge-maintained project.
+title: "[Official Mod Proposal]: "
+labels:
+  - mod-submission
+body:
+  - type: input
+    id: mod_name
+    attributes:
+      label: Mod name
+      placeholder: ExampleMod
+    validations:
+      required: true
+
+  - type: input
+    id: repo_link
+    attributes:
+      label: Existing repository or download link
+      placeholder: https://github.com/yourname/your-mod
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What does the mod do?
+      description: Player-facing summary and major features.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fit
+    attributes:
+      label: Why should this be in the official CastleForge repository?
+      description: Explain why this should be first-party rather than community-catalog only.
+    validations:
+      required: true
+
+  - type: textarea
+    id: maintenance
+    attributes:
+      label: Maintenance and ownership
+      description: Who will maintain it? Is the code documented? Are there active releases?
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies / embedded assets / licensing notes
+      description: List DLLs, third-party code, assets, or license obligations.
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation status
+      description: README, config docs, screenshots, commands, install steps, etc.

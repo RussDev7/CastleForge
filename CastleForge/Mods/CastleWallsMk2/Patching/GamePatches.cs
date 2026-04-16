@@ -4020,7 +4020,7 @@ namespace CastleWallsMk2
                 if (randomize)
                 {
                     // Uniform 0..N-1 using rejection sampling (no modulo bias).
-                    int ix = GenerateRandomNumberInclusive(0, fam.Length);
+                    int ix = GenerateRandomNumber(0, fam.Length);
                     return fam[ix];
                 }
                 else
@@ -4344,7 +4344,7 @@ namespace CastleWallsMk2
 
                 return _safeFiltered.Length == 0
                     ? BlockTypeEnum.Dirt
-                    : _safeFiltered[GenerateRandomNumberInclusive(0, _safeFiltered.Length)];
+                    : _safeFiltered[GenerateRandomNumber(0, _safeFiltered.Length)];
             }
 
             /// <summary>

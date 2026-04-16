@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a reproducible problem in CastleForge core, an official mod, a tool, or docs.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - ModLoader
+        - ModLoaderExtensions
+        - Official mod
+        - Server project
+        - Tool project
+        - Docs / README
+        - Build / CI
+        - Packaging / Release
+    validations:
+      required: true
+
+  - type: input
+    id: component
+    attributes:
+      label: Specific component
+      description: Example: WorldEdit, DirectConnect, CastleWallsMk2, FbxToXnb, root README
+      placeholder: WorldEdit
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+      placeholder: A short description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch...
+        2. Open...
+        3. Use...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces / screenshots
+      description: Paste relevant logs, exceptions, screenshots, or links here.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: CastleForge version / commit
+      placeholder: v0.1.0 or commit abc123
+
+  - type: input
+    id: game_version
+    attributes:
+      label: CastleMiner Z version
+      placeholder: v1.9.9.8.5 Steam
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      placeholder: |
+        OS:
+        GPU:
+        Fullscreen / windowed:
+        Installed mods:
+        Reproducible every time?:

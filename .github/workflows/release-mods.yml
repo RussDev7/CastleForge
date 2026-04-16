@@ -1,0 +1,62 @@
+name: Release Mods
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, e.g. mods-v0.1.0"
+        required: true
+      prerelease:
+        description: "Mark as prerelease"
+        required: true
+        default: "true"
+
+jobs:
+  release-mods:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore solution
+        run: nuget restore CastleForge.sln
+
+      - name: Build solution
+        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=AnyCPU
+
+      - name: Package official mods individually
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+
+          Get-ChildItem -Path "CastleForge/Mods" -Directory | ForEach-Object {
+            $modName = $_.Name
+            $pkgDir = Join-Path "pkg" $modName
+            New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+
+            Get-ChildItem -Recurse -Path $_.FullName -Include *.dll,*.ini,README.md |
+              Where-Object { $_.FullName -match '\\bin\\Release\\' -or $_.Name -eq 'README.md' } |
+              Copy-Item -Destination $pkgDir -Force -ErrorAction SilentlyContinue
+
+            if (Test-Path $pkgDir) {
+              $items = Get-ChildItem $pkgDir -ErrorAction SilentlyContinue
+              if ($items) {
+                Compress-Archive -Path (Join-Path $pkgDir '*') -DestinationPath ("release\" + $modName + "-" + $version + ".zip") -Force
+              }
+            }
+          }
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          files: release/*.zip

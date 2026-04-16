@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest a new feature, enhancement, or QoL improvement for CastleForge.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target area
+      options:
+        - ModLoader
+        - ModLoaderExtensions
+        - Official mod
+        - Server project
+        - Tool project
+        - Docs
+        - Build / Release
+    validations:
+      required: true
+
+  - type: input
+    id: component
+    attributes:
+      label: Specific component
+      placeholder: ModLoaderExtensions
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What limitation, annoyance, or missing capability is this addressing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Other ideas or workarounds you considered.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why this would be valuable
+      description: Tell us how this helps players, modders, pack creators, or maintainers.

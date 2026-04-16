@@ -205,6 +205,20 @@ namespace WorldGenPlus
 
         #endregion
 
+        #region [Spawners]
+
+        /// <summary>
+        /// When true, the cave overlay may emit vanilla-style enemy / alien spawner blocks while carving caves.
+        /// </summary>
+        public bool EnableCaveSpawners = true;
+
+        /// <summary>
+        /// When true, the hell floor overlay may emit vanilla-style boss spawner blocks.
+        /// </summary>
+        public bool EnableHellBossSpawners = true;
+
+        #endregion
+
         #region [Bedrock]
 
         /// <summary>Noise frequency control for bedrock thickness. Higher => smoother, slower variation.</summary>
@@ -444,6 +458,13 @@ namespace WorldGenPlus
                 EnableOrigin             = ini.GetBool("Overlays", "Origin", true),
                 EnableWater              = ini.GetBool("Overlays", "Water", true),
                 EnableTrees              = ini.GetBool("Overlays", "Trees", true),
+
+                #endregion
+
+                #region [Spawners]
+
+                EnableCaveSpawners     = ini.GetBool("Spawners", "EnableCaveSpawners", true),
+                EnableHellBossSpawners = ini.GetBool("Spawners", "EnableHellBossSpawners", true),
 
                 #endregion
 
@@ -1050,6 +1071,13 @@ namespace WorldGenPlus
 
         #endregion
 
+        #region [Spawners]
+
+        public static bool EnableCaveSpawnersValue     { get { EnsureLoaded(); return _current.EnableCaveSpawners;     } set { EnsureLoaded(); _current.EnableCaveSpawners = value; } }
+        public static bool EnableHellBossSpawnersValue { get { EnsureLoaded(); return _current.EnableHellBossSpawners; } set { EnsureLoaded(); _current.EnableHellBossSpawners = value; } }
+
+        #endregion
+
         #region [RingsRandom]
 
         public static bool RandomRingsVaryByPeriodValue               { get { EnsureLoaded(); return _current.RandomRingsVaryByPeriod;               } set { EnsureLoaded(); _current.RandomRingsVaryByPeriod = value;               } }
@@ -1278,6 +1306,13 @@ namespace WorldGenPlus
                 EnableOrigin             = _current.EnableOrigin,
                 EnableWater              = _current.EnableWater,
                 EnableTrees              = _current.EnableTrees,
+
+                #endregion
+
+                #region [Spawners]
+
+                EnableCaveSpawners     = _current.EnableCaveSpawners,
+                EnableHellBossSpawners = _current.EnableHellBossSpawners,
 
                 #endregion
 
@@ -1510,6 +1545,13 @@ namespace WorldGenPlus
 
             #endregion
 
+            #region [Spawners]
+
+            EnableCaveSpawners     = s.EnableCaveSpawners;
+            EnableHellBossSpawners = s.EnableHellBossSpawners;
+
+            #endregion
+
             #region [Bedrock]
 
             Bedrock_CoordDiv = s.Bedrock_CoordDiv;
@@ -1722,6 +1764,13 @@ namespace WorldGenPlus
             EnableOrigin             = true;
             EnableWater              = true;
             EnableTrees              = true;
+
+            #endregion
+
+            #region [Spawners]
+
+            EnableCaveSpawners     = true;
+            EnableHellBossSpawners = true;
 
             #endregion
 
@@ -2032,6 +2081,13 @@ namespace WorldGenPlus
             lines.Add("BiomeGuards  = " + (cfg.EnableBiomeOverlayGuards ? "true" : "false"));
             lines.Add("");
 
+            lines.Add("[Spawners]");
+            lines.Add("; Controls whether WorldGenPlus may place new spawner blocks while generating terrain.");
+            lines.Add("; Cave spawners come from the caves overlay; hell boss spawners come from the hell floor overlay.");
+            lines.Add("EnableCaveSpawners     = " + (cfg.EnableCaveSpawners ? "true" : "false"));
+            lines.Add("EnableHellBossSpawners = " + (cfg.EnableHellBossSpawners ? "true" : "false"));
+            lines.Add("");
+
             lines.Add("[Bedrock]");
             lines.Add("; CustomBedrockDepositer tuning.");
             lines.Add("; These control how thick the bottom bedrock layer is and how much it varies across X/Z.");
@@ -2306,6 +2362,13 @@ namespace WorldGenPlus
         public bool EnableOrigin;
         public bool EnableWater;
         public bool EnableTrees;
+
+        #endregion
+
+        #region [Spawners]
+
+        public bool EnableCaveSpawners;
+        public bool EnableHellBossSpawners;
 
         #endregion
 

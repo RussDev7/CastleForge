@@ -1,0 +1,19 @@
+# Default reviewers
+* @RussDev7
+
+# Core framework
+/CastleForge/ModLoaderFramework/ModLoader/ @RussDev7
+/CastleForge/ModLoaderFramework/ModLoaderExtensions/ @RussDev7
+
+# Official mods
+/CastleForge/Mods/ @RussDev7
+
+# Servers and tools
+/CastleForge/Servers/ @RussDev7
+/CastleForge/Tools/ @RussDev7
+
+# Docs and repo config
+/README.md @RussDev7
+/docs/ @RussDev7
+/.github/ @RussDev7
+/ReferenceAssemblies/ @RussDev7

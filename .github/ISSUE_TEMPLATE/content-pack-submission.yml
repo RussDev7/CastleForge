@@ -1,0 +1,48 @@
+name: Content pack proposal
+description: Propose a first-party content pack sample or official pack addition.
+title: "[Content Pack Proposal]: "
+labels:
+  - content-pack
+body:
+  - type: input
+    id: pack_name
+    attributes:
+      label: Pack name
+      placeholder: Default Texture Refresh
+    validations:
+      required: true
+
+  - type: dropdown
+    id: pack_type
+    attributes:
+      label: Pack type
+      options:
+        - Texture pack
+        - Weapon addon pack
+        - Other content format
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What does the pack include and who is it for?
+    validations:
+      required: true
+
+  - type: textarea
+    id: format_notes
+    attributes:
+      label: Format / compatibility notes
+      description: Folder layout, manifest format, asset expectations, version compatibility.
+    validations:
+      required: true
+
+  - type: textarea
+    id: licensing
+    attributes:
+      label: Licensing / redistribution rights
+      description: Confirm the pack contents can be hosted and distributed.
+    validations:
+      required: true

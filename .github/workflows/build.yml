@@ -1,0 +1,41 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore solution
+        run: nuget restore CastleForge.sln
+
+      - name: Build solution (Release)
+        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=AnyCPU
+
+      - name: Collect build outputs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Get-ChildItem -Recurse -Path . -Include *.dll,*.exe |
+            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
+            Copy-Item -Destination artifacts -Force
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: castleforge-build
+          path: artifacts

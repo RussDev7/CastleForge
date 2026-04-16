@@ -1,4 +1,4 @@
-# WorldGenPlus
+﻿# WorldGenPlus
 
 > Rebuild CastleMiner Z world generation with configurable surface layouts, custom biome loading, vanilla-style overlays, seed control, multiplayer sync, and a full in-game tuning screen.
 
@@ -32,7 +32,7 @@ WorldGenPlus goes much further than a simple biome swap:
 - It exposes an **in-game configuration screen** instead of forcing you to edit every value by hand.
 - It supports **custom biome discovery from external DLLs**.
 - It can **broadcast host worldgen settings to joining clients** so multiplayer sessions stay consistent.
-- It gives you control over **surface rings, region blending, bedrock thickness, crash-site carving, ore distribution, loot placement, and tree generation**.
+- It gives you control over **surface rings, region blending, bedrock thickness, crash-site carving, ore distribution, loot placement, tree generation, and generated spawner placement**.
 
 ---
 
@@ -65,7 +65,8 @@ After the surface biome is chosen, WorldGenPlus can still run a familiar overlay
 - bedrock,
 - origin / Lantern Land,
 - water setup,
-- and trees.
+- trees,
+- and generated spawner placement rules.
 
 Each overlay can be toggled on or off, and several of them have their own tuning section.
 
@@ -236,7 +237,7 @@ Configurable crater placement and shaping with options for:
 - slime ore inside the crash-site structure.
 
 ### Caves
-Vanilla cave pass can still be enabled as part of the overlay flow.
+Vanilla cave pass can still be enabled as part of the overlay flow. Cave terrain generation is now separate from whether the cave pass may place new spawner blocks.
 
 ### Ore
 A heavily configurable ore/loot pass with controls for:
@@ -251,7 +252,15 @@ A heavily configurable ore/loot pass with controls for:
 - optional loot on non-rock blocks.
 
 ### Hell Ceiling / Hell Floor
-The mod preserves hell overlay support and applies special suppression rules to certain unusual/test biomes when guards are enabled.
+The mod preserves hell overlay support and applies special suppression rules to certain unusual/test biomes when guards are enabled. Hell boss spawner generation can now also be toggled independently from the hell terrain overlay itself.
+
+### Spawners
+WorldGenPlus now exposes a dedicated **[Spawners]** config section and matching UI menu group so you can independently control:
+
+- `EnableCaveSpawners`
+- `EnableHellBossSpawners`
+
+This keeps cave / hell terrain generation intact while letting you reduce or fully remove newly generated spawner blocks from a world.
 
 ### Bedrock
 Bottom bedrock thickness can be smoothed and varied.
@@ -411,10 +420,10 @@ CastleMinerZ/
 ## Generated / important files
 
 | Path | Purpose |
-|---|---|
-| `!Mods/WorldGenPlus/WorldGenPlus.Config.ini` | Main WorldGenPlus config |
-| `!Mods/WorldGenPlus/CustomBiomes/*.dll` | Discoverable custom biome assemblies |
-| `!Mods/WorldGenPlus/...` | Extracted embedded resources, if present |
+|----------------------------------------------|------------------------------------------|
+| `!Mods/WorldGenPlus/WorldGenPlus.Config.ini` | Main WorldGenPlus config                 |
+| `!Mods/WorldGenPlus/CustomBiomes/*.dll`      | Discoverable custom biome assemblies     |
+| `!Mods/WorldGenPlus/...`                     | Extracted embedded resources, if present |
 
 ---
 
@@ -489,7 +498,7 @@ Custom biome DLLs are merged into this list automatically.
 <br>
 
 | Preview | Biome |
-|---------|-------|
+|----------------------------------------------------------|--------------------|
 | ![ClassicBiome](_Images/Biomes/ClassicBiome.png)         | `ClassicBiome`     |
 | ![LagoonBiome](_Images/Biomes/LagoonBiome.png)           | `LagoonBiome`      |
 | ![DesertBiome](_Images/Biomes/DesertBiome.png)           | `DesertBiome`      |
@@ -514,7 +523,7 @@ Custom biome DLLs are merged into this list automatically.
 <br>
 
 | Preview | Depositor |
-|---------|-----------|
+|------------------------------------------------------------------|----------------------|
 | ![OreDepositer](_Images/Depositors/OreDepositer.png)             | `OreDepositer`       |
 | ![BedrockDepositer](_Images/Depositors/BedrockDepositer.png)     | `BedrockDepositer`   |
 | ![CrashSiteDepositer](_Images/Depositors/CrashSiteDepositer.png) | `CrashSiteDepositer` |
@@ -567,6 +576,10 @@ Origin      = true
 Water       = true
 Trees       = true
 BiomeGuards = true
+
+[Spawners]
+EnableCaveSpawners     = true
+EnableHellBossSpawners = true
 ```
 
 ---
@@ -660,11 +673,11 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[RingsRandom]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `VaryByPeriod` | `true` | Repeated ring periods can choose new random biomes instead of repeating the same pick. |
-| `BiomeCount` | `7` | Number of weighted entries in the ring-random bag. |
-| `Biome0..BiomeN` | default bag | Weighted biome entries used when a ring core uses `@Random`. Duplicate entries increase weight. |
-| `AutoIncludeCustomBiomes` | `false` | Appends discovered custom biome types into the random bag. |
+|---------------------------|------------:|-------------------------------------------------------------------------------------------------|
+| `VaryByPeriod`            | `true`      | Repeated ring periods can choose new random biomes instead of repeating the same pick.          |
+| `BiomeCount`              | `7`         | Number of weighted entries in the ring-random bag.                                              |
+| `Biome0..BiomeN`          | default bag | Weighted biome entries used when a ring core uses `@Random`. Duplicate entries increase weight. |
+| `AutoIncludeCustomBiomes` | `false`     | Appends discovered custom biome types into the random bag.                                      |
 
 </details>
 
@@ -672,7 +685,7 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[SingleBiome]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
+|----------------------|---------------:|------------------------------------------|
 | `SingleSurfaceBiome` | `ClassicBiome` | Full biome type name used when `Mode=2`. |
 
 </details>
@@ -681,10 +694,10 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[RandomRegions]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `BiomeCount` | `7` | Number of entries in the weighted random-region biome bag. |
-| `Biome0..BiomeN` | default bag | Weighted biome entries used by random-region mode. Duplicate entries increase weight. |
-| `AutoIncludeCustomBiomes` | `false` | Appends discovered custom biome DLL types into the region pool. |
+|---------------------------|------------:|---------------------------------------------------------------------------------------|
+| `BiomeCount`              | `7`         | Number of entries in the weighted random-region biome bag.                            |
+| `Biome0..BiomeN`          | default bag | Weighted biome entries used by random-region mode. Duplicate entries increase weight. |
+| `AutoIncludeCustomBiomes` | `false`     | Appends discovered custom biome DLL types into the region pool.                       |
 
 </details>
 
@@ -692,18 +705,33 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[Overlays]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `WorldBlendRadius` | `3600` | Global overlay fade radius used for vanilla-style blending. |
-| `CrashSites` | `true` | Enables crash-site overlay generation. |
-| `Caves` | `true` | Enables the cave overlay pass. |
-| `Ore` | `true` | Enables ore and loot passes. |
-| `HellCeiling` | `true` | Enables hell-ceiling overlay. |
-| `Hell` | `true` | Enables hell-floor overlay. |
-| `Bedrock` | `true` | Enables bedrock overlay. |
-| `Origin` | `true` | Enables origin / Lantern Land overlay. |
-| `Water` | `true` | Enables water setup in the builder. |
-| `Trees` | `true` | Enables the post-surface tree pass. |
-| `BiomeGuards` | `true` | Suppresses certain hell/bedrock overlays on unusual/test biomes. |
+|------------------------|-------:|------------------------------------------------------------------|
+| `WorldBlendRadius`     | `3600` | Global overlay fade radius used for vanilla-style blending.      |
+| `CrashSites`           | `true` | Enables crash-site overlay generation.                           |
+| `Caves`                | `true` | Enables the cave overlay pass.                                   |
+| `Ore`                  | `true` | Enables ore and loot passes.                                     |
+| `HellCeiling`          | `true` | Enables hell-ceiling overlay.                                    |
+| `Hell`                 | `true` | Enables hell-floor overlay.                                      |
+| `Bedrock`              | `true` | Enables bedrock overlay.                                         |
+| `Origin`               | `true` | Enables origin / Lantern Land overlay.                           |
+| `Water`                | `true` | Enables water setup in the builder.                              |
+| `Trees`                | `true` | Enables the post-surface tree pass.                              |
+| `BiomeGuards`          | `true` | Suppresses certain hell/bedrock overlays on unusual/test biomes. |
+
+</details>
+
+<details>
+<summary><strong>[Spawners]</strong></summary>
+
+| Key | Default | Description |
+|--------------------------|-------:|-----------------------------------------------------------------------------------------------|
+| `EnableCaveSpawners`     | `true` | Allows the caves overlay to place new enemy / alien spawner blocks while generating caves.    |
+| `EnableHellBossSpawners` | `true` | Allows the hell floor overlay to place new boss spawner blocks while generating hell terrain. |
+
+**Notes**
+
+- These toggles control **new generated spawner placement**, not runtime spawner reset behavior.
+- Cave and hell terrain generation can remain enabled even when these are turned off.
 
 </details>
 
@@ -711,10 +739,10 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[Bedrock]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
+|------------|----:|------------------------------------------------------------------------------------|
 | `CoordDiv` | `1` | Noise frequency divisor for bedrock thickness. Higher values smooth the variation. |
-| `MinLevel` | `1` | Minimum bedrock thickness. |
-| `Variance` | `3` | Additional bedrock-thickness variance. |
+| `MinLevel` | `1` | Minimum bedrock thickness.                                                         |
+| `Variance` | `3` | Additional bedrock-thickness variance.                                             |
 
 </details>
 
@@ -722,27 +750,27 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[CrashSite]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `WorldScale` | `0.0046875` | Noise world scale for crash-site placement. |
-| `NoiseThreshold` | `0.5` | Minimum noise needed before a crash site activates. |
-| `GroundPlane` | `66` | Reference Y used in crater/mound shaping. |
-| `StartY` | `20` | Inclusive start Y for carve logic. |
-| `EndYExclusive` | `126` | Exclusive end Y for carve logic. |
-| `CraterDepthMul` | `140` | Strength multiplier for crater depth. |
-| `EnableMound` | `true` | Enables crater rim / mound formation. |
-| `MoundThreshold` | `0.55` | Noise threshold for mound creation. |
-| `MoundHeightMul` | `200` | Mound height multiplier. |
-| `CarvePadding` | `10` | Extra carve padding around the crater. |
-| `ProtectBloodStone` | `true` | Avoids carving bloodstone. |
-| `EnableSlime` | `true` | Allows slime block placement inside crash structures. |
-| `SlimePosOffset` | `777` | Slime noise sampling offset. |
-| `SlimeCoarseDiv` | `2` | Coarse divisor for slime field shaping. |
-| `SlimeAdjustCenter` | `128` | Center term for slime threshold adjustment. |
-| `SlimeAdjustDiv` | `8` | Divisor for slime adjustment shaping. |
-| `SlimeThresholdBase` | `265` | Base slime threshold. |
-| `SlimeBlendToIntBlendMul` | `10` | Scales overlay blend influence into slime logic. |
-| `SlimeThresholdBlendMul` | `1` | Scales how much blend modifies slime threshold. |
-| `SlimeTopPadding` | `3` | Keeps slime away from the very top of the mound region. |
+|---------------------------|------------:|---------------------------------------------------------|
+| `WorldScale`              | `0.0046875` | Noise world scale for crash-site placement.             |
+| `NoiseThreshold`          | `0.5`       | Minimum noise needed before a crash site activates.     |
+| `GroundPlane`             | `66`        | Reference Y used in crater/mound shaping.               |
+| `StartY`                  | `20`        | Inclusive start Y for carve logic.                      |
+| `EndYExclusive`           | `126`       | Exclusive end Y for carve logic.                        |
+| `CraterDepthMul`          | `140`       | Strength multiplier for crater depth.                   |
+| `EnableMound`             | `true`      | Enables crater rim / mound formation.                   |
+| `MoundThreshold`          | `0.55`      | Noise threshold for mound creation.                     |
+| `MoundHeightMul`          | `200`       | Mound height multiplier.                                |
+| `CarvePadding`            | `10`        | Extra carve padding around the crater.                  |
+| `ProtectBloodStone`       | `true`      | Avoids carving bloodstone.                              |
+| `EnableSlime`             | `true`      | Allows slime block placement inside crash structures.   |
+| `SlimePosOffset`          | `777`       | Slime noise sampling offset.                            |
+| `SlimeCoarseDiv`          | `2`         | Coarse divisor for slime field shaping.                 |
+| `SlimeAdjustCenter`       | `128`       | Center term for slime threshold adjustment.             |
+| `SlimeAdjustDiv`          | `8`         | Divisor for slime adjustment shaping.                   |
+| `SlimeThresholdBase`      | `265`       | Base slime threshold.                                   |
+| `SlimeBlendToIntBlendMul` | `10`        | Scales overlay blend influence into slime logic.        |
+| `SlimeThresholdBlendMul`  | `1`         | Scales how much blend modifies slime threshold.         |
+| `SlimeTopPadding`         | `3`         | Keeps slime away from the very top of the mound region. |
 
 </details>
 
@@ -750,44 +778,44 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[Ore]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `BlendRadius` | `0` | Builder-side ore blend radius. `0` means use `WorldBlendRadius`. |
-| `BlendMul` | `1` | Multiplier applied to blend influence. |
-| `BlendAdd` | `0` | Additive bias applied to blend influence. |
-| `MaxY` | `128` | Global max Y for the main ore pass. |
-| `BlendToIntBlendMul` | `10` | Converts float blend into internal ore-blend strength. |
-| `NoiseAdjustCenter` | `128` | Center term for combined ore-noise adjustment. |
-| `NoiseAdjustDiv` | `8` | Divisor for ore-noise adjustment. |
-| `CoalCoarseDiv` | `4` | Coarse divisor for coal/copper distribution. |
-| `CoalThresholdBase` | `255` | Base coal threshold. |
-| `CopperThresholdOffset` | `-5` | Offset relative to coal threshold. |
-| `IronOffset` | `1000` | Decorrelates iron/gold sampling from earlier passes. |
-| `IronCoarseDiv` | `3` | Coarse divisor for iron/gold distribution. |
-| `IronThresholdBase` | `264` | Base iron threshold. |
-| `GoldThresholdOffset` | `-9` | Offset relative to iron threshold. |
-| `GoldMaxY` | `50` | Gold will not spawn above this Y. |
-| `DeepPassMaxY` | `50` | Maximum Y for deep-only ore passes. |
-| `DiamondOffset` | `777` | Decorrelates diamond sampling. |
-| `DiamondCoarseDiv` | `2` | Coarse divisor for diamond distribution. |
-| `LavaThresholdBase` | `266` | Base threshold for lava pocket generation. |
-| `DiamondThresholdOffset` | `-11` | Offset relative to deep-pass baseline. |
-| `DiamondMaxY` | `40` | Diamond will not spawn above this Y. |
-| `LootEnabled` | `true` | Enables loot generation. |
-| `LootOnNonRockBlocks` | `true` | Allows loot on non-rock blocks such as sand/snow/bloodstone. |
-| `LootSandSnowMaxY` | `60` | Max Y for loot in sand/snow areas. |
-| `LootOffset` | `333` | Decorrelates loot sampling. |
-| `LootCoarseDiv` | `5` | Coarse divisor for loot distribution. |
-| `LootFineDiv` | `2` | Fine detail divisor for loot shaping. |
-| `LootSurvivalMainThreshold` | `268` | Main loot threshold for Survival/Exploration. |
-| `LootSurvivalLuckyThreshold` | `249` | Lucky loot threshold for Survival/Exploration. |
-| `LootSurvivalRegularThreshold` | `145` | Regular loot threshold for Survival/Exploration. |
-| `LootLuckyBandMinY` | `55` | Lower lucky-band Y gate. |
-| `LootLuckyBandMaxYStart` | `100` | Upper lucky-band starting Y gate. |
-| `LootScavengerTargetMod` | `1` | Scavenger-mode target modifier. |
-| `LootScavengerMainThreshold` | `267` | Main loot threshold for Scavenger/Creative. |
-| `LootScavengerLuckyThreshold` | `250` | Lucky loot threshold for Scavenger/Creative. |
-| `LootScavengerLuckyExtraPerMod` | `3` | Extra lucky chance per mod step in scavenger logic. |
-| `LootScavengerRegularThreshold` | `165` | Regular loot threshold for Scavenger/Creative. |
+|---------------------------------|-------:|------------------------------------------------------------------|
+| `BlendRadius`                   | `0`    | Builder-side ore blend radius. `0` means use `WorldBlendRadius`. |
+| `BlendMul`                      | `1`    | Multiplier applied to blend influence.                           |
+| `BlendAdd`                      | `0`    | Additive bias applied to blend influence.                        |
+| `MaxY`                          | `128`  | Global max Y for the main ore pass.                              |
+| `BlendToIntBlendMul`            | `10`   | Converts float blend into internal ore-blend strength.           |
+| `NoiseAdjustCenter`             | `128`  | Center term for combined ore-noise adjustment.                   |
+| `NoiseAdjustDiv`                | `8`    | Divisor for ore-noise adjustment.                                |
+| `CoalCoarseDiv`                 | `4`    | Coarse divisor for coal/copper distribution.                     |
+| `CoalThresholdBase`             | `255`  | Base coal threshold.                                             |
+| `CopperThresholdOffset`         | `-5`   | Offset relative to coal threshold.                               |
+| `IronOffset`                    | `1000` | Decorrelates iron/gold sampling from earlier passes.             |
+| `IronCoarseDiv`                 | `3`    | Coarse divisor for iron/gold distribution.                       |
+| `IronThresholdBase`             | `264`  | Base iron threshold.                                             |
+| `GoldThresholdOffset`           | `-9`   | Offset relative to iron threshold.                               |
+| `GoldMaxY`                      | `50`   | Gold will not spawn above this Y.                                |
+| `DeepPassMaxY`                  | `50`   | Maximum Y for deep-only ore passes.                              |
+| `DiamondOffset`                 | `777`  | Decorrelates diamond sampling.                                   |
+| `DiamondCoarseDiv`              | `2`    | Coarse divisor for diamond distribution.                         |
+| `LavaThresholdBase`             | `266`  | Base threshold for lava pocket generation.                       |
+| `DiamondThresholdOffset`        | `-11`  | Offset relative to deep-pass baseline.                           |
+| `DiamondMaxY`                   | `40`   | Diamond will not spawn above this Y.                             |
+| `LootEnabled`                   | `true` | Enables loot generation.                                         |
+| `LootOnNonRockBlocks`           | `true` | Allows loot on non-rock blocks such as sand/snow/bloodstone.     |
+| `LootSandSnowMaxY`              | `60`   | Max Y for loot in sand/snow areas.                               |
+| `LootOffset`                    | `333`  | Decorrelates loot sampling.                                      |
+| `LootCoarseDiv`                 | `5`    | Coarse divisor for loot distribution.                            |
+| `LootFineDiv`                   | `2`    | Fine detail divisor for loot shaping.                            |
+| `LootSurvivalMainThreshold`     | `268`  | Main loot threshold for Survival/Exploration.                    |
+| `LootSurvivalLuckyThreshold`    | `249`  | Lucky loot threshold for Survival/Exploration.                   |
+| `LootSurvivalRegularThreshold`  | `145`  | Regular loot threshold for Survival/Exploration.                 |
+| `LootLuckyBandMinY`             | `55`   | Lower lucky-band Y gate.                                         |
+| `LootLuckyBandMaxYStart`        | `100`  | Upper lucky-band starting Y gate.                                |
+| `LootScavengerTargetMod`        | `1`    | Scavenger-mode target modifier.                                  |
+| `LootScavengerMainThreshold`    | `267`  | Main loot threshold for Scavenger/Creative.                      |
+| `LootScavengerLuckyThreshold`   | `250`  | Lucky loot threshold for Scavenger/Creative.                     |
+| `LootScavengerLuckyExtraPerMod` | `3`    | Extra lucky chance per mod step in scavenger logic.              |
+| `LootScavengerRegularThreshold` | `165`  | Regular loot threshold for Scavenger/Creative.                   |
 
 **Notes**
 
@@ -802,17 +830,17 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[Trees]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
-| `Scale` | `0.4375` | Noise scale used for tree placement checks. |
-| `Threshold` | `0.6` | Tree placement threshold. Higher values reduce tree density. |
-| `BaseTrunkHeight` | `5` | Minimum trunk height before noise-based growth. |
-| `HeightVarMul` | `9` | Strength of noise-driven trunk-height variation. |
-| `LeafRadius` | `3` | Canopy radius. Also affects chunk-edge safe area. |
-| `LeafNoiseScale` | `0.5` | Noise scale for leaf canopy shaping. |
-| `LeafCutoff` | `0.25` | Higher values create sparser canopies. |
-| `GroundScanStartY` | `124` | Starting Y for the downward scan that searches for grass. |
-| `GroundScanMinY` | `0` | Lowest Y the scan may reach. |
-| `MinGroundHeight` | `1` | Prevents tree placement on tiny invalid columns. |
+|--------------------|---------:|--------------------------------------------------------------|
+| `Scale`            | `0.4375` | Noise scale used for tree placement checks.                  |
+| `Threshold`        | `0.6`    | Tree placement threshold. Higher values reduce tree density. |
+| `BaseTrunkHeight`  | `5`      | Minimum trunk height before noise-based growth.              |
+| `HeightVarMul`     | `9`      | Strength of noise-driven trunk-height variation.             |
+| `LeafRadius`       | `3`      | Canopy radius. Also affects chunk-edge safe area.            |
+| `LeafNoiseScale`   | `0.5`    | Noise scale for leaf canopy shaping.                         |
+| `LeafCutoff`       | `0.25`   | Higher values create sparser canopies.                       |
+| `GroundScanStartY` | `124`    | Starting Y for the downward scan that searches for grass.    |
+| `GroundScanMinY`   | `0`      | Lowest Y the scan may reach.                                 |
+| `MinGroundHeight`  | `1`      | Prevents tree placement on tiny invalid columns.             |
 
 </details>
 
@@ -820,7 +848,7 @@ Core5Biome = DNA.CastleMinerZ.Terrain.WorldBuilders.DecentBiome
 <summary><strong>[Hotkeys]</strong></summary>
 
 | Key | Default | Description |
-|---|---:|---|
+|----------------|---------------:|-------------------------------------------|
 | `ReloadConfig` | `Ctrl+Shift+R` | Reserved reload binding stored in config. |
 
 **Important**
@@ -843,6 +871,7 @@ The WorldGenPlus config screen is organized into the following sections:
 - Single Surface
 - Random Region Indexing
 - Overlays
+- Spawners
 - Bedrock Tuning
 - Crash Site Tuning
 - Ore Tuning

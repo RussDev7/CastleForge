@@ -727,7 +727,7 @@ namespace WorldGenPlus
             _rows.Add(Spacer());
             _rows.Add(Header("Overlays"));
 
-            #region [Overlay Toggles]
+            #region [Overlay]
 
             _rows.Add(new Row { Key = "Caves",       Desc = "Toggle caves overlay.",      GetText = () => "Caves: " + (WGConfig.EnableCavesValue ? "ON" : "OFF"),                  OnSelect = () => { WGConfig.EnableCavesValue = !WGConfig.EnableCavesValue; WGConfig.Save(); } });
             _rows.Add(new Row { Key = "HellCeiling", Desc = "Toggle hell ceiling fade.",  GetText = () => "Hell Ceiling: " + (WGConfig.EnableHellCeilingValue ? "ON" : "OFF"),     OnSelect = () => { WGConfig.EnableHellCeilingValue = !WGConfig.EnableHellCeilingValue; WGConfig.Save(); } });
@@ -742,6 +742,36 @@ namespace WorldGenPlus
                 OnSelect = () =>
                 {
                     WGConfig.EnableBiomeOverlayGuardsValue = !WGConfig.EnableBiomeOverlayGuardsValue;
+                    WGConfig.Save();
+                }
+            });
+            #endregion
+
+            _rows.Add(Spacer());
+            _rows.Add(Header("Spawners"));
+
+            #region [Spawner]
+
+            _rows.Add(new Row
+            {
+                Key      = "EnableCaveSpawners",
+                Desc     = "When ON, the caves overlay may place new enemy / alien spawner blocks while carving caves.",
+                GetText  = () => "Cave Spawners: " + (WGConfig.EnableCaveSpawnersValue ? "ON" : "OFF"),
+                OnSelect = () =>
+                {
+                    WGConfig.EnableCaveSpawnersValue = !WGConfig.EnableCaveSpawnersValue;
+                    WGConfig.Save();
+                }
+            });
+
+            _rows.Add(new Row
+            {
+                Key      = "EnableHellBossSpawners",
+                Desc     = "When ON, the hell floor overlay may place new boss spawner blocks during world generation.",
+                GetText  = () => "Hell Boss Spawners: " + (WGConfig.EnableHellBossSpawnersValue ? "ON" : "OFF"),
+                OnSelect = () =>
+                {
+                    WGConfig.EnableHellBossSpawnersValue = !WGConfig.EnableHellBossSpawnersValue;
                     WGConfig.Save();
                 }
             });
