@@ -389,19 +389,19 @@ The catalog below is organized so the root README stays friendly to browse while
 
 ---
 
-## Community Mods
+## Community Creations
 
 Looking for third-party creations from the CastleForge community?
 
-### Just want to browse mods?
+### Just want to browse?
 
-The easiest way to explore community submissions is through the live **CastleForge Community Mod Browser**:
+The easiest way to explore community submissions is through the live **CastleForge Community Browser**:
 
-➡️ **[Open the Mod Browser](https://russdev7.github.io/CastleForge-CommunityMods/)**
+➡️ **[Open the Community Browser](https://russdev7.github.io/CastleForge-CommunityMods/)**
 
 Use the browser if you want to:
-- preview community mods
-- open each mod's README
+- preview community mods, texture packs, and weapon addons
+- open each project's README
 - jump to source repositories
 - find release/download links
 
@@ -409,15 +409,15 @@ Use the browser if you want to:
 
 Visit the **CastleForge Community Mods** repository:
 
-➡️ **[Open the Community Mod Repository](https://github.com/RussDev7/CastleForge-CommunityMods)**
+➡️ **[Open the Community Repository](https://github.com/RussDev7/CastleForge-CommunityMods)**
 
 Use the repository if you want to:
-- submit a new community mod
+- submit a new mod, texture pack, or weapon addon
 - edit metadata or previews
 - update README entries
 - maintain an existing listing
 
-> Community mods are maintained separately from the main CastleForge repository so official projects and community submissions stay organized and easier to support.
+> Community creations are maintained separately from the main CastleForge repository so official projects and community submissions stay organized and easier to support.
 
 ---
 
