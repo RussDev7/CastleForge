@@ -2,6 +2,10 @@
 
 > An all-in-one CastleMiner Z overlay mod focused on power-user tools, sandbox controls, live editors, session utilities, networking diagnostics, moderation workflows, and experimental gameplay manipulation.
 
+![Preview](_Images/Preview.gif)
+
+> Inspired by the original **CastleWalls** by **cNoEvil**, with the UI design paying homage to the original bare-bones version.
+
 ---
 
 ## Contents
@@ -46,10 +50,6 @@ CastleWallsMk2 is one of the largest and most feature-dense mods in the CastleFo
 - integrated logs, debug views, and quality-of-life helpers
 
 This mod is best described as a **power overlay for advanced players, hosts, testers, modders, and server operators**.
-
-![Preview](_Images/Preview.gif)
-
-> Inspired by the original **CastleWalls** by **cNoEvil**, with the UI design paying homage to the original bare-bones version.
 
 ---
 
