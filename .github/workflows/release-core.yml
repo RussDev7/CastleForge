@@ -4,12 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag, e.g. v0.1.0"
+        description: "Release tag, e.g. core-v0.1.0"
         required: true
       prerelease:
         description: "Mark as prerelease"
         required: true
         default: "true"
+
+permissions:
+  contents: write
 
 jobs:
   release-core:
@@ -28,35 +31,42 @@ jobs:
       - name: Restore solution
         run: nuget restore CastleForge.sln
 
-      - name: Build core projects
-        run: |
-          msbuild CastleForge/ModLoaderFramework/ModLoader/ModLoader.csproj /m /p:Configuration=Release
-          msbuild CastleForge/ModLoaderFramework/ModLoaderExtensions/ModLoaderExtensions.csproj /m /p:Configuration=Release
+      - name: Build solution (Release)
+        run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=x86
 
       - name: Package core release
         shell: pwsh
         run: |
           $version = "${{ github.event.inputs.version }}"
+
           New-Item -ItemType Directory -Force -Path release | Out-Null
           New-Item -ItemType Directory -Force -Path pkg\ModLoader | Out-Null
           New-Item -ItemType Directory -Force -Path pkg\ModLoaderExtensions | Out-Null
 
-          Get-ChildItem -Recurse -Path . -Filter ModLoader.dll |
-            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
-            Copy-Item -Destination pkg\ModLoader -Force
+          # ModLoader package
+          Copy-Item "Build\Release\ModLoader.dll" "pkg\ModLoader\" -Force
+          Copy-Item "Build\Release\CastleMinerZ.exe.config" "pkg\ModLoader\" -Force
+          Copy-Item "Build\Release\Update&Launch.bat" "pkg\ModLoader\" -Force
 
-          Get-ChildItem -Recurse -Path . -Filter ModLoaderExtensions.dll |
-            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
-            Copy-Item -Destination pkg\ModLoaderExtensions -Force
-
-          if (Test-Path README.md) { Copy-Item README.md pkg\ModLoader -Force }
-          if (Test-Path LICENSE)   { Copy-Item LICENSE pkg\ModLoader -Force }
-          if (Test-Path CastleForge/ModLoaderFramework/ModLoader/README.md) {
-            Copy-Item CastleForge/ModLoaderFramework/ModLoader/README.md pkg\ModLoader -Force
+          if (Test-Path "CastleForge\ModLoaderFramework\ModLoader\README.md") {
+            Copy-Item "CastleForge\ModLoaderFramework\ModLoader\README.md" "pkg\ModLoader\" -Force
+          }
+          if (Test-Path "LICENSE") {
+            Copy-Item "LICENSE" "pkg\ModLoader\" -Force
           }
 
-          Compress-Archive -Path pkg\ModLoader\* -DestinationPath ("release\CastleForge-ModLoader-" + $version + ".zip") -Force
-          Compress-Archive -Path pkg\ModLoaderExtensions\* -DestinationPath ("release\CastleForge-ModLoaderExtensions-" + $version + ".zip") -Force
+          # ModLoaderExtensions package
+          Copy-Item "Build\Release\!Mods\ModLoaderExtensions.dll" "pkg\ModLoaderExtensions\" -Force
+
+          if (Test-Path "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md") {
+            Copy-Item "CastleForge\ModLoaderFramework\ModLoaderExtensions\README.md" "pkg\ModLoaderExtensions\" -Force
+          }
+          if (Test-Path "LICENSE") {
+            Copy-Item "LICENSE" "pkg\ModLoaderExtensions\" -Force
+          }
+
+          Compress-Archive -Path "pkg\ModLoader\*" -DestinationPath "release\CastleForge-ModLoader-$version.zip" -Force
+          Compress-Archive -Path "pkg\ModLoaderExtensions\*" -DestinationPath "release\CastleForge-ModLoaderExtensions-$version.zip" -Force
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

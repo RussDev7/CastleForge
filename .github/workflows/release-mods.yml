@@ -11,6 +11,9 @@ on:
         required: true
         default: "true"
 
+permissions:
+  contents: write
+
 jobs:
   release-mods:
     runs-on: windows-latest
@@ -28,30 +31,49 @@ jobs:
       - name: Restore solution
         run: nuget restore CastleForge.sln
 
-      - name: Build solution
+      - name: Build solution (Release)
         run: msbuild CastleForge.sln /m /p:Configuration=Release /p:Platform=x86
 
       - name: Package official mods individually
         shell: pwsh
         run: |
           $version = "${{ github.event.inputs.version }}"
-          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $modsRoot = "Build\Release\!Mods"
 
-          Get-ChildItem -Path "CastleForge/Mods" -Directory | ForEach-Object {
-            $modName = $_.Name
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          New-Item -ItemType Directory -Force -Path pkg | Out-Null
+
+          Get-ChildItem -Path $modsRoot -Filter *.dll | ForEach-Object {
+            $modDll = $_
+            $modName = [System.IO.Path]::GetFileNameWithoutExtension($modDll.Name)
+
+            # Skip ModLoaderExtensions from the mods release
+            if ($modName -eq "ModLoaderExtensions") { return }
+
             $pkgDir = Join-Path "pkg" $modName
             New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
 
-            Get-ChildItem -Recurse -Path $_.FullName -Include *.dll,*.ini,README.md |
-              Where-Object { $_.FullName -match '\\bin\\Release\\' -or $_.Name -eq 'README.md' } |
-              Copy-Item -Destination $pkgDir -Force -ErrorAction SilentlyContinue
+            # Main mod DLL
+            Copy-Item $modDll.FullName $pkgDir -Force
 
-            if (Test-Path $pkgDir) {
-              $items = Get-ChildItem $pkgDir -ErrorAction SilentlyContinue
-              if ($items) {
-                Compress-Archive -Path (Join-Path $pkgDir '*') -DestinationPath ("release\" + $modName + "-" + $version + ".zip") -Force
-              }
+            # Optional support folder with same name
+            $supportDir = Join-Path $modsRoot $modName
+            if (Test-Path $supportDir) {
+              Copy-Item $supportDir (Join-Path $pkgDir $modName) -Recurse -Force
             }
+
+            # Optional README from source tree
+            $readmePath = Join-Path "CastleForge\Mods\$modName" "README.md"
+            if (Test-Path $readmePath) {
+              Copy-Item $readmePath $pkgDir -Force
+            }
+
+            # Optional LICENSE
+            if (Test-Path "LICENSE") {
+              Copy-Item "LICENSE" $pkgDir -Force
+            }
+
+            Compress-Archive -Path (Join-Path $pkgDir '*') -DestinationPath "release\$modName-$version.zip" -Force
           }
 
       - name: Publish GitHub release
