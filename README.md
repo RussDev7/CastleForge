@@ -444,7 +444,7 @@ If you are new to the repo, this is a good flow:
 - This root page is intentionally focused on **showcasing and organizing the entire repository**.
 - The old low-level loader deep dive has been moved into the dedicated **[ModLoader README](CastleForge/ModLoaderFramework/ModLoader/README.md)** so the root page can stay more discoverable.
 - Each subproject README is where command lists, config details, workflow notes, and troubleshooting should continue to live.
-
+- Small repo-maintenance scripts may be included at the repo root to make local development and cleanup lighter.
 
 ---
 
