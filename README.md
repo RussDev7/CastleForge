@@ -445,6 +445,25 @@ If you are new to the repo, this is a good flow:
 - The old low-level loader deep dive has been moved into the dedicated **[ModLoader README](CastleForge/ModLoaderFramework/ModLoader/README.md)** so the root page can stay more discoverable.
 - Each subproject README is where command lists, config details, workflow notes, and troubleshooting should continue to live.
 
+
+---
+
+## Still need help?
+
+If something still is not working, or you are not sure what to do next, you can reach out here:
+
+- **DM me on Discord:** [dannyruss](https://discordapp.com/users/364835156587970580) (_RussDev7)
+- **Join the CastleForge Discord server:** [Discord Server](https://discord.gg/j3PcNJmry5)
+
+### When asking for help, please include:
+
+- the mod or tool you are trying to install
+- a screenshot of your CastleMiner Z folder
+- a screenshot or copy of your `CastleMinerZ.exe.config`
+- any error message or log you see
+
+This makes it much easier to help you quickly.
+
 ---
 
 ## License
