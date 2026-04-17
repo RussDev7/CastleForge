@@ -48,7 +48,7 @@ echo ============================================================
 REM --------------------------------------------------
 REM 4) Run ROBOCOPY to sync everything (quiet mode).
 REM --------------------------------------------------
-robocopy "%SOURCE%" "%DEST%" /E /COPYALL /R:3 /W:1 /XF "%~nx0" /NFL /NDL /NJH /NJS /NC /NS /NP
+robocopy "%SOURCE%" "%DEST%" /E /COPY:DAT /R:3 /W:1 /XF "%~nx0" /NFL /NDL /NJH /NJS /NC /NS /NP
 
 REM ------------------------------------------
 REM 5) Check exit code: 0-7 = OK, 8+ = errors.
