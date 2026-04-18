@@ -1,0 +1,730 @@
+[
+  {
+    "name": "BruteForceJoin",
+    "slug": "brute-force-join",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a password-testing button to the multiplayer browser so you can cycle a word list against your own locked server during testing.",
+    "readme_path": "CastleForge/Mods/BruteForceJoin/README.md",
+    "preview_path": "CastleForge/Mods/BruteForceJoin/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/BruteForceJoin",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/BruteForceJoin-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "multiplayer",
+      "admin",
+      "testing",
+      "utility"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "CastleWalls Mk2",
+    "slug": "castlewalls-mk2",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "An all-in-one overlay mod focused on power-user tools, sandbox controls, live editors, moderation workflows, and networking diagnostics.",
+    "readme_path": "CastleForge/Mods/CastleWallsMk2/README.md",
+    "preview_path": "CastleForge/Mods/CastleWallsMk2/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/CastleWallsMk2",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/CastleWallsMk2-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "overlay",
+      "admin",
+      "sandbox",
+      "networking"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "ChatTranslator",
+    "slug": "chat-translator",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Translates CastleMiner Z chat in real time so players can read incoming messages locally and reply in other languages more easily.",
+    "readme_path": "CastleForge/Mods/ChatTranslator/README.md",
+    "preview_path": "CastleForge/Mods/ChatTranslator/_Images/AutoTranslate.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/ChatTranslator",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/ChatTranslator-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "chat",
+      "translation",
+      "multiplayer",
+      "communication"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "CMZMaterialColors",
+    "slug": "cmz-material-colors",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Recolors material-based tools and weapons at runtime using a lightweight config-driven color override system.",
+    "readme_path": "CastleForge/Mods/CMZMaterialColors/README.md",
+    "preview_path": "CastleForge/Mods/CMZMaterialColors/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/CMZMaterialColors",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/CMZMaterialColors-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "visuals",
+      "weapons",
+      "materials",
+      "config"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "DirectConnect",
+    "slug": "direct-connect",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a direct-IP connection flow, remembers the last address you used, and exposes quick launch buttons for compatible dedicated servers.",
+    "readme_path": "CastleForge/Mods/DirectConnect/README.md",
+    "preview_path": "CastleForge/Mods/DirectConnect/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/DirectConnect",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/DirectConnect-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "multiplayer",
+      "direct-connect",
+      "server-browser",
+      "dedicated-server"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "FastBoot",
+    "slug": "fast-boot",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Short-circuits the vanilla loading flow so CastleMiner Z starts and transitions into gameplay faster.",
+    "readme_path": "CastleForge/Mods/FastBoot/README.md",
+    "preview_path": "CastleForge/Mods/FastBoot/_Images/FastBootInstall.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/FastBoot",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/FastBoot-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "startup",
+      "performance",
+      "quality-of-life",
+      "loading"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "InfiniteGPS",
+    "slug": "infinite-gps",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Prevents GPS-based items from losing durability so navigation tools never wear out during play.",
+    "readme_path": "CastleForge/Mods/InfiniteGPS/README.md",
+    "preview_path": "CastleForge/Mods/InfiniteGPS/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/InfiniteGPS",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/InfiniteGPS-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "quality-of-life",
+      "durability",
+      "navigation",
+      "items"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "LanternLandMap",
+    "slug": "lantern-land-map",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Provides a full-screen in-game Lantern Land map and biome analysis overlay with ring, gap, tower, and WorldGenPlus surface previews.",
+    "readme_path": "CastleForge/Mods/LanternLandMap/README.md",
+    "preview_path": "CastleForge/Mods/LanternLandMap/_Images/Showcase.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/LanternLandMap",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/LanternLandMap-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "map",
+      "biomes",
+      "navigation",
+      "analysis"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "Minimap",
+    "slug": "minimap",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a lightweight biome-aware minimap overlay with live navigation, multiplayer markers, hostile tracking, and optional WorldGenPlus rendering.",
+    "readme_path": "CastleForge/Mods/Minimap/README.md",
+    "preview_path": "CastleForge/Mods/Minimap/_Images/Showcase.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/Minimap",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/Minimap-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "minimap",
+      "hud",
+      "navigation",
+      "multiplayer"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "MoreAchievements",
+    "slug": "more-achievements",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Expands the achievement system with a large custom set, a full browser UI, custom rewards, and command/config support.",
+    "readme_path": "CastleForge/Mods/MoreAchievements/README.md",
+    "preview_path": "CastleForge/Mods/MoreAchievements/_Images/Showcase.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/MoreAchievements",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/MoreAchievements-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "achievements",
+      "progression",
+      "ui",
+      "rewards"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "NetworkSniffer",
+    "slug": "network-sniffer",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Logs inbound and outbound network traffic in-game with readable message output, filtering, sampling, and optional raw hex dumps.",
+    "readme_path": "CastleForge/Mods/NetworkSniffer/README.md",
+    "preview_path": "CastleForge/Mods/NetworkSniffer/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/NetworkSniffer",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/NetworkSniffer-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "networking",
+      "debugging",
+      "logging",
+      "developer"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "PhysicsEngine",
+    "slug": "physics-engine",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Turns placed lava into a configurable live simulation with bounded runtime budgets and in-game tuning support.",
+    "readme_path": "CastleForge/Mods/PhysicsEngine/README.md",
+    "preview_path": "CastleForge/Mods/PhysicsEngine/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/PhysicsEngine",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/PhysicsEngine-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "lava",
+      "simulation",
+      "gameplay",
+      "config"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "QoLTweaks",
+    "slug": "qol-tweaks",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Bundles everyday quality-of-life improvements for text input, HUD readability, building reach, offline chat, and freer movement.",
+    "readme_path": "CastleForge/Mods/QoLTweaks/README.md",
+    "preview_path": "CastleForge/Mods/QoLTweaks/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/QoLTweaks",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/QoLTweaks-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "quality-of-life",
+      "hud",
+      "chat",
+      "movement"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "RegionProtect",
+    "slug": "region-protect",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds host-controlled spawn and region protection with build denial, whitelist support, and anti-griefing safeguards.",
+    "readme_path": "CastleForge/Mods/RegionProtect/README.md",
+    "preview_path": "CastleForge/Mods/RegionProtect/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/RegionProtect",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/RegionProtect-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "protection",
+      "admin",
+      "multiplayer",
+      "regions"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "RenderDistancePlus",
+    "slug": "render-distance-plus",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Extends the game's render distance beyond vanilla limits and replaces the stock setting with a safer, more usable slider.",
+    "readme_path": "CastleForge/Mods/RenderDistancePlus/README.md",
+    "preview_path": "CastleForge/Mods/RenderDistancePlus/_Images/Showcase.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/RenderDistancePlus",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/RenderDistancePlus-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "graphics",
+      "render-distance",
+      "performance",
+      "ui"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "Restore360Water",
+    "slug": "restore-360-water",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Brings back an Xbox 360-style water experience with biome-aware water bands, optional reflections, custom audio, and WorldGenPlus integration.",
+    "readme_path": "CastleForge/Mods/Restore360Water/README.md",
+    "preview_path": "CastleForge/Mods/Restore360Water/_Images/Showcase1.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/Restore360Water",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/Restore360Water-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "water",
+      "visuals",
+      "audio",
+      "worldgen"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "SetHomes",
+    "slug": "set-homes",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Lets players save named homes per world and teleport back to them while preserving exact facing direction.",
+    "readme_path": "CastleForge/Mods/SetHomes/README.md",
+    "preview_path": "CastleForge/Mods/SetHomes/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/SetHomes",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/SetHomes-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "teleport",
+      "homes",
+      "quality-of-life",
+      "multiplayer"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "TacticalNuke",
+    "slug": "tactical-nuke",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a custom nuke workflow with new items, warning announcements, crater shaping, chain reactions, and configurable large-scale detonations.",
+    "readme_path": "CastleForge/Mods/TacticalNuke/README.md",
+    "preview_path": "CastleForge/Mods/TacticalNuke/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/TacticalNuke",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/TacticalNuke-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "explosives",
+      "weapons",
+      "gameplay",
+      "blocks"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "TexturePacks",
+    "slug": "texture-packs",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a runtime content replacement system for terrain, icons, models, UI, audio, shaders, skyboxes, and other pack-driven assets.",
+    "readme_path": "CastleForge/Mods/TexturePacks/README.md",
+    "preview_path": "CastleForge/Mods/TexturePacks/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/TexturePacks",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/TexturePacks-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "content-packs",
+      "textures",
+      "audio",
+      "visuals"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "TooManyItems",
+    "slug": "too-many-items",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Provides an in-game item browser, hidden-block exposer, inventory helper, and quick-action overlay for building and testing.",
+    "readme_path": "CastleForge/Mods/TooManyItems/README.md",
+    "preview_path": "CastleForge/Mods/TooManyItems/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/TooManyItems",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/TooManyItems-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "inventory",
+      "browser",
+      "building",
+      "utility"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "TreeFeller",
+    "slug": "tree-feller",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Automatically fells connected natural trees after you chop the trunk with an axe or chainsaw.",
+    "readme_path": "CastleForge/Mods/TreeFeller/README.md",
+    "preview_path": "CastleForge/Mods/TreeFeller/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/TreeFeller",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/TreeFeller-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "quality-of-life",
+      "woodcutting",
+      "automation",
+      "survival"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "VeinMiner",
+    "slug": "vein-miner",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Automatically mines connected ore veins after you break the first valid ore block with the right tool.",
+    "readme_path": "CastleForge/Mods/VeinMiner/README.md",
+    "preview_path": "CastleForge/Mods/VeinMiner/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/VeinMiner",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/VeinMiner-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "quality-of-life",
+      "mining",
+      "automation",
+      "survival"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "VoiceChat",
+    "slug": "voice-chat",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Strengthens the game's built-in voice pipeline with push-to-talk, safer packet handling, HUD speaker feedback, and cleaner session behavior.",
+    "readme_path": "CastleForge/Mods/VoiceChat/README.md",
+    "preview_path": "CastleForge/Mods/VoiceChat/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/VoiceChat",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/VoiceChat-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "voice",
+      "multiplayer",
+      "audio",
+      "communication"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "WeaponAddons",
+    "slug": "weapon-addons",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Turns custom weapons into data-driven content packs with .clag definitions, optional models, icons, sounds, recipes, and synthetic IDs.",
+    "readme_path": "CastleForge/Mods/WeaponAddons/README.md",
+    "preview_path": "CastleForge/Mods/WeaponAddons/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/WeaponAddons",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/WeaponAddons-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "content-packs",
+      "weapons",
+      "data-driven",
+      "modding"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "WorldEdit",
+    "slug": "world-edit",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds an in-game map editor with selections, schematics, copy and paste, brushes, and scripting tools.",
+    "readme_path": "CastleForge/Mods/WorldEdit/README.md",
+    "preview_path": "CastleForge/Mods/WorldEdit/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/WorldEdit",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/WorldEdit-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "building",
+      "editor",
+      "schematics",
+      "scripting"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  },
+  {
+    "name": "WorldEditCUI",
+    "slug": "world-edit-cui",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Adds a graphical overlay for WorldEdit that visualizes your current selection directly in-game.",
+    "readme_path": "CastleForge/Mods/WorldEditCUI/README.md",
+    "preview_path": "CastleForge/Mods/WorldEditCUI/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/WorldEditCUI",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/WorldEditCUI-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "building",
+      "overlay",
+      "visualizer",
+      "worldedit"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions",
+      "WorldEdit"
+    ]
+  },
+  {
+    "name": "WorldEditPixelart",
+    "slug": "world-edit-pixelart",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Converts source images into block-based pixel art, lets you tune the palette, and sends the result into WorldEdit schematics.",
+    "readme_path": "CastleForge/Mods/WorldEditPixelart/README.md",
+    "preview_path": "CastleForge/Mods/WorldEditPixelart/_Images/Preview.gif",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/WorldEditPixelart",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/WorldEditPixelart-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "pixel-art",
+      "schematics",
+      "images",
+      "worldedit"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions",
+      "WorldEdit"
+    ]
+  },
+  {
+    "name": "WorldGenPlus",
+    "slug": "world-gen-plus",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Rebuilds world generation with configurable surface layouts, custom biome loading, seed control, multiplayer sync, and in-game tuning tools.",
+    "readme_path": "CastleForge/Mods/WorldGenPlus/README.md",
+    "preview_path": "CastleForge/Mods/WorldGenPlus/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Mods/WorldGenPlus",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/mods-v0.1.0/WorldGenPlus-mods-v0.1.0.zip",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "worldgen",
+      "biomes",
+      "config",
+      "multiplayer"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": [
+      "ModLoaderExtensions"
+    ]
+  }
+]
