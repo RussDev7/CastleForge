@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net481</TargetFramework>
+    <PlatformTarget>x86</PlatformTarget>
+    <AssemblyName>CMZDedicatedLidgrenServer</AssemblyName>
+    <RootNamespace>CMZDedicatedLidgrenServer</RootNamespace>
+    <OutputPath>$(BuildOutputRoot)\$(Configuration)\!Mods\CMZDedicatedLidgrenServer\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>Libs\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Libs\0Harmony.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Libs\0Harmony.dll</Link>
+      <TargetPath>Libs\0Harmony.dll</TargetPath>
+    </Content>
+
+    <Content Include="ServerHost\RunServer.bat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>RunServer.bat</TargetPath>
+    </Content>
+
+    <Content Include="ServerHost\Game\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Game\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+
+    <Content Include="ServerHost\Inventory\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Inventory\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+
+    <Content Include="ServerHost\Worlds\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Worlds\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Templates\server.properties">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>server.properties</TargetPath>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,530 @@
+name: Build Official Index
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'CastleForge/Mods/**'
+      - 'CastleForge/ModLoaderFramework/**'
+      - 'CastleForge/Servers/**'
+      - 'CastleForge/Tools/**'
+      - 'LICENSE'
+      - '.github/workflows/build-official-index.yml'
+      - '.github/workflows/release-mods.yml'
+      - '.github/workflows/release-core.yml'
+      - '.github/workflows/release-full.yml'
+  release:
+    types: [published, edited, prereleased, released]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-index:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Build Index/mods.json from official CastleForge projects
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          python <<'PY'
+          import json
+          import os
+          import re
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          ROOT = Path('.')
+          REPO_SLUG = os.environ['GITHUB_REPOSITORY']
+          GITHUB_SERVER_URL = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
+          DEFAULT_BRANCH = os.environ.get('DEFAULT_BRANCH', 'main')
+          API_BASE = f"https://api.github.com/repos/{REPO_SLUG}"
+          TOKEN = os.environ.get('GITHUB_TOKEN', '').strip()
+
+          MODS_ROOT = ROOT / 'CastleForge' / 'Mods'
+          FRAMEWORK_ROOT = ROOT / 'CastleForge' / 'ModLoaderFramework'
+          SERVERS_ROOT = ROOT / 'CastleForge' / 'Servers'
+          TOOLS_ROOT = ROOT / 'CastleForge' / 'Tools'
+          INDEX_PATH = ROOT / 'Index' / 'mods.json'
+
+          DEFAULT_AUTHOR = 'RussDev7'
+          DEFAULT_CATEGORY = 'mod'
+          DEFAULT_GAME_VERSION = 'v1.9.9.8'
+          DEFAULT_LICENSE = 'GPL-3.0-or-later'
+          DEFAULT_MAINTAINERS = ['RussDev7']
+
+          # Exclusions:
+          # - ModLoader: the base framework/bootstrap itself, not a content mod.
+          # - ModLoaderExtensions: framework/support package shipped separately via core release.
+          # - Example: starter/template project rather than a normal end-user gameplay/content mod.
+          EXCLUDED_CATALOG_PROJECTS = {'ModLoader', 'ModLoaderExtensions', 'Example'}
+          EXCLUDED_DEPENDENCIES = {'ModLoader'}
+
+          PREVIEW_EXTS = {'.png', '.gif', '.jpg', '.jpeg', '.webp'}
+
+          # Curated metadata based on the current official repo's README files and project layout.
+          # Anything omitted here falls back to automatic extraction from the project README/csproj.
+          OFFICIAL_OVERRIDES = {
+              'BruteForceJoin': {
+                  'name': 'BruteForceJoin',
+                  'slug': 'brute-force-join',
+                  'summary': 'Adds a password-testing button to the multiplayer browser so you can cycle a word list against your own locked server during testing.',
+                  'tags': ['multiplayer', 'admin', 'testing', 'utility'],
+              },
+              'CMZMaterialColors': {
+                  'name': 'CMZMaterialColors',
+                  'slug': 'cmz-material-colors',
+                  'summary': 'Recolors material-based tools and weapons at runtime using a lightweight config-driven color override system.',
+                  'tags': ['visuals', 'weapons', 'materials', 'config'],
+              },
+              'CastleWallsMk2': {
+                  'name': 'CastleWalls Mk2',
+                  'slug': 'castlewalls-mk2',
+                  'summary': 'An all-in-one overlay mod focused on power-user tools, sandbox controls, live editors, moderation workflows, and networking diagnostics.',
+                  'tags': ['overlay', 'admin', 'sandbox', 'networking'],
+              },
+              'ChatTranslator': {
+                  'name': 'ChatTranslator',
+                  'slug': 'chat-translator',
+                  'summary': 'Translates CastleMiner Z chat in real time so players can read incoming messages locally and reply in other languages more easily.',
+                  'tags': ['chat', 'translation', 'multiplayer', 'communication'],
+              },
+              'DirectConnect': {
+                  'name': 'DirectConnect',
+                  'slug': 'direct-connect',
+                  'summary': 'Adds a direct-IP connection flow, remembers the last address you used, and exposes quick launch buttons for compatible dedicated servers.',
+                  'tags': ['multiplayer', 'direct-connect', 'server-browser', 'dedicated-server'],
+              },
+              'FastBoot': {
+                  'name': 'FastBoot',
+                  'slug': 'fast-boot',
+                  'summary': 'Short-circuits the vanilla loading flow so CastleMiner Z starts and transitions into gameplay faster.',
+                  'tags': ['startup', 'performance', 'quality-of-life', 'loading'],
+              },
+              'InfiniteGPS': {
+                  'name': 'InfiniteGPS',
+                  'slug': 'infinite-gps',
+                  'summary': 'Prevents GPS-based items from losing durability so navigation tools never wear out during play.',
+                  'tags': ['quality-of-life', 'durability', 'navigation', 'items'],
+              },
+              'LanternLandMap': {
+                  'name': 'LanternLandMap',
+                  'slug': 'lantern-land-map',
+                  'summary': 'Provides a full-screen in-game Lantern Land map and biome analysis overlay with ring, gap, tower, and WorldGenPlus surface previews.',
+                  'tags': ['map', 'biomes', 'navigation', 'analysis'],
+              },
+              'Minimap': {
+                  'name': 'Minimap',
+                  'slug': 'minimap',
+                  'summary': 'Adds a lightweight biome-aware minimap overlay with live navigation, multiplayer markers, hostile tracking, and optional WorldGenPlus rendering.',
+                  'tags': ['minimap', 'hud', 'navigation', 'multiplayer'],
+              },
+              'MoreAchievements': {
+                  'name': 'MoreAchievements',
+                  'slug': 'more-achievements',
+                  'summary': 'Expands the achievement system with a large custom set, a full browser UI, custom rewards, and command/config support.',
+                  'tags': ['achievements', 'progression', 'ui', 'rewards'],
+              },
+              'NetworkSniffer': {
+                  'name': 'NetworkSniffer',
+                  'slug': 'network-sniffer',
+                  'summary': 'Logs inbound and outbound network traffic in-game with readable message output, filtering, sampling, and optional raw hex dumps.',
+                  'tags': ['networking', 'debugging', 'logging', 'developer'],
+              },
+              'PhysicsEngine': {
+                  'name': 'PhysicsEngine',
+                  'slug': 'physics-engine',
+                  'summary': 'Turns placed lava into a configurable live simulation with bounded runtime budgets and in-game tuning support.',
+                  'tags': ['lava', 'simulation', 'gameplay', 'config'],
+              },
+              'QoLTweaks': {
+                  'name': 'QoLTweaks',
+                  'slug': 'qol-tweaks',
+                  'summary': 'Bundles everyday quality-of-life improvements for text input, HUD readability, building reach, offline chat, and freer movement.',
+                  'tags': ['quality-of-life', 'hud', 'chat', 'movement'],
+              },
+              'RegionProtect': {
+                  'name': 'RegionProtect',
+                  'slug': 'region-protect',
+                  'summary': 'Adds host-controlled spawn and region protection with build denial, whitelist support, and anti-griefing safeguards.',
+                  'tags': ['protection', 'admin', 'multiplayer', 'regions'],
+              },
+              'RenderDistancePlus': {
+                  'name': 'RenderDistancePlus',
+                  'slug': 'render-distance-plus',
+                  'summary': 'Extends the game\'s render distance beyond vanilla limits and replaces the stock setting with a safer, more usable slider.',
+                  'tags': ['graphics', 'render-distance', 'performance', 'ui'],
+              },
+              'Restore360Water': {
+                  'name': 'Restore360Water',
+                  'slug': 'restore-360-water',
+                  'summary': 'Brings back an Xbox 360-style water experience with biome-aware water bands, optional reflections, custom audio, and WorldGenPlus integration.',
+                  'tags': ['water', 'visuals', 'audio', 'worldgen'],
+              },
+              'SetHomes': {
+                  'name': 'SetHomes',
+                  'slug': 'set-homes',
+                  'summary': 'Lets players save named homes per world and teleport back to them while preserving exact facing direction.',
+                  'tags': ['teleport', 'homes', 'quality-of-life', 'multiplayer'],
+              },
+              'TacticalNuke': {
+                  'name': 'TacticalNuke',
+                  'slug': 'tactical-nuke',
+                  'summary': 'Adds a custom nuke workflow with new items, warning announcements, crater shaping, chain reactions, and configurable large-scale detonations.',
+                  'tags': ['explosives', 'weapons', 'gameplay', 'blocks'],
+              },
+              'TexturePacks': {
+                  'name': 'TexturePacks',
+                  'slug': 'texture-packs',
+                  'summary': 'Adds a runtime content replacement system for terrain, icons, models, UI, audio, shaders, skyboxes, and other pack-driven assets.',
+                  'tags': ['content-packs', 'textures', 'audio', 'visuals'],
+              },
+              'TooManyItems': {
+                  'name': 'TooManyItems',
+                  'slug': 'too-many-items',
+                  'summary': 'Provides an in-game item browser, hidden-block exposer, inventory helper, and quick-action overlay for building and testing.',
+                  'tags': ['inventory', 'browser', 'building', 'utility'],
+              },
+              'TreeFeller': {
+                  'name': 'TreeFeller',
+                  'slug': 'tree-feller',
+                  'summary': 'Automatically fells connected natural trees after you chop the trunk with an axe or chainsaw.',
+                  'tags': ['quality-of-life', 'woodcutting', 'automation', 'survival'],
+              },
+              'VeinMiner': {
+                  'name': 'VeinMiner',
+                  'slug': 'vein-miner',
+                  'summary': 'Automatically mines connected ore veins after you break the first valid ore block with the right tool.',
+                  'tags': ['quality-of-life', 'mining', 'automation', 'survival'],
+              },
+              'VoiceChat': {
+                  'name': 'VoiceChat',
+                  'slug': 'voice-chat',
+                  'summary': 'Strengthens the game\'s built-in voice pipeline with push-to-talk, safer packet handling, HUD speaker feedback, and cleaner session behavior.',
+                  'tags': ['voice', 'multiplayer', 'audio', 'communication'],
+              },
+              'WeaponAddons': {
+                  'name': 'WeaponAddons',
+                  'slug': 'weapon-addons',
+                  'summary': 'Turns custom weapons into data-driven content packs with .clag definitions, optional models, icons, sounds, recipes, and synthetic IDs.',
+                  'tags': ['content-packs', 'weapons', 'data-driven', 'modding'],
+              },
+              'WorldEdit': {
+                  'name': 'WorldEdit',
+                  'slug': 'world-edit',
+                  'summary': 'Adds an in-game map editor with selections, schematics, copy and paste, brushes, and scripting tools.',
+                  'tags': ['building', 'editor', 'schematics', 'scripting'],
+              },
+              'WorldEditCUI': {
+                  'name': 'WorldEditCUI',
+                  'slug': 'world-edit-cui',
+                  'summary': 'Adds a graphical overlay for WorldEdit that visualizes your current selection directly in-game.',
+                  'tags': ['building', 'overlay', 'visualizer', 'worldedit'],
+              },
+              'WorldEditPixelart': {
+                  'name': 'WorldEditPixelart',
+                  'slug': 'world-edit-pixelart',
+                  'summary': 'Converts source images into block-based pixel art, lets you tune the palette, and sends the result into WorldEdit schematics.',
+                  'tags': ['pixel-art', 'schematics', 'images', 'worldedit'],
+              },
+              'WorldGenPlus': {
+                  'name': 'WorldGenPlus',
+                  'slug': 'world-gen-plus',
+                  'summary': 'Rebuilds world generation with configurable surface layouts, custom biome loading, seed control, multiplayer sync, and in-game tuning tools.',
+                  'tags': ['worldgen', 'biomes', 'config', 'multiplayer'],
+              },
+          }
+
+          def gh_json(url: str):
+              request = urllib.request.Request(url)
+              request.add_header('Accept', 'application/vnd.github+json')
+              request.add_header('X-GitHub-Api-Version', '2022-11-28')
+              if TOKEN:
+                  request.add_header('Authorization', f'Bearer {TOKEN}')
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return json.load(response)
+              except Exception as exc:
+                  print(f'Warning: could not query GitHub API: {exc}')
+                  return []
+
+          def latest_release_with_prefix(prefix: str):
+              releases = gh_json(f'{API_BASE}/releases?per_page=100')
+              candidates = []
+              for release in releases:
+                  tag = str(release.get('tag_name', '')).strip()
+                  if not tag.startswith(prefix):
+                      continue
+                  candidates.append(release)
+              if not candidates:
+                  return None
+              candidates.sort(key=lambda r: (r.get('published_at') or '', r.get('created_at') or ''), reverse=True)
+              return candidates[0]
+
+          def strip_bom(text: str) -> str:
+              return text.lstrip('\ufeff').strip()
+
+          def slugify(text: str) -> str:
+              text = strip_bom(text)
+              text = re.sub(r'[^A-Za-z0-9]+', '-', text).strip('-').lower()
+              return text or 'unnamed'
+
+          def read_text(path: Path) -> str:
+              return path.read_text(encoding='utf-8', errors='replace')
+
+          def find_csproj(project_dir: Path):
+              items = sorted(project_dir.glob('*.csproj'))
+              return items[0] if items else None
+
+          def xml_root(path: Path):
+              return ET.parse(path).getroot()
+
+          def assembly_name(csproj_path: Path) -> str:
+              try:
+                  root = xml_root(csproj_path)
+                  for elem in root.iter():
+                      if elem.tag.endswith('AssemblyName') and (elem.text or '').strip():
+                          return elem.text.strip()
+              except Exception:
+                  pass
+              return csproj_path.stem
+
+          def project_ref_names(csproj_path: Path):
+              names = []
+              try:
+                  root = xml_root(csproj_path)
+              except Exception:
+                  return names
+              for elem in root.iter():
+                  if elem.tag.endswith('ProjectReference'):
+                      include = elem.attrib.get('Include', '').replace('\\', '/')
+                      stem = Path(include).stem
+                      if stem:
+                          names.append(stem)
+              return names
+
+          def extract_dependencies(csproj_path: Path):
+              deps = []
+              for name in project_ref_names(csproj_path):
+                  if name in EXCLUDED_DEPENDENCIES:
+                      continue
+                  if name not in deps:
+                      deps.append(name)
+              return deps
+
+          def first_heading(readme_text: str):
+              for raw in readme_text.splitlines():
+                  line = strip_bom(raw)
+                  if line.startswith('#'):
+                      return line.lstrip('#').strip()
+              return ''
+
+          def auto_summary(readme_text: str):
+              lines = [strip_bom(line) for line in readme_text.splitlines()]
+              # Prefer leading blockquote teaser lines.
+              quotes = []
+              seen_nonempty = False
+              for line in lines:
+                  if not line:
+                      if seen_nonempty and quotes:
+                          break
+                      continue
+                  if line.startswith('#') and not seen_nonempty:
+                      seen_nonempty = True
+                      continue
+                  if line.startswith('>'):
+                      quotes.append(line.lstrip('> ').strip())
+                      seen_nonempty = True
+                      continue
+                  if quotes:
+                      break
+                  seen_nonempty = True
+              if quotes:
+                  return ' '.join(quotes).strip()
+
+              # Fallback to first meaningful paragraph.
+              parts = []
+              for line in lines:
+                  if not line:
+                      if parts:
+                          break
+                      continue
+                  if line.startswith('#'):
+                      continue
+                  if line.startswith('![') or line.startswith('<img') or line.startswith('|'):
+                      continue
+                  if line.startswith('```'):
+                      continue
+                  parts.append(line)
+                  if len(' '.join(parts)) >= 220:
+                      break
+              return ' '.join(parts).strip()
+
+          def find_best_preview(project_dir: Path):
+              candidates = [
+                  '_Images/Preview.gif', '_Images/Preview.png', '_Images/Preview.jpg', '_Images/Preview.jpeg', '_Images/Preview.webp',
+                  '_Images/Showcase.gif', '_Images/Showcase.png', '_Images/Showcase.jpg', '_Images/Showcase.jpeg',
+                  '_Images/LanternLandMapPreview1.gif', '_Images/LanternLandMapPreview1.png',
+                  '_Images/Thumbnail.png',
+              ]
+              for rel in candidates:
+                  path = project_dir / rel
+                  if path.is_file():
+                      return path
+
+              readme = project_dir / 'README.md'
+              if readme.is_file():
+                  text = read_text(readme)
+                  md_imgs = re.findall(r'!\[[^\]]*\]\(([^)\s]+)', text)
+                  html_imgs = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', text, flags=re.IGNORECASE)
+                  for raw in md_imgs + html_imgs:
+                      rel = raw.split()[0].strip().strip('"\'')
+                      if rel.startswith('http://') or rel.startswith('https://'):
+                          continue
+                      path = (project_dir / rel).resolve()
+                      try:
+                          path.relative_to(project_dir.resolve())
+                      except Exception:
+                          continue
+                      if path.is_file() and path.suffix.lower() in PREVIEW_EXTS:
+                          return path
+
+              for path in sorted(project_dir.rglob('*')):
+                  if path.is_file() and path.suffix.lower() in PREVIEW_EXTS and path.name.lower().startswith(('preview', 'showcase', 'thumbnail')):
+                      return path
+              return None
+
+          def rel(path: Path) -> str:
+              return path.as_posix()
+
+          def repo_tree_url(path: str) -> str:
+              return f'{GITHUB_SERVER_URL}/{REPO_SLUG}/tree/{DEFAULT_BRANCH}/{path}'
+
+          def determine_release_context():
+              release = latest_release_with_prefix('mods-v')
+              if not release:
+                  return {'tag': '', 'version': '', 'html_url': '', 'assets': {}}
+              tag = str(release.get('tag_name', '')).strip()
+              version = tag[len('mods-v'):] if tag.startswith('mods-v') else ''
+              assets = {}
+              for asset in release.get('assets', []) or []:
+                  name = str(asset.get('name', '')).strip()
+                  url = str(asset.get('browser_download_url', '')).strip()
+                  if name and url:
+                      assets[name] = url
+              return {
+                  'tag': tag,
+                  'version': version,
+                  'html_url': str(release.get('html_url', '')).strip(),
+                  'assets': assets,
+              }
+
+          def build_entry(project_dir: Path, release_ctx: dict):
+              csproj = find_csproj(project_dir)
+              if csproj is None:
+                  return None
+
+              project_name = project_dir.name
+              assembly = assembly_name(csproj)
+              if project_name in EXCLUDED_CATALOG_PROJECTS or assembly in EXCLUDED_CATALOG_PROJECTS:
+                  return None
+
+              override = OFFICIAL_OVERRIDES.get(project_name, {})
+              readme = project_dir / 'README.md'
+              readme_text = read_text(readme) if readme.is_file() else ''
+              heading = first_heading(readme_text)
+              summary = override.get('summary') or auto_summary(readme_text)
+              preview = find_best_preview(project_dir)
+              preview_rel = rel(preview.relative_to(ROOT)) if preview else ''
+
+              readme_rel = rel((project_dir / 'README.md').relative_to(ROOT)) if readme.is_file() else ''
+              project_rel = rel(project_dir.relative_to(ROOT))
+
+              deps = override.get('dependencies') or extract_dependencies(csproj)
+              deps = [d for d in deps if d not in EXCLUDED_DEPENDENCIES]
+
+              asset_name = f"{assembly}-{release_ctx['tag']}.zip" if release_ctx['tag'] else ''
+              release_url = release_ctx['assets'].get(asset_name, '') if asset_name else ''
+              if not release_url:
+                  release_url = release_ctx['html_url']
+
+              entry = {
+                  'name': override.get('name') or heading or project_name,
+                  'slug': override.get('slug') or slugify(project_name),
+                  'category': DEFAULT_CATEGORY,
+                  'author': override.get('author', DEFAULT_AUTHOR),
+                  'summary': summary,
+                  'readme_path': readme_rel,
+                  'preview_path': preview_rel,
+                  'official': True,
+                  'source_repo': repo_tree_url(project_rel),
+                  'releases_url': release_url,
+                  'game_version': override.get('game_version', DEFAULT_GAME_VERSION),
+                  'castleforge_version': override.get('castleforge_version', release_ctx['version']),
+                  'license': override.get('license', DEFAULT_LICENSE),
+                  'tags': override.get('tags', []),
+                  'maintainers': override.get('maintainers', DEFAULT_MAINTAINERS),
+                  'dependencies': deps,
+              }
+              return entry
+
+          # Inventory non-mod project groups so the workflow is explicitly aware of them,
+          # even though only gameplay/content mods are emitted to Index/mods.json.
+          framework_projects = sorted(p.parent.name for p in FRAMEWORK_ROOT.rglob('*.csproj')) if FRAMEWORK_ROOT.is_dir() else []
+          server_projects = sorted(p.parent.name for p in SERVERS_ROOT.rglob('*.csproj')) if SERVERS_ROOT.is_dir() else []
+          tool_projects = sorted(p.parent.name for p in TOOLS_ROOT.rglob('*.csproj')) if TOOLS_ROOT.is_dir() else []
+
+          print(f'Framework projects scanned: {framework_projects}')
+          print(f'Server projects scanned: {server_projects}')
+          print(f'Tool projects scanned: {tool_projects}')
+
+          release_ctx = determine_release_context()
+          if release_ctx['tag']:
+              print(f"Using latest mods release: {release_ctx['tag']}")
+          else:
+              print('No mods-v* GitHub release found yet; release URLs will be blank until a mods release exists.')
+
+          entries = []
+          for project_dir in sorted(MODS_ROOT.iterdir(), key=lambda p: p.name.lower()):
+              if not project_dir.is_dir() or project_dir.name.startswith('.'):
+                  continue
+              entry = build_entry(project_dir, release_ctx)
+              if entry:
+                  entries.append(entry)
+
+          entries.sort(key=lambda item: item['name'].lower())
+
+          unknown_overrides = sorted(set(OFFICIAL_OVERRIDES) - {p.name for p in MODS_ROOT.iterdir() if p.is_dir()})
+          if unknown_overrides:
+              print(f'Warning: overrides exist for missing projects: {unknown_overrides}')
+
+          INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+          INDEX_PATH.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          print(f'Wrote {INDEX_PATH.as_posix()} with {len(entries)} official mod entries.')
+          PY
+
+      - name: Commit updated official index
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add Index/mods.json
+
+          if git diff --cached --quiet -- Index/mods.json; then
+            echo "Index/mods.json is already up to date."
+            exit 0
+          fi
+
+          git commit -m "Build Index/mods.json"
+          git push origin HEAD:${{ github.event.repository.default_branch }}

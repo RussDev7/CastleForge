@@ -1,0 +1,11 @@
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\Libs\0Harmony.dll
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\RunServer.bat
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\Game\README.txt
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\Inventory\default.inv
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\server.properties
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\CMZDedicatedSteamServer.exe
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\CMZDedicatedSteamServer.csproj.AssemblyReference.cache
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\CMZDedicatedSteamServer.GeneratedMSBuildEditorConfig.editorconfig
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\CMZDedicatedSteamServer.csproj.CoreCompileInputs.cache
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\CMZDedicatedSteamServer.exe
+Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\!Mods\CMZDedicatedSteamServer\Worlds\b8c81243-b6ac-48fe-a782-1e2dc5a44d17\world.info

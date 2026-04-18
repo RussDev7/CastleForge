@@ -5,7 +5,7 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 /*
-This mod was created for connecting to dedicated lidgren servers.
+This mod was created for launching dedicated servers and connecting to dedicated servers (Lidgren & Steam).
 Main Project: https://github.com/RussDev7/CMZDedicatedServer.
 */
 

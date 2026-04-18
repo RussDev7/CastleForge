@@ -103,7 +103,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhysicsEngine", "CastleForg
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Servers", "Servers", "{9CAF8F46-06A5-4A84-91CD-16B429534C2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CMZServerHost", "CastleForge\Servers\CMZServerHost\CMZServerHost.csproj", "{EC59D57D-2B2F-62B8-9F67-2E2B24C3E69E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CMZDedicatedLidgrenServer", "CastleForge\Servers\CMZDedicatedLidgrenServer\CMZDedicatedLidgrenServer.csproj", "{EC59D57D-2B2F-62B8-9F67-2E2B24C3E69E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Restore360Water", "CastleForge\Mods\Restore360Water\Restore360Water.csproj", "{64D0FE4D-2CB7-47C1-8A03-868912B2D5D6}"
 EndProject
@@ -112,6 +112,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CMZMaterialColors", "CastleForge\Mods\CMZMaterialColors\CMZMaterialColors.csproj", "{F6B3DB07-0FBA-49A2-9B43-667508724407}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageColorsToXml", "CastleForge\Tools\ImageColorsToXml\ImageColorsToXml.csproj", "{CC625212-E08A-4FA5-97B7-211EA15821E7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CMZDedicatedSteamServer", "CastleForge\Servers\CMZDedicatedSteamServer\CMZDedicatedSteamServer.csproj", "{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -259,6 +261,10 @@ Global
 		{CC625212-E08A-4FA5-97B7-211EA15821E7}.Debug|x86.Build.0 = Debug|x86
 		{CC625212-E08A-4FA5-97B7-211EA15821E7}.Release|x86.ActiveCfg = Release|x86
 		{CC625212-E08A-4FA5-97B7-211EA15821E7}.Release|x86.Build.0 = Release|x86
+		{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73}.Debug|x86.Build.0 = Debug|Any CPU
+		{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73}.Release|x86.ActiveCfg = Release|Any CPU
+		{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -299,6 +305,7 @@ Global
 		{E64AEAE6-96E7-4805-8E3A-F99F279C90F3} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{F6B3DB07-0FBA-49A2-9B43-667508724407} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{CC625212-E08A-4FA5-97B7-211EA15821E7} = {EB2CCDEA-536D-4E0C-9856-4D2BF40EBD60}
+		{ABCECAE2-C25D-58EC-EF87-FE5FE15B0C73} = {9CAF8F46-06A5-4A84-91CD-16B429534C2B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {AF8100CF-8E04-4D2F-BADD-0513D3614907}

@@ -487,6 +487,196 @@ $AMMO_NAME: Bullets
 - `AMMO_ID` sets the ammo type by enum name or numeric ID.
 - `AMMO_NAME` is accepted as an alias for `AMMO_ID`.
 
+<details>
+<summary><strong>Show all valid <code>SLOT_ID</code> values</strong></summary>
+
+## Valid `SLOT_ID` values
+
+`SLOT_ID` accepts either:
+
+- a valid `InventoryItemIDs` enum name, or
+- a numeric item ID
+
+The same `InventoryItemIDs` names are also accepted by `AMMO_ID`.
+`ITEM_ID` is different: it should be a numeric runtime item ID.
+
+Enum names are case-insensitive, but the underlying names below are the canonical values.
+
+| ID | Name |
+|---:|---|
+| 0 | BareHands |
+| 1 | DirtBlock |
+| 2 | SandBlock |
+| 3 | RockBlock |
+| 4 | LogBlock |
+| 5 | WoodBlock |
+| 6 | LanternBlock |
+| 7 | BloodStoneBlock |
+| 8 | SpaceRock |
+| 9 | IronWall |
+| 10 | CopperWall |
+| 11 | GoldenWall |
+| 12 | DiamondWall |
+| 13 | Stick |
+| 14 | Torch |
+| 15 | Coal |
+| 16 | CopperOre |
+| 17 | IronOre |
+| 18 | GoldOre |
+| 19 | Diamond |
+| 20 | Iron |
+| 21 | Copper |
+| 22 | Gold |
+| 23 | StonePickAxe |
+| 24 | CopperPickAxe |
+| 25 | IronPickAxe |
+| 26 | GoldPickAxe |
+| 27 | DiamondPickAxe |
+| 28 | BloodstonePickAxe |
+| 29 | StoneSpade |
+| 30 | CopperSpade |
+| 31 | IronSpade |
+| 32 | GoldSpade |
+| 33 | DiamondSpade |
+| 34 | StoneAxe |
+| 35 | CopperAxe |
+| 36 | IronAxe |
+| 37 | GoldAxe |
+| 38 | DiamondAxe |
+| 39 | Compass |
+| 40 | Clock |
+| 41 | BrassCasing |
+| 42 | IronCasing |
+| 43 | GoldCasing |
+| 44 | Bullets |
+| 45 | IronBullets |
+| 46 | GoldBullets |
+| 47 | DiamondBullets |
+| 48 | BloodStoneBullets |
+| 49 | Knife |
+| 50 | AssultRifle |
+| 51 | Pistol |
+| 52 | PumpShotgun |
+| 53 | BoltActionRifle |
+| 54 | SMGGun |
+| 55 | GoldKnife |
+| 56 | GoldAssultRifle |
+| 57 | GoldPistol |
+| 58 | GoldPumpShotgun |
+| 59 | GoldBoltActionRifle |
+| 60 | GoldSMGGun |
+| 61 | DiamondKnife |
+| 62 | DiamondAssultRifle |
+| 63 | DiamondPistol |
+| 64 | DiamondPumpShotgun |
+| 65 | DiamondBoltActionRifle |
+| 66 | DiamondSMGGun |
+| 67 | BloodStoneKnife |
+| 68 | BloodStoneAssultRifle |
+| 69 | BloodStonePistol |
+| 70 | BloodStonePumpShotgun |
+| 71 | BloodStoneBoltActionRifle |
+| 72 | BloodStoneSMGGun |
+| 73 | Crate |
+| 74 | Snow |
+| 75 | Ice |
+| 76 | Door |
+| 77 | GPS |
+| 78 | TeleportGPS |
+| 79 | TNT |
+| 80 | C4 |
+| 81 | SpaceKnife |
+| 82 | IronSpaceAssultRifle |
+| 83 | IronSpacePistol |
+| 84 | IronSpacePumpShotgun |
+| 85 | IronSpaceBoltActionRifle |
+| 86 | IronSpaceSMGGun |
+| 87 | CopperSpaceAssultRifle |
+| 88 | CopperSpacePistol |
+| 89 | CopperSpacePumpShotgun |
+| 90 | CopperSpaceBoltActionRifle |
+| 91 | CopperSpaceSMGGun |
+| 92 | GoldSpaceAssultRifle |
+| 93 | GoldSpacePistol |
+| 94 | GoldSpacePumpShotgun |
+| 95 | GoldSpaceBoltActionRifle |
+| 96 | GoldSpaceSMGGun |
+| 97 | DiamondSpaceAssultRifle |
+| 98 | DiamondSpacePistol |
+| 99 | DiamondSpacePumpShotgun |
+| 100 | DiamondSpaceBoltActionRifle |
+| 101 | DiamondSpaceSMGGun |
+| 102 | Slime |
+| 103 | RocketLauncher |
+| 104 | RocketLauncherGuided |
+| 105 | RocketAmmo |
+| 106 | GunPowder |
+| 107 | SpaceRockInventory |
+| 108 | ExplosivePowder |
+| 109 | LaserBullets |
+| 110 | Grenade |
+| 111 | DiamondCasing |
+| 112 | RocketLauncherShotFired |
+| 113 | RocketLauncherGuidedShotFired |
+| 114 | IronLaserSword |
+| 115 | CopperLaserSword |
+| 116 | GoldLaserSword |
+| 117 | DiamondLaserSword |
+| 118 | BloodStoneLaserSword |
+| 119 | LMGGun |
+| 120 | GoldLMGGun |
+| 121 | DiamondLMGGun |
+| 122 | BloodStoneLMGGun |
+| 123 | Chainsaw1 |
+| 124 | Chainsaw2 |
+| 125 | Chainsaw3 |
+| 126 | StickyGrenade |
+| 127 | StoneContainer |
+| 128 | CopperContainer |
+| 129 | IronContainer |
+| 130 | GoldContainer |
+| 131 | DiamondContainer |
+| 132 | BloodstoneContainer |
+| 133 | SpawnBasic |
+| 134 | SpawnCombat |
+| 135 | SpawnExplorer |
+| 136 | SpawnBuilder |
+| 137 | GlassWindowWood |
+| 138 | GlassWindowIron |
+| 139 | GlassWindowGold |
+| 140 | GlassWindowDiamond |
+| 141 | BasicGrenadeLauncher |
+| 142 | AdvancedGrenadeLauncher |
+| 143 | LaserDrill |
+| 144 | MegaPickAxe |
+| 145 | Snowball |
+| 146 | Iceball |
+| 147 | DiamondDoor |
+| 148 | LanternFancyBlock |
+| 149 | PrecisionLaser |
+| 150 | MultiLaser |
+| 151 | TeleportStation |
+| 152 | MonsterBlock |
+| 153 | IronDoor |
+| 154 | TechDoor |
+
+### Notes
+
+- `SLOT_ID` chooses the base vanilla item class the pack inherits from.
+- Names are case-insensitive.
+- Numeric IDs are also accepted.
+- Be careful to use the game’s exact enum spelling for documentation purposes, including:
+  - `AssultRifle` (not `AssaultRifle`)
+  - `GoldAssultRifle`
+  - `DiamondAssultRifle`
+  - `BloodStoneAssultRifle`
+  - `IronSpaceAssultRifle`
+  - `CopperSpaceAssultRifle`
+  - `GoldSpaceAssultRifle`
+  - `DiamondSpaceAssultRifle`
+
+</details>
+
 </details>
 
 <details>

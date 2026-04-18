@@ -5,7 +5,7 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 /*
-This mod was created for connecting to dedicated lidgren servers.
+This mod was created for launching dedicated servers and connecting to dedicated servers (Lidgren & Steam).
 Main Project: https://github.com/RussDev7/CMZDedicatedServer.
 */
 
@@ -234,11 +234,13 @@ namespace DirectConnect
 
         #region Patches
 
-        #region Buttons: Bottom-Right - Launch Dedicated / Direct Connect
+        #region Buttons: Bottom-Right - Launchers / Direct Connect
 
         /// <summary>
-        /// Injects two custom bottom-right buttons into <see cref="ChooseOnlineGameScreen"/>:
-        /// - Launch Dedicated
+        /// Injects custom bottom-right buttons into <see cref="ChooseOnlineGameScreen"/>:
+        /// - Launch Second CMZ
+        /// - Launch Dedicated (Lidgren)
+        /// - Launch Dedicated (Steam)
         /// - Direct Connect
         ///
         /// Purpose:
@@ -261,9 +263,14 @@ namespace DirectConnect
             private static FrameButtonControl _launchSecondCmzButton;
 
             /// <summary>
-            /// Custom button used to launch the external dedicated server executable.
+            /// Custom button used to launch the Lidgren dedicated server executable.
             /// </summary>
-            private static FrameButtonControl _launchDedicatedButton;
+            private static FrameButtonControl _launchDedicatedLidgrenButton;
+
+            /// <summary>
+            /// Custom button used to launch the Steam dedicated server executable.
+            /// </summary>
+            private static FrameButtonControl _launchDedicatedSteamButton;
 
             /// <summary>
             /// Custom button used to open the direct-connect flow.
@@ -451,7 +458,8 @@ namespace DirectConnect
             ///
             /// Layout:
             /// - Launch Second CMZ (top)
-            /// - Launch Dedicated  (middle)
+            /// - Launch Dedicated  (Lidgren)
+            /// - Launch Dedicated  (Steam)
             /// - Direct Connect    (bottom)
             ///
             /// Notes:
@@ -460,19 +468,21 @@ namespace DirectConnect
             /// </summary>
             private static void PlaceButtons(ChooseOnlineGameScreen screen)
             {
-                if (screen                 == null ||
-                    _launchSecondCmzButton == null ||
-                    _launchDedicatedButton == null ||
-                    _directConnectButton   == null)
+                if (screen                        == null ||
+                    _launchSecondCmzButton        == null ||
+                    _launchDedicatedLidgrenButton == null ||
+                    _launchDedicatedSteamButton   == null ||
+                    _directConnectButton          == null)
                     return;
 
                 if (!(_fiSelect?.GetValue(screen) is FrameButtonControl select) ||
                     !(_fiRefresh?.GetValue(screen) is FrameButtonControl refresh))
                     return;
 
-                StyleLikeStock(_launchSecondCmzButton, select, refresh);
-                StyleLikeStock(_launchDedicatedButton, select, refresh);
-                StyleLikeStock(_directConnectButton,   select, refresh);
+                StyleLikeStock(_launchSecondCmzButton,        select, refresh);
+                StyleLikeStock(_launchDedicatedLidgrenButton, select, refresh);
+                StyleLikeStock(_launchDedicatedSteamButton,   select, refresh);
+                StyleLikeStock(_directConnectButton,          select, refresh);
 
                 Rectangle r = Screen.Adjuster.ScreenRect;
 
@@ -489,12 +499,16 @@ namespace DirectConnect
                 int yDirect = r.Bottom - height - marginY;
                 _directConnectButton.LocalPosition = new Point(x, yDirect);
 
-                // Middle button = Launch Dedicated
-                int yLaunchDedicated = yDirect - height - gap;
-                _launchDedicatedButton.LocalPosition = new Point(x, yLaunchDedicated);
+                // One above bottom = Launch Dedicated (Steam)
+                int yLaunchSteam = yDirect - height - gap;
+                _launchDedicatedSteamButton.LocalPosition = new Point(x, yLaunchSteam);
+
+                // Two above bottom = Launch Dedicated (Lidgren)
+                int yLaunchLidgren = yLaunchSteam - height - gap;
+                _launchDedicatedLidgrenButton.LocalPosition = new Point(x, yLaunchLidgren);
 
                 // Top button = Launch Second CMZ
-                int yLaunchSecond = yLaunchDedicated - height - gap;
+                int yLaunchSecond = yLaunchLidgren - height - gap;
                 _launchSecondCmzButton.LocalPosition = new Point(x, yLaunchSecond);
             }
             #endregion
@@ -528,14 +542,24 @@ namespace DirectConnect
                         _launchSecondCmzButton.Pressed += LaunchSecondCmzButton_Pressed;
                     }
 
-                    if (_launchDedicatedButton == null)
+                    if (_launchDedicatedLidgrenButton == null)
                     {
-                        _launchDedicatedButton = new FrameButtonControl
+                        _launchDedicatedLidgrenButton = new FrameButtonControl
                         {
-                            Text = "Launch Dedicated",
+                            Text = "Launch Dedicated (Lidgren)",
                             Font = CastleMinerZGame.Instance._medFont
                         };
-                        _launchDedicatedButton.Pressed += LaunchDedicatedButton_Pressed;
+                        _launchDedicatedLidgrenButton.Pressed += LaunchDedicatedLidgrenButton_Pressed;
+                    }
+
+                    if (_launchDedicatedSteamButton == null)
+                    {
+                        _launchDedicatedSteamButton = new FrameButtonControl
+                        {
+                            Text = "Launch Dedicated (Steam)",
+                            Font = CastleMinerZGame.Instance._medFont
+                        };
+                        _launchDedicatedSteamButton.Pressed += LaunchDedicatedSteamButton_Pressed;
                     }
 
                     if (_directConnectButton == null)
@@ -551,8 +575,11 @@ namespace DirectConnect
                     if (!__instance.Controls.Contains(_launchSecondCmzButton))
                         __instance.Controls.Add(_launchSecondCmzButton);
 
-                    if (!__instance.Controls.Contains(_launchDedicatedButton))
-                        __instance.Controls.Add(_launchDedicatedButton);
+                    if (!__instance.Controls.Contains(_launchDedicatedLidgrenButton))
+                        __instance.Controls.Add(_launchDedicatedLidgrenButton);
+
+                    if (!__instance.Controls.Contains(_launchDedicatedSteamButton))
+                        __instance.Controls.Add(_launchDedicatedSteamButton);
 
                     if (!__instance.Controls.Contains(_directConnectButton))
                         __instance.Controls.Add(_directConnectButton);
@@ -705,51 +732,84 @@ namespace DirectConnect
             }
 
             /// <summary>
-            /// Handles clicks for the "Launch Dedicated" button.
+            /// Handles clicks for the "Launch Dedicated (Lidgren)" button.
             ///
             /// Purpose:
-            /// - Locates the external dedicated server EXE.
+            /// - Locates the external Lidgren dedicated server EXE.
             /// - Launches it using the EXE's own working directory.
             ///
             /// Notes:
-            /// - If the EXE is not found, a user-facing dialog explains where it is expected.
+            /// - Legacy CMZServerHost.exe paths are still accepted for backwards compatibility.
             /// </summary>
-            private static void LaunchDedicatedButton_Pressed(object sender, EventArgs e)
+            private static void LaunchDedicatedLidgrenButton_Pressed(object sender, EventArgs e)
             {
                 try
                 {
-                    string exePath = FindDedicatedServerExe();
+                    string exePath = FindDedicatedLidgrenServerExe();
 
                     if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
                     {
                         CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
-                            "Launch Dedicated",
-                            "CMZServerHost.exe was not found.\n\n" +
-                            "To use Launch Dedicated, place the server executable in one of these locations:\n" +
-                            "- Next to CastleMinerZ.exe\n" +
+                            "Launch Dedicated (Lidgren)",
+                            "No Lidgren dedicated server executable was found.\n\n" +
+                            "Supported names and locations:\n" +
+                            "- Next to CastleMinerZ.exe\\CMZDedicatedLidgrenServer.exe\n" +
+                            "- !Mods\\CMZDedicatedLidgrenServer\\CMZDedicatedLidgrenServer.exe\n" +
+                            "- !Mods\\DirectConnect\\CMZDedicatedLidgrenServer.exe\n\n" +
+                            "Legacy fallback names are also checked:\n" +
+                            "- CMZServerHost.exe\n" +
                             "- !Mods\\CMZServerHost\\CMZServerHost.exe\n" +
-                            "- !Mods\\DirectConnect\\CMZServerHost.exe\n\n" +
-                            "Please also make sure the file is named exactly:\n" +
-                            "CMZServerHost.exe",
+                            "- !Mods\\DirectConnect\\CMZServerHost.exe",
                             false);
                         return;
                     }
 
-                    ProcessStartInfo psi = new ProcessStartInfo
-                    {
-                        FileName         = exePath,
-                        WorkingDirectory = Path.GetDirectoryName(exePath),
-                        UseShellExecute  = false
-                    };
+                    LaunchProcess(exePath);
 
-                    Process.Start(psi);
-
-                    Log($"Launched dedicated server host: {exePath}.");
+                    Log($"Launched Lidgren dedicated server host: {exePath}.");
                 }
                 catch (Exception ex)
                 {
                     CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
-                        "Launch Dedicated",
+                        "Launch Dedicated (Lidgren)",
+                        ex.Message,
+                        false);
+                }
+            }
+
+            /// <summary>
+            /// Handles clicks for the "Launch Dedicated (Steam)" button.
+            ///
+            /// Purpose:
+            /// - Locates the external Steam dedicated server EXE.
+            /// - Prompts the user that CastleMiner Z will be closed first.
+            /// - Queues the Steam dedicated server to launch after the current game process exits.
+            /// </summary>
+            private static void LaunchDedicatedSteamButton_Pressed(object sender, EventArgs e)
+            {
+                try
+                {
+                    string exePath = FindDedicatedSteamServerExe();
+
+                    if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+                    {
+                        CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
+                            "Launch Dedicated (Steam)",
+                            "CMZDedicatedSteamServer.exe was not found.\n\n" +
+                            "To use Launch Dedicated (Steam), place the server executable in one of these locations:\n" +
+                            "- Next to CastleMinerZ.exe\n" +
+                            "- !Mods\\CMZDedicatedSteamServer\\CMZDedicatedSteamServer.exe\n" +
+                            "- !Mods\\DirectConnect\\CMZDedicatedSteamServer.exe",
+                            false);
+                        return;
+                    }
+
+                    ShowSteamDedicatedLaunchConfirm(exePath);
+                }
+                catch (Exception ex)
+                {
+                    CastleMinerZGame.Instance.FrontEnd.ShowUIDialog(
+                        "Launch Dedicated (Steam)",
                         ex.Message,
                         false);
                 }
@@ -757,6 +817,7 @@ namespace DirectConnect
 
             /// <summary>
             /// Handles clicks for the "Direct Connect" button.
+
             ///
             /// Flow:
             /// - Prompts for IP or IP:Port.
@@ -934,27 +995,55 @@ namespace DirectConnect
             #region Dedicated EXE Finder
 
             /// <summary>
-            /// Finds the standalone dedicated server executable.
+            /// Finds the standalone Lidgren dedicated server executable.
             ///
             /// Search order:
             /// - Next to CastleMinerZ.exe
-            /// - !Mods\CMZServerHost\CMZServerHost.exe
-            /// - !Mods\DirectConnect\CMZServerHost.exe
-            ///
-            /// Notes:
-            /// - Update this list if your deployment layout changes.
+            /// - !Mods\CMZDedicatedLidgrenServer\CMZDedicatedLidgrenServer.exe
+            /// - !Mods\DirectConnect\CMZDedicatedLidgrenServer.exe
+            /// - Legacy CMZServerHost.exe locations
             /// </summary>
-            private static string FindDedicatedServerExe()
+            private static string FindDedicatedLidgrenServerExe()
             {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
                 string[] candidates = new string[]
                 {
+                    Path.Combine(baseDir, "CMZDedicatedLidgrenServer.exe"),
+                    Path.Combine(baseDir, "!Mods", "CMZDedicatedLidgrenServer", "CMZDedicatedLidgrenServer.exe"),
+                    Path.Combine(baseDir, "!Mods", "DirectConnect", "CMZDedicatedLidgrenServer.exe"),
+
+                    // Backwards compatibility.
                     Path.Combine(baseDir, "CMZServerHost.exe"),
                     Path.Combine(baseDir, "!Mods", "CMZServerHost", "CMZServerHost.exe"),
                     Path.Combine(baseDir, "!Mods", "DirectConnect", "CMZServerHost.exe"),
                 };
 
+                return FindFirstExisting(candidates);
+            }
+
+            /// <summary>
+            /// Finds the standalone Steam dedicated server executable.
+            /// </summary>
+            private static string FindDedicatedSteamServerExe()
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+                string[] candidates = new string[]
+                {
+                    Path.Combine(baseDir, "CMZDedicatedSteamServer.exe"),
+                    Path.Combine(baseDir, "!Mods", "CMZDedicatedSteamServer", "CMZDedicatedSteamServer.exe"),
+                    Path.Combine(baseDir, "!Mods", "DirectConnect", "CMZDedicatedSteamServer.exe"),
+                };
+
+                return FindFirstExisting(candidates);
+            }
+
+            /// <summary>
+            /// Returns the first file that exists from the provided candidate list.
+            /// </summary>
+            private static string FindFirstExisting(string[] candidates)
+            {
                 for (int i = 0; i < candidates.Length; i++)
                 {
                     if (File.Exists(candidates[i]))
@@ -962,6 +1051,111 @@ namespace DirectConnect
                 }
 
                 return null;
+            }
+
+            /// <summary>
+            /// Launches a process using its own directory as the working directory.
+            /// </summary>
+            private static void LaunchProcess(string exePath)
+            {
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath),
+                    UseShellExecute = false
+                };
+
+                Process.Start(psi);
+            }
+
+            /// <summary>
+            /// Prompts the user that the Steam dedicated server launch will close the game first.
+            ///
+            /// Notes:
+            /// - On confirmation, a temporary batch file is queued to launch the server only after the
+            ///   current CastleMiner Z process exits.
+            /// - This avoids launching the Steam dedicated host while the game is still running.
+            /// </summary>
+            private static void ShowSteamDedicatedLaunchConfirm(string exePath)
+            {
+                CastleMinerZGame game = CastleMinerZGame.Instance;
+                if (game == null || game.FrontEnd == null)
+                {
+                    ScheduleLaunchAfterCurrentProcessExits(exePath);
+                    return;
+                }
+
+                PCDialogScreen dialog = new PCDialogScreen(
+                    "Launch Dedicated (Steam)",
+                    "Launching the Steam dedicated server will close CastleMiner Z first.\n\nContinue?",
+                    null,
+                    true,
+                    game.DialogScreenImage,
+                    game._myriadMed,
+                    true,
+                    game.ButtonFrame);
+                dialog.UseDefaultValues();
+
+                game.FrontEnd.ShowPCDialogScreen(dialog, delegate
+                {
+                    if (dialog.OptionSelected == -1)
+                        return;
+
+                    try
+                    {
+                        ScheduleLaunchAfterCurrentProcessExits(exePath);
+                        Log($"Queued Steam dedicated server launch after game exit: {exePath}.");
+                        game.Exit();
+                    }
+                    catch (Exception ex)
+                    {
+                        game.FrontEnd.ShowUIDialog(
+                            "Launch Dedicated (Steam)",
+                            ex.Message,
+                            false);
+                    }
+                });
+            }
+
+            /// <summary>
+            /// Queues a detached helper script that waits for the current game process to close,
+            /// then launches the Steam dedicated server.
+            /// </summary>
+            private static void ScheduleLaunchAfterCurrentProcessExits(string exePath)
+            {
+                string fullExePath   = Path.GetFullPath(exePath);
+                string workingDir    = Path.GetDirectoryName(fullExePath) ?? AppDomain.CurrentDomain.BaseDirectory;
+                int    currentPid    = Process.GetCurrentProcess().Id;
+                string helperCmdPath = Path.Combine(Path.GetTempPath(), $"CastleForge_LaunchSteamDedicated_{currentPid}_{Guid.NewGuid():N}.cmd");
+
+                string script = string.Join(Environment.NewLine, new[]
+                {
+                    "@echo off",
+                    "setlocal",
+                    ":wait_for_cmz_exit",
+                    $"tasklist /FI \"PID eq {currentPid}\" 2>nul | find \"{currentPid}\" >nul",
+                    "if not errorlevel 1 (",
+                    "  ping 127.0.0.1 -n 2 >nul",
+                    "  goto wait_for_cmz_exit",
+                    ")",
+                    $"cd /d \"{workingDir}\"",
+                    $"start \"\" \"{fullExePath}\"",
+                    "del \"%~f0\""
+                }) + Environment.NewLine;
+
+                File.WriteAllText(helperCmdPath, script);
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/C \"{helperCmdPath}\"",
+                    WorkingDirectory = Path.GetDirectoryName(helperCmdPath),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+
+                Process.Start(psi);
             }
             #endregion
 
