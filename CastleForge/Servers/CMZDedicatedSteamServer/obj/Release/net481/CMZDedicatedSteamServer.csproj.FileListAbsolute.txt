@@ -1,7 +1,0 @@
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\net481\Libs\0Harmony.dll
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\net481\server.properties
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\Build\Release\net481\CMZDedicatedSteamServer.exe
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\net481\CMZDedicatedSteamServer.csproj.AssemblyReference.cache
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\net481\CMZDedicatedSteamServer.GeneratedMSBuildEditorConfig.editorconfig
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\net481\CMZDedicatedSteamServer.csproj.CoreCompileInputs.cache
-Z:\#VB PROJECTS BACKUP RECOURCES\Castle Miner Z\CastleForge\CastleForge\Servers\CMZDedicatedSteamServer\obj\Release\net481\CMZDedicatedSteamServer.exe
