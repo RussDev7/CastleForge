@@ -75,6 +75,13 @@ jobs:
           # Curated metadata based on the current official repo's README files and project layout.
           # Anything omitted here falls back to automatic extraction from the project README/csproj.
           OFFICIAL_OVERRIDES = {
+              'ModLoaderExtensions': {
+                  'name': 'ModLoaderExtensions',
+                  'slug': 'mod-loader-extensions',
+                  'summary': 'Shared CastleForge support package that provides common patches, utilities, hooks, and compatibility helpers used by many official mods.',
+                  'tags': ['framework', 'shared-library', 'patches', 'dependencies'],
+                  'dependencies': [],
+              },
               'BruteForceJoin': {
                   'name': 'BruteForceJoin',
                   'slug': 'brute-force-join',
@@ -410,12 +417,15 @@ jobs:
           def repo_tree_url(path: str) -> str:
               return f'{GITHUB_SERVER_URL}/{REPO_SLUG}/tree/{DEFAULT_BRANCH}/{path}'
 
-          def determine_release_context():
-              release = latest_release_with_prefix('mods-v')
+          mods_release_ctx = determine_release_context('mods-v')
+          core_release_ctx = determine_release_context('core-v')
+
+          def determine_release_context(prefix: str):
+              release = latest_release_with_prefix(prefix)
               if not release:
                   return {'tag': '', 'version': '', 'html_url': '', 'assets': {}}
               tag = str(release.get('tag_name', '')).strip()
-              version = tag[len('mods-v'):] if tag.startswith('mods-v') else ''
+              version = tag[len(prefix):] if tag.startswith(prefix) else ''
               assets = {}
               for asset in release.get('assets', []) or []:
                   name = str(asset.get('name', '')).strip()
@@ -428,6 +438,11 @@ jobs:
                   'html_url': str(release.get('html_url', '')).strip(),
                   'assets': assets,
               }
+
+          def release_context_for(project_name: str):
+              if project_name == 'ModLoaderExtensions':
+                  return core_release_ctx
+              return mods_release_ctx
 
           def build_entry(project_dir: Path, release_ctx: dict):
               csproj = find_csproj(project_dir)
@@ -453,10 +468,12 @@ jobs:
               deps = override.get('dependencies') or extract_dependencies(csproj)
               deps = [d for d in deps if d not in EXCLUDED_DEPENDENCIES]
 
-              asset_name = f"{assembly}-{release_ctx['tag']}.zip" if release_ctx['tag'] else ''
-              release_url = release_ctx['assets'].get(asset_name, '') if asset_name else ''
+              ctx = release_context_for(project_name)
+
+              asset_name = f"{assembly}-{ctx['tag']}.zip" if ctx['tag'] else ''
+              release_url = ctx['assets'].get(asset_name, '') if asset_name else ''
               if not release_url:
-                  release_url = release_ctx['html_url']
+                  release_url = ctx['html_url']
 
               entry = {
                   'name': override.get('name') or heading or project_name,
@@ -494,17 +511,31 @@ jobs:
           else:
               print('No mods-v* GitHub release found yet; release URLs will be blank until a mods release exists.')
 
+          SPECIAL_CATALOG_PROJECTS = [
+              FRAMEWORK_ROOT / 'ModLoaderExtensions',
+          ]
+
+          catalog_dirs = []
+
+          if MODS_ROOT.is_dir():
+              for project_dir in MODS_ROOT.iterdir():
+                  if project_dir.is_dir() and not project_dir.name.startswith('.'):
+                      catalog_dirs.append(project_dir)
+
+          for project_dir in SPECIAL_CATALOG_PROJECTS:
+              if project_dir.is_dir():
+                  catalog_dirs.append(project_dir)
+
           entries = []
-          for project_dir in sorted(MODS_ROOT.iterdir(), key=lambda p: p.name.lower()):
-              if not project_dir.is_dir() or project_dir.name.startswith('.'):
-                  continue
+          for project_dir in sorted(catalog_dirs, key=lambda p: p.name.lower()):
               entry = build_entry(project_dir, release_ctx)
               if entry:
                   entries.append(entry)
 
           entries.sort(key=lambda item: item['name'].lower())
 
-          unknown_overrides = sorted(set(OFFICIAL_OVERRIDES) - {p.name for p in MODS_ROOT.iterdir() if p.is_dir()})
+          known_catalog_projects = {p.name for p in catalog_dirs if p.is_dir()}
+          unknown_overrides = sorted(set(OFFICIAL_OVERRIDES) - known_catalog_projects)
           if unknown_overrides:
               print(f'Warning: overrides exist for missing projects: {unknown_overrides}')
 
