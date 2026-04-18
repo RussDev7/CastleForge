@@ -67,7 +67,7 @@ jobs:
           # - ModLoader: the base framework/bootstrap itself, not a content mod.
           # - ModLoaderExtensions: framework/support package shipped separately via core release.
           # - Example: starter/template project rather than a normal end-user gameplay/content mod.
-          EXCLUDED_CATALOG_PROJECTS = {'ModLoader', 'ModLoaderExtensions', 'Example'}
+          EXCLUDED_CATALOG_PROJECTS = {'ModLoader', 'Example'}
           EXCLUDED_DEPENDENCIES = {'ModLoader'}
 
           PREVIEW_EXTS = {'.png', '.gif', '.jpg', '.jpeg', '.webp'}
