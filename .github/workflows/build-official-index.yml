@@ -65,7 +65,6 @@ jobs:
 
           # Exclusions:
           # - ModLoader: the base framework/bootstrap itself, not a content mod.
-          # - ModLoaderExtensions: framework/support package shipped separately via core release.
           # - Example: starter/template project rather than a normal end-user gameplay/content mod.
           EXCLUDED_CATALOG_PROJECTS = {'ModLoader', 'Example'}
           EXCLUDED_DEPENDENCIES = {'ModLoader'}
@@ -169,7 +168,7 @@ jobs:
               'RenderDistancePlus': {
                   'name': 'RenderDistancePlus',
                   'slug': 'render-distance-plus',
-                  'summary': 'Extends the game\'s render distance beyond vanilla limits and replaces the stock setting with a safer, more usable slider.',
+                  'summary': "Extends the game's render distance beyond vanilla limits and replaces the stock setting with a safer, more usable slider.",
                   'tags': ['graphics', 'render-distance', 'performance', 'ui'],
               },
               'Restore360Water': {
@@ -217,7 +216,7 @@ jobs:
               'VoiceChat': {
                   'name': 'VoiceChat',
                   'slug': 'voice-chat',
-                  'summary': 'Strengthens the game\'s built-in voice pipeline with push-to-talk, safer packet handling, HUD speaker feedback, and cleaner session behavior.',
+                  'summary': "Strengthens the game's built-in voice pipeline with push-to-talk, safer packet handling, HUD speaker feedback, and cleaner session behavior.",
                   'tags': ['voice', 'multiplayer', 'audio', 'communication'],
               },
               'WeaponAddons': {
@@ -277,6 +276,38 @@ jobs:
                   return None
               candidates.sort(key=lambda r: (r.get('published_at') or '', r.get('created_at') or ''), reverse=True)
               return candidates[0]
+
+          def determine_release_context(prefix: str):
+              release = latest_release_with_prefix(prefix)
+              if not release:
+                  return {'tag': '', 'version': '', 'html_url': '', 'assets': {}}
+              tag = str(release.get('tag_name', '')).strip()
+              version = tag[len(prefix):] if tag.startswith(prefix) else ''
+              assets = {}
+              for asset in release.get('assets', []) or []:
+                  name = str(asset.get('name', '')).strip()
+                  url = str(asset.get('browser_download_url', '')).strip()
+                  if name and url:
+                      assets[name] = url
+              return {
+                  'tag': tag,
+                  'version': version,
+                  'html_url': str(release.get('html_url', '')).strip(),
+                  'assets': assets,
+              }
+
+          mods_release_ctx = determine_release_context('mods-v')
+          core_release_ctx = determine_release_context('core-v')
+
+          if mods_release_ctx['tag']:
+              print(f"Using latest mods release: {mods_release_ctx['tag']}")
+          else:
+              print('No mods-v* GitHub release found yet; mod release URLs will be blank until a mods release exists.')
+
+          if core_release_ctx['tag']:
+              print(f"Using latest core release: {core_release_ctx['tag']}")
+          else:
+              print('No core-v* GitHub release found yet; framework release URLs will be blank until a core release exists.')
 
           def strip_bom(text: str) -> str:
               return text.lstrip('\ufeff').strip()
@@ -338,7 +369,6 @@ jobs:
 
           def auto_summary(readme_text: str):
               lines = [strip_bom(line) for line in readme_text.splitlines()]
-              # Prefer leading blockquote teaser lines.
               quotes = []
               seen_nonempty = False
               for line in lines:
@@ -359,7 +389,6 @@ jobs:
               if quotes:
                   return ' '.join(quotes).strip()
 
-              # Fallback to first meaningful paragraph.
               parts = []
               for line in lines:
                   if not line:
@@ -417,34 +446,12 @@ jobs:
           def repo_tree_url(path: str) -> str:
               return f'{GITHUB_SERVER_URL}/{REPO_SLUG}/tree/{DEFAULT_BRANCH}/{path}'
 
-          mods_release_ctx = determine_release_context('mods-v')
-          core_release_ctx = determine_release_context('core-v')
-
-          def determine_release_context(prefix: str):
-              release = latest_release_with_prefix(prefix)
-              if not release:
-                  return {'tag': '', 'version': '', 'html_url': '', 'assets': {}}
-              tag = str(release.get('tag_name', '')).strip()
-              version = tag[len(prefix):] if tag.startswith(prefix) else ''
-              assets = {}
-              for asset in release.get('assets', []) or []:
-                  name = str(asset.get('name', '')).strip()
-                  url = str(asset.get('browser_download_url', '')).strip()
-                  if name and url:
-                      assets[name] = url
-              return {
-                  'tag': tag,
-                  'version': version,
-                  'html_url': str(release.get('html_url', '')).strip(),
-                  'assets': assets,
-              }
-
           def release_context_for(project_name: str):
               if project_name == 'ModLoaderExtensions':
                   return core_release_ctx
               return mods_release_ctx
 
-          def build_entry(project_dir: Path, release_ctx: dict):
+          def build_entry(project_dir: Path):
               csproj = find_csproj(project_dir)
               if csproj is None:
                   return None
@@ -465,11 +472,13 @@ jobs:
               readme_rel = rel((project_dir / 'README.md').relative_to(ROOT)) if readme.is_file() else ''
               project_rel = rel(project_dir.relative_to(ROOT))
 
-              deps = override.get('dependencies') or extract_dependencies(csproj)
+              if 'dependencies' in override:
+                  deps = list(override.get('dependencies') or [])
+              else:
+                  deps = extract_dependencies(csproj)
               deps = [d for d in deps if d not in EXCLUDED_DEPENDENCIES]
 
               ctx = release_context_for(project_name)
-
               asset_name = f"{assembly}-{ctx['tag']}.zip" if ctx['tag'] else ''
               release_url = ctx['assets'].get(asset_name, '') if asset_name else ''
               if not release_url:
@@ -487,16 +496,14 @@ jobs:
                   'source_repo': repo_tree_url(project_rel),
                   'releases_url': release_url,
                   'game_version': override.get('game_version', DEFAULT_GAME_VERSION),
-                  'castleforge_version': override.get('castleforge_version', release_ctx['version']),
+                  'castleforge_version': override.get('castleforge_version', ctx['version']),
                   'license': override.get('license', DEFAULT_LICENSE),
-                  'tags': override.get('tags', []),
-                  'maintainers': override.get('maintainers', DEFAULT_MAINTAINERS),
+                  'tags': list(override.get('tags', [])),
+                  'maintainers': list(override.get('maintainers', DEFAULT_MAINTAINERS)),
                   'dependencies': deps,
               }
               return entry
 
-          # Inventory non-mod project groups so the workflow is explicitly aware of them,
-          # even though only gameplay/content mods are emitted to Index/mods.json.
           framework_projects = sorted(p.parent.name for p in FRAMEWORK_ROOT.rglob('*.csproj')) if FRAMEWORK_ROOT.is_dir() else []
           server_projects = sorted(p.parent.name for p in SERVERS_ROOT.rglob('*.csproj')) if SERVERS_ROOT.is_dir() else []
           tool_projects = sorted(p.parent.name for p in TOOLS_ROOT.rglob('*.csproj')) if TOOLS_ROOT.is_dir() else []
@@ -504,12 +511,6 @@ jobs:
           print(f'Framework projects scanned: {framework_projects}')
           print(f'Server projects scanned: {server_projects}')
           print(f'Tool projects scanned: {tool_projects}')
-
-          release_ctx = determine_release_context()
-          if release_ctx['tag']:
-              print(f"Using latest mods release: {release_ctx['tag']}")
-          else:
-              print('No mods-v* GitHub release found yet; release URLs will be blank until a mods release exists.')
 
           SPECIAL_CATALOG_PROJECTS = [
               FRAMEWORK_ROOT / 'ModLoaderExtensions',
@@ -528,7 +529,7 @@ jobs:
 
           entries = []
           for project_dir in sorted(catalog_dirs, key=lambda p: p.name.lower()):
-              entry = build_entry(project_dir, release_ctx)
+              entry = build_entry(project_dir)
               if entry:
                   entries.append(entry)
 
