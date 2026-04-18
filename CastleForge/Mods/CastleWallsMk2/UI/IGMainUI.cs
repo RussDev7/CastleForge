@@ -1544,7 +1544,7 @@ namespace CastleWallsMk2
                     }
                     CB_Checkbox    ("Shoot Grenades",    ref _shootGrenadeAmmo,       Callbacks.OnShootGrenades);
                     CB_Checkbox    ("Shoot Rockets",     ref _shootRocketAmmo,        Callbacks.OnShootRockets);
-                    if (_shootRocketAmmo)
+                    if (_shootGrenadeAmmo || _shootRocketAmmo)
                     {
                         CB_RadioButton("SA_Y", "You",      ref _shootAmmoScope, Callbacks.OnShootAmmoScope, PlayerSelectScope.Personal, enabled: _shootGrenadeAmmo || _shootRocketAmmo);
                         ImGui.SameLine();
