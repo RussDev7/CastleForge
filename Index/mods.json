@@ -229,6 +229,31 @@
     "dependencies": []
   },
   {
+    "name": "ModLoaderExtensions",
+    "slug": "mod-loader-extensions",
+    "category": "mod",
+    "author": "RussDev7",
+    "summary": "Shared CastleForge support package that provides common patches, utilities, hooks, and compatibility helpers used by many official mods.",
+    "readme_path": "CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md",
+    "preview_path": "CastleForge/ModLoaderFramework/ModLoaderExtensions/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/ModLoaderFramework/ModLoaderExtensions",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/tag/core-v0.1.0",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "0.1.0",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "framework",
+      "shared-library",
+      "patches",
+      "dependencies"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
     "name": "MoreAchievements",
     "slug": "more-achievements",
     "category": "mod",
