@@ -4,7 +4,7 @@
 
 > **CastleForge** is an open-source modding framework, mod catalog, dedicated-server stack, and creator toolset for **CastleMiner Z**.
 
-CastleForge is more than a single loader DLL. It is a full ecosystem built around a config-bootstrapped runtime loader, shared framework services, large gameplay and utility mods, in-game editors, world-generation overhauls, content-pack systems, a dedicated host path, and supporting creator tools.
+CastleForge is more than a single loader DLL. It is a full ecosystem built around a config-bootstrapped runtime loader, shared framework services, large gameplay and utility mods, in-game editors, world-generation overhauls, content-pack systems, dedicated host paths, and supporting creator tools.
 
 This root README is now the **main landing page and catalog** for the whole repository.
 For the deep loader internals that used to live here, go to **[CastleForge/ModLoaderFramework/ModLoader/README.md](CastleForge/ModLoaderFramework/ModLoader/README.md)**.
@@ -25,7 +25,7 @@ If CastleForge has been useful to you and you’d like to support continued deve
 
 - **2 core framework projects**: `ModLoader` and `ModLoaderExtensions`
 - **29 gameplay / utility / world-building mods**
-- **1 dedicated server project**: `CMZServerHost`
+- **2 dedicated server projects**: `CMZDedicatedLidgrenServer` and `CMZDedicatedSteamServer`
 - **3 creator tools** for pipelines and asset preparation
 
 ### Why CastleForge stands out
@@ -33,7 +33,7 @@ If CastleForge has been useful to you and you’d like to support continued deve
 - **No external injector required** — the core loader starts through `CastleMinerZ.exe.config` and a custom `AppDomainManager`.
 - **In-process, mod-author-friendly runtime** — discover DLLs from `!Mods`, apply Harmony patches, and tick mods from the live game.
 - **A real ecosystem instead of isolated experiments** — many projects share common infrastructure, shared helpers, and consistent packaging patterns.
-- **Both player-facing and creator-facing** — the repo includes in-game mods, a dedicated server path, content-pack systems, and offline tools.
+- **Both player-facing and creator-facing** — the repo includes in-game mods, dedicated server paths, content-pack systems, and offline tools.
 - **Strong emphasis on usability** — many projects expose clean in-game UIs, config reload workflows, or menu-integrated entry points instead of forcing external setup.
 
 ---
@@ -45,7 +45,7 @@ If CastleForge has been useful to you and you’d like to support continued deve
 | Understand how the loader works      | [ModLoader README](CastleForge/ModLoaderFramework/ModLoader/README.md)                                                                                                                                                                     |
 | See the shared framework layer       | [ModLoaderExtensions README](CastleForge/ModLoaderFramework/ModLoaderExtensions/README.md)                                                                                                                                                 |
 | Browse gameplay and utility mods     | [Full project catalog](#full-project-catalog)                                                                                                                                                                                              |
-| Run a dedicated server               | [CMZServerHost README](CastleForge/Servers/CMZServerHost/README.md)                                                                                                                                                                        |
+| Run a dedicated server               | [CMZDedicatedLidgrenServer](CastleForge/Servers/CMZDedicatedLidgrenServer/README.md), [CMZDedicatedSteamServer](CastleForge/Servers/CMZDedicatedSteamServer/README.md), and [DirectConnect](CastleForge/Mods/DirectConnect/README.md) |
 | Build content packs or custom assets | [WeaponAddons](CastleForge/Mods/WeaponAddons/README.md), [TexturePacks](CastleForge/Mods/TexturePacks/README.md), [FbxToXnb](CastleForge/Tools/FbxToXnb/README.md), [DNA.SkinnedPipeline](CastleForge/Tools/DNA.SkinnedPipeline/README.md) |
 | Build palettes for pixel art         | [WorldEditPixelart](CastleForge/Mods/WorldEditPixelart/README.md) and [ImageColorsToXml](CastleForge/Tools/ImageColorsToXml/README.md)                                                                                                     |
 | Start writing a new mod              | [Example](CastleForge/Mods/Example/README.md)                                                                                                                                                                                              |
@@ -67,6 +67,19 @@ If CastleForge has been useful to you and you’d like to support continued deve
 8. Open each mod README for screenshots, config options, commands, hotkeys, and troubleshooting.
 
 > `ModLoaderExtensions` is optional, but it is strongly recommended because many CastleForge mods are built to work best with it.
+
+## Dedicated server options
+
+CastleForge now includes two dedicated-server transports:
+
+- **[CMZDedicatedLidgrenServer](CastleForge/Servers/CMZDedicatedLidgrenServer/README.md)** — a **Lidgren / direct-IP** dedicated host that pairs especially well with **[DirectConnect](CastleForge/Mods/DirectConnect/README.md)**.
+- **[CMZDedicatedSteamServer](CastleForge/Servers/CMZDedicatedSteamServer/README.md)** — a **Steam-native** dedicated host path built around a real logged-in Steam account and the online browser workflow.
+
+If you are using **DirectConnect**, the in-game menu can now launch:
+- **Launch Second CMZ**
+- **Launch Dedicated (Lidgren)**
+- **Launch Dedicated (Steam)**
+- **Direct Connect**
 
 ---
 
@@ -113,7 +126,8 @@ CastleForge/
 │  │  ├─ WorldEditPixelart/
 │  │  └─ WorldGenPlus/
 │  ├─ Servers/
-│  │  └─ CMZServerHost/
+│  │  ├─ CMZDedicatedLidgrenServer/
+│  │  └─ CMZDedicatedSteamServer/
 │  └─ Tools/
 │     ├─ DNA.SkinnedPipeline/
 │     ├─ FbxToXnb/
@@ -262,8 +276,8 @@ The catalog below is organized so the root README stays friendly to browse while
   </tr>
   <tr>
     <td align="center" valign="top"><a href="CastleForge/Mods/DirectConnect/README.md"><img src="CastleForge/Mods/DirectConnect/_Images/Preview.png" alt="DirectConnect preview" width="280"></a><br><b>DirectConnect</b></td>
-    <td valign="top">Adds a proper direct IP join flow to the multiplayer browser. It remembers the last address you used, adds a real cancel path while joining, and can launch a compatible dedicated server or a second client from the menu.</td>
-    <td valign="top"><a href="CastleForge/Mods/DirectConnect/README.md">README</a><br><a href="CastleForge/Servers/CMZServerHost/README.md">Dedicated server</a></td>
+    <td valign="top">Adds a proper direct IP join flow to the multiplayer browser. It remembers the last address you used, adds a real cancel path while joining, and can launch <b>CMZDedicatedLidgrenServer</b>, <b>CMZDedicatedSteamServer</b>, or a second client directly from the menu.</td>
+    <td valign="top"><a href="CastleForge/Mods/DirectConnect/README.md">README</a><br><a href="CastleForge/Servers/CMZDedicatedLidgrenServer/README.md">Lidgren server</a><br><a href="CastleForge/Servers/CMZDedicatedSteamServer/README.md">Steam server</a></td>
   </tr>
   <tr>
     <td align="center" valign="top"><a href="CastleForge/Mods/NetworkSniffer/README.md"><img src="CastleForge/Mods/NetworkSniffer/_Images/Preview.gif" alt="NetworkSniffer preview" width="280"></a><br><b>NetworkSniffer</b></td>
@@ -281,9 +295,14 @@ The catalog below is organized so the root README stays friendly to browse while
     <td valign="top"><a href="CastleForge/Mods/VoiceChat/README.md">README</a></td>
   </tr>
   <tr>
-    <td align="center" valign="top"><a href="CastleForge/Servers/CMZServerHost/README.md"><img src="CastleForge/Servers/CMZServerHost/_Images/Preview.png" alt="CMZServerHost preview" width="280"></a><br><b>CMZServerHost</b></td>
-    <td valign="top">A dedicated CastleMiner Z server host that runs outside the normal game client, keeps world state server-side, and pairs naturally with mods like DirectConnect for smoother custom multiplayer hosting.</td>
-    <td valign="top"><a href="CastleForge/Servers/CMZServerHost/README.md">README</a><br><a href="CastleForge/Mods/DirectConnect/README.md">Pairs with DirectConnect</a></td>
+    <td align="center" valign="top"><a href="CastleForge/Servers/CMZDedicatedLidgrenServer/README.md"><img src="CastleForge/Servers/CMZDedicatedLidgrenServer/_Images/Preview.png" alt="CMZDedicatedLidgrenServer preview" width="280"></a><br><b>CMZDedicatedLidgrenServer</b></td>
+    <td valign="top">A dedicated CastleMiner Z server host for <b>Lidgren / direct-IP</b> workflows. It runs outside the normal game client, keeps world state server-side, and pairs naturally with DirectConnect for smoother custom multiplayer hosting.</td>
+    <td valign="top"><a href="CastleForge/Servers/CMZDedicatedLidgrenServer/README.md">README</a><br><a href="CastleForge/Mods/DirectConnect/README.md">Pairs with DirectConnect</a></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><a href="CastleForge/Servers/CMZDedicatedSteamServer/README.md"><img src="CastleForge/Servers/CMZDedicatedSteamServer/_Images/Preview.png" alt="CMZDedicatedSteamServer preview" width="280"></a><br><b>CMZDedicatedSteamServer</b></td>
+    <td valign="top">A <b>Steam-native</b> dedicated CastleMiner Z host path that uses the Steam browser / session flow under a real logged-in Steam account, giving CastleForge a separate Steam transport alongside the Lidgren host.</td>
+    <td valign="top"><a href="CastleForge/Servers/CMZDedicatedSteamServer/README.md">README</a><br><a href="CastleForge/Mods/DirectConnect/README.md">Launchable from DirectConnect</a></td>
   </tr>
 </table>
 
