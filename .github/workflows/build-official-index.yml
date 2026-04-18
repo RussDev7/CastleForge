@@ -44,7 +44,7 @@ jobs:
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          ROOT = Path('.')
+          ROOT = Path('.').resolve()
           REPO_SLUG = os.environ['GITHUB_REPOSITORY']
           GITHUB_SERVER_URL = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
           DEFAULT_BRANCH = os.environ.get('DEFAULT_BRANCH', 'main')
