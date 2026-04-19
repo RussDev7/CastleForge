@@ -6,7 +6,7 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 
 /*
 This mod was created for launching dedicated servers and connecting to dedicated servers (Lidgren & Steam).
-Main Project: https://github.com/RussDev7/CMZDedicatedServer.
+Main Project: https://github.com/RussDev7/CMZDedicatedServers.
 */
 
 #pragma warning disable IDE0060              // Silence IDE0060.

@@ -425,6 +425,12 @@ Loads and validates typed config values from `server.properties`, supplies defau
 
 ---
 
+## Original standalone project
+
+This CastleForge version of **CMZDedicatedLidgrenServer** is based on and evolves the earlier standalone dedicated-server project:
+
+- [CMZDedicatedServers](https://github.com/RussDev7/CMZDedicatedServers)
+
 ## License
 
 This project is licensed under **GPL-3.0-or-later**.

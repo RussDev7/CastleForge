@@ -594,7 +594,7 @@ That makes the project much easier to showcase and distribute as part of CastleF
 
 This CastleForge version of **CMZDedicatedLidgrenServer** is based on and evolves the earlier standalone dedicated-server project:
 
-- [CMZDedicatedServer](https://github.com/RussDev7/CMZDedicatedServer)
+- [CMZDedicatedServers](https://github.com/RussDev7/CMZDedicatedServers)
 
 ## License
 
