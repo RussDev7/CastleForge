@@ -40,7 +40,7 @@ namespace ModLoaderExt
         // [FloodGuard].
         
         public static volatile bool FloodGuardEnabled         = true;
-        public static volatile int  PerSenderMaxPacketsPerSec = 256;
+        public static volatile int  PerSenderMaxPacketsPerSec = 512;
         public static volatile int  BlackholeMs               = 30000;
         public static volatile bool DoNotExemptHost           = true;
 
@@ -153,7 +153,7 @@ namespace ModLoaderExt
 
         // [FloodGuard].
         public bool FloodGuardEnabled         = true;
-        public int  PerSenderMaxPacketsPerSec = 256;
+        public int  PerSenderMaxPacketsPerSec = 512;
         public int  BlackholeMs               = 30000;
         public bool DoNotExemptHost           = true;
 
@@ -215,7 +215,7 @@ namespace ModLoaderExt
                     "Enabled                   = true",
                     "; Per-sender inbound packet cap (1 second window).",
                     "; Don't set this too low unless you're OK dropping legit bursts.",
-                    "PerSenderMaxPacketsPerSec = 256",
+                    "PerSenderMaxPacketsPerSec = 512",
                     "; How long (ms) to blackhole a sender who exceeds the cap.",
                     "BlackholeMs               = 30000",
                     "; IMPORTANT: If true, host is NOT exempt (safer if attacker can be host).",
@@ -281,7 +281,7 @@ namespace ModLoaderExt
 
                 // [FloodGuard].
                 FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", true),
-                PerSenderMaxPacketsPerSec = Clamp(ini.GetInt("FloodGuard", "PerSenderMaxPacketsPerSec", 256), 1, 50000),
+                PerSenderMaxPacketsPerSec = Clamp(ini.GetInt("FloodGuard", "PerSenderMaxPacketsPerSec", 512), 1, 50000),
                 BlackholeMs               = Clamp(ini.GetInt("FloodGuard", "BlackholeMs", 30000), 0, 600000),
                 DoNotExemptHost           = ini.GetBool("FloodGuard", "DoNotExemptHost", true),
 

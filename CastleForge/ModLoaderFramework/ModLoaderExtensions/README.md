@@ -531,7 +531,7 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 |---------------------------------------------------|--------------------------------------------:|------------------------------------------------------------|
 | `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                        |
 | `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                |
-| `PerSenderMaxPacketsPerSec`                       | `256`                                       | Per-sender packet cap inside the 1-second window.          |
+| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.          |
 | `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap. |
 | `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.            |
 | `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.   |
@@ -569,7 +569,7 @@ HideMenuAd                = true
 Enabled                   = true
 ; Per-sender inbound packet cap (1 second window).
 ; Don't set this too low unless you're OK dropping legit bursts.
-PerSenderMaxPacketsPerSec = 256
+PerSenderMaxPacketsPerSec = 512
 ; How long (ms) to blackhole a sender who exceeds the cap.
 BlackholeMs               = 30000
 ; IMPORTANT: If true, host is NOT exempt (safer if attacker can be host).
