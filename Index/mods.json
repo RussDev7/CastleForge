@@ -79,6 +79,56 @@
     ]
   },
   {
+    "name": "CMZDedicatedLidgrenServer",
+    "slug": "cmz-dedicated-lidgren-server",
+    "category": "server",
+    "author": "RussDev7",
+    "summary": "Dedicated CastleMiner Z server host for Lidgren and direct-IP workflows, with server-side world state, inventory persistence, and packaged runtime files.",
+    "readme_path": "CastleForge/Servers/CMZDedicatedLidgrenServer/README.md",
+    "preview_path": "CastleForge/Servers/CMZDedicatedLidgrenServer/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Servers/CMZDedicatedLidgrenServer",
+    "releases_url": "",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "server",
+      "dedicated-server",
+      "lidgren",
+      "direct-connect"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
+    "name": "CMZDedicatedSteamServer",
+    "slug": "cmz-dedicated-steam-server",
+    "category": "server",
+    "author": "RussDev7",
+    "summary": "Dedicated CastleMiner Z server host for Steam-native session workflows, built around a logged-in Steam account and packaged server runtime files.",
+    "readme_path": "CastleForge/Servers/CMZDedicatedSteamServer/README.md",
+    "preview_path": "CastleForge/Servers/CMZDedicatedSteamServer/_Images/Preview.png",
+    "official": true,
+    "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Servers/CMZDedicatedSteamServer",
+    "releases_url": "",
+    "game_version": "v1.9.9.8",
+    "castleforge_version": "",
+    "license": "GPL-3.0-or-later",
+    "tags": [
+      "server",
+      "dedicated-server",
+      "steam",
+      "multiplayer"
+    ],
+    "maintainers": [
+      "RussDev7"
+    ],
+    "dependencies": []
+  },
+  {
     "name": "CMZMaterialColors",
     "slug": "cmz-material-colors",
     "category": "mod",
