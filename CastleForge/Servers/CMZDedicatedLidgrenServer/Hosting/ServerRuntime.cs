@@ -1,5 +1,4 @@
-﻿
-/*
+﻿/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServer - see LICENSE for details.
