@@ -13,6 +13,7 @@ on:
       - '.github/workflows/release-mods.yml'
       - '.github/workflows/release-core.yml'
       - '.github/workflows/release-full.yml'
+      - '.github/workflows/release-servers.yml'
   release:
     types: [published, edited, prereleased, released]
   workflow_dispatch:
@@ -79,6 +80,22 @@ jobs:
                   'slug': 'mod-loader-extensions',
                   'summary': 'Shared CastleForge support package that provides common patches, utilities, hooks, and compatibility helpers used by many official mods.',
                   'tags': ['framework', 'shared-library', 'patches', 'dependencies'],
+                  'dependencies': [],
+              },
+              'CMZDedicatedLidgrenServer': {
+                  'name': 'CMZDedicatedLidgrenServer',
+                  'slug': 'cmz-dedicated-lidgren-server',
+                  'category': 'server',
+                  'summary': 'Dedicated CastleMiner Z server host for Lidgren and direct-IP workflows, with server-side world state, inventory persistence, and packaged runtime files.',
+                  'tags': ['server', 'dedicated-server', 'lidgren', 'direct-connect'],
+                  'dependencies': [],
+              },
+              'CMZDedicatedSteamServer': {
+                  'name': 'CMZDedicatedSteamServer',
+                  'slug': 'cmz-dedicated-steam-server',
+                  'category': 'server',
+                  'summary': 'Dedicated CastleMiner Z server host for Steam-native session workflows, built around a logged-in Steam account and packaged server runtime files.',
+                  'tags': ['server', 'dedicated-server', 'steam', 'multiplayer'],
                   'dependencies': [],
               },
               'BruteForceJoin': {
@@ -298,6 +315,7 @@ jobs:
 
           mods_release_ctx = determine_release_context('mods-v')
           core_release_ctx = determine_release_context('core-v')
+          servers_release_ctx = determine_release_context('servers-v')
 
           if mods_release_ctx['tag']:
               print(f"Using latest mods release: {mods_release_ctx['tag']}")
@@ -308,6 +326,11 @@ jobs:
               print(f"Using latest core release: {core_release_ctx['tag']}")
           else:
               print('No core-v* GitHub release found yet; framework release URLs will be blank until a core release exists.')
+
+          if servers_release_ctx['tag']:
+              print(f"Using latest servers release: {servers_release_ctx['tag']}")
+          else:
+              print('No servers-v* GitHub release found yet; dedicated server release URLs will be blank until a servers release exists.')
 
           def strip_bom(text: str) -> str:
               return text.lstrip('\ufeff').strip()
@@ -449,6 +472,8 @@ jobs:
           def release_context_for(project_name: str):
               if project_name == 'ModLoaderExtensions':
                   return core_release_ctx
+              if project_name in {'CMZDedicatedLidgrenServer', 'CMZDedicatedSteamServer'}:
+                  return servers_release_ctx
               return mods_release_ctx
 
           def build_entry(project_dir: Path):
@@ -487,7 +512,7 @@ jobs:
               entry = {
                   'name': override.get('name') or heading or project_name,
                   'slug': override.get('slug') or slugify(project_name),
-                  'category': DEFAULT_CATEGORY,
+                  'category': override.get('category', DEFAULT_CATEGORY),
                   'author': override.get('author', DEFAULT_AUTHOR),
                   'summary': summary,
                   'readme_path': readme_rel,
@@ -514,6 +539,8 @@ jobs:
 
           SPECIAL_CATALOG_PROJECTS = [
               FRAMEWORK_ROOT / 'ModLoaderExtensions',
+              SERVERS_ROOT / 'CMZDedicatedLidgrenServer',
+              SERVERS_ROOT / 'CMZDedicatedSteamServer',
           ]
 
           catalog_dirs = []
@@ -542,7 +569,7 @@ jobs:
 
           INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
           INDEX_PATH.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-          print(f'Wrote {INDEX_PATH.as_posix()} with {len(entries)} official mod entries.')
+          print(f'Wrote {INDEX_PATH.as_posix()} with {len(entries)} official catalog entries.')
           PY
 
       - name: Commit updated official index
