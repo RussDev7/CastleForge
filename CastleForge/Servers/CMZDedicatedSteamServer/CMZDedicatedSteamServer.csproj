@@ -55,5 +55,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>server.properties</TargetPath>
     </None>
+
+    <None Update="Templates\steam_appid.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>steam_appid.txt</TargetPath>
+    </None>
   </ItemGroup>
 </Project>
