@@ -103,5 +103,11 @@
       <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\DiscordButton.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\DiscordButton_Hover.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

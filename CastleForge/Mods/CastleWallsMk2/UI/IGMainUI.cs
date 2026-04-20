@@ -1131,6 +1131,10 @@ namespace CastleWallsMk2
                 }
                 #endregion
 
+                // Reload remembered toggle values into the UI when allowed.
+                EnsureRememberedToggleUiStateLoaded();
+                EnsureRememberedSliderUiStateLoaded();
+
                 // If the user clicked the X this frame, IsOpen is now false.
                 // Mirror that into the renderer state immediately and end this window cleanly.
                 if (!IsOpen)
@@ -2287,6 +2291,13 @@ namespace CastleWallsMk2
                             {
                                 cfg.PreserveTogglesWhenLeavingGame = value;
                                 cfg.Save();
+
+                                // Re-show remembered checkbox states immediately when menu edits are allowed.
+                                if (value)
+                                {
+                                    EnsureRememberedToggleUiStateLoaded();
+                                    EnsureRememberedSliderUiStateLoaded();
+                                }
                             }
 
                             if (ImGui.IsItemHovered())
@@ -2300,10 +2311,48 @@ namespace CastleWallsMk2
                             {
                                 cfg.AllowOutOfGameSettingEdits = value;
                                 cfg.Save();
+
+                                if (value)
+                                {
+                                    // Re-show stored values when menu edits are allowed again.
+                                    EnsureRememberedToggleUiStateLoaded();
+                                    EnsureRememberedSliderUiStateLoaded();
+                                }
+                                else if (!CastleWallsMk2.IsInGame())
+                                {
+                                    // We just turned menu editing OFF while sitting at the menu.
+                                    // Clear only the visible/live UI toggle state so disabled controls
+                                    // no longer appear checked.
+                                    ResetToggleStates();
+
+                                    // Mark remembered UI as unloaded so it can be reloaded later
+                                    // when edits are allowed again or when entering a game.
+                                    _rememberedToggleUiLoaded = false;
+                                }
                             }
 
                             if (ImGui.IsItemHovered())
                                 ImGui.SetTooltip("Lets you edit stored setting values while not in a live game.");
+                        });
+
+                        Cell(() =>
+                        {
+                            bool value = RememberedToggleStore.RememberEnabled;
+                            if (ImGui.Checkbox("Remember toggles", ref value))
+                            {
+                                RememberedToggleStore.RememberEnabled = value;
+
+                                if (value)
+                                {
+                                    // Only snapshot live/current values when edits are actually allowed.
+                                    CaptureRememberedToggleSnapshot();
+                                    QueueRememberedToggleRestore();
+                                    QueueRememberedSliderRestore();
+                                }
+                            }
+
+                            if (ImGui.IsItemHovered())
+                                ImGui.SetTooltip("Saves gameplay checkbox states to a separate config and restores them when you enter a game again.");
                         });
 
                         if (outOfGameLocked) ImGui.BeginDisabled();
@@ -12279,6 +12328,529 @@ namespace CastleWallsMk2
         }
         #endregion
 
+        #region Helpers: Remembered Toggle Snapshot
+
+        // Tracks whether the remembered toggle values have been loaded
+        // into the UI backing fields for the current app/session state.
+        private static bool _rememberedToggleUiLoaded;
+
+        // When true, remembered toggles should be re-applied the next time
+        // we are back in-game and restoration is allowed.
+        private static bool _rememberedToggleRestorePending = true;
+
+        /// <summary>
+        /// Tracks whether remembered slider values have been loaded into the UI backing fields
+        /// for the current app/session state.
+        /// </summary>
+        private static bool _rememberedSliderUiLoaded;
+
+        /// <summary>
+        /// When true, remembered slider values should be re-applied the next time
+        /// we are back in-game and restoration is allowed.
+        /// </summary>
+        private static bool _rememberedSliderRestorePending = true;
+
+        private sealed class RememberedIntSliderMeta
+        {
+            public readonly string CallbackFieldName;
+            public readonly int Min;
+            public readonly int Max;
+            public readonly Func<bool> ShouldApply;
+
+            public RememberedIntSliderMeta(string callbackFieldName, int min, int max, Func<bool> shouldApply = null)
+            {
+                CallbackFieldName = callbackFieldName;
+                Min = min;
+                Max = max;
+                ShouldApply = shouldApply;
+            }
+        }
+
+        private sealed class RememberedFloatSliderMeta
+        {
+            public readonly string CallbackFieldName;
+            public readonly float Min;
+            public readonly float Max;
+            public readonly Func<bool> ShouldApply;
+
+            public RememberedFloatSliderMeta(string callbackFieldName, float min, float max, Func<bool> shouldApply = null)
+            {
+                CallbackFieldName = callbackFieldName;
+                Min = min;
+                Max = max;
+                ShouldApply = shouldApply;
+            }
+        }
+
+        /// <summary>
+        /// Explicit allowlist for integer sliders that are safe to remember and re-apply.
+        /// Each entry defines the callback field, safe clamp range, and optional runtime
+        /// predicate that decides whether the value callback should fire during restore.
+        /// </summary>
+        private static readonly Dictionary<string, RememberedIntSliderMeta> _rememberedIntSliderFields =
+            new Dictionary<string, RememberedIntSliderMeta>(StringComparer.Ordinal)
+            {
+                { "_timeDay",                 new RememberedIntSliderMeta(nameof(Callbacks.OnWorldTimeDay),          1, 10000, () => _worldTime == TriState.On || _worldTime == TriState.Mixed) },
+                { "_projectileTuningValue",   new RememberedIntSliderMeta(nameof(Callbacks.OnProjectileTuningValue), 1, ProjectileOutputTuning.MaxMultiplierClamp, () => _projectileTuning) },
+                { "_aimbotRandomDelayValue",  new RememberedIntSliderMeta(nameof(Callbacks.OnAimbotRandomDelayValue),0, 500) },
+                { "_rapidItemsTimerValue",    new RememberedIntSliderMeta(nameof(Callbacks.OnRapidItemsValue),       1, 1000,  () => _rapidItems) },
+                { "_showerTimerValue",        new RememberedIntSliderMeta(nameof(Callbacks.OnShowerValue),           1, 1000,  () => _shower) },
+                { "_choasTimerValue",         new RememberedIntSliderMeta(nameof(Callbacks.OnChaosValue),            1, 5000,  () => _chaosMode) },
+                { "_beaconHeightValue",       new RememberedIntSliderMeta(nameof(Callbacks.OnBeaconHeightValue),     0, 64,    () => _itemVortex && _beaconMode) },
+                { "_itemVortexTimerValue",    new RememberedIntSliderMeta(nameof(Callbacks.OnItemVortexValue),       1, 1000,  () => _itemVortex) },
+                { "_hugSpreadValue",          new RememberedIntSliderMeta(nameof(Callbacks.OnHugSpreadValue),        0, 100,   () => _hug) },
+                { "_reliableFloodBurstValue", new RememberedIntSliderMeta(nameof(Callbacks.OnReliableFloodValue),    1, 10000, () => _reliableFlood) },
+                { "_blockEspChunkRadValue",   new RememberedIntSliderMeta(nameof(Callbacks.OnBlockEspChunkRadValue), 1, 24,    () => _blockEsp) },
+                { "_blockEspMaxBoxesValue",   new RememberedIntSliderMeta(nameof(Callbacks.OnBlockEspMaxBoxesValue), 1, 10000, () => _blockEsp) },
+                { "_spamTextTimerValue",      new RememberedIntSliderMeta(nameof(Callbacks.OnSpamTextValue),         1, 1000,  () => _spamTextShow) },
+                { "_deathAuraRangeValue",     new RememberedIntSliderMeta(nameof(Callbacks.OnDeathAuraRangeValue),   0, 200,   () => _deathAura) },
+                { "_begoneAuraRangeValue",    new RememberedIntSliderMeta(nameof(Callbacks.OnBegoneAuraRangeValue),  0, 200,   () => _begoneAura) },
+                { "_blockNukerRangeValue",    new RememberedIntSliderMeta(nameof(Callbacks.OnBlockNukerRangeValue),  0, 20,    () => _blockNuker) },
+            };
+
+        /// <summary>
+        /// Explicit allowlist for float sliders that are safe to remember and re-apply.
+        /// Each entry defines the callback field, safe clamp range, and optional runtime
+        /// predicate that decides whether the value callback should fire during restore.
+        /// </summary>
+        private static readonly Dictionary<string, RememberedFloatSliderMeta> _rememberedFloatSliderFields =
+            new Dictionary<string, RememberedFloatSliderMeta>(StringComparer.Ordinal)
+            {
+                { "_pickupScale",            new RememberedFloatSliderMeta(nameof(Callbacks.OnPickupRangeScale),       0f,    1000f, () => _pickupRange) },
+                { "_timeScale",              new RememberedFloatSliderMeta(nameof(Callbacks.OnWorldTimeScale),         0f,    100f,  () => _worldTime == TriState.On || _worldTime == TriState.Mixed) },
+                { "_speedScale",             new RememberedFloatSliderMeta(nameof(Callbacks.OnSpeedScale),             0.25f, 100f,  () => _movementSpeed) },
+                { "_rocketSpeedValue",       new RememberedFloatSliderMeta(nameof(Callbacks.OnRocketSpeedValue),       0f,    500f,  () => _rocketSpeed) },
+                { "_guidedRocketSpeedValue", new RememberedFloatSliderMeta(nameof(Callbacks.OnGuidedRocketSpeedValue), 0f,    500f,  () => _rocketSpeed) },
+                { "_gravityValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnGravityValue),          -50f,   0f,    () => _gravity) },
+                { "_cameraXValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraXValue),         -100f,   100f,  () => _cameraXyz) },
+                { "_cameraYValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraYValue),         -100f,   100f,  () => _cameraXyz) },
+                { "_cameraZValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraZValue),         -100f,   100f,  () => _cameraXyz) },
+            };
+
+        // Some UI field names do not map 1:1 to callback names, so this alias table
+        // translates specific UI backing fields to their actual callback handlers.
+        private static readonly Dictionary<string, string> _rememberedToggleCallbackAliases =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "_infItems",      nameof(Callbacks.OnInfiniteItems) },
+                { "_infDurability", nameof(Callbacks.OnInfiniteDurability) },
+                { "_infJump",       nameof(Callbacks.OnInfiniteJump) },
+                { "_infAmmo",       nameof(Callbacks.OnInfiniteAmmo) },
+                { "_infClips",      nameof(Callbacks.OnInfiniteClips) },
+                { "_cameraXyz",     nameof(Callbacks.OnCamera) },
+                { "_allHarvest",    nameof(Callbacks.OnAllGunsHarvest) },
+                { "_trailMode",     nameof(Callbacks.OnTrailMode) },
+            };
+
+        // UI bools listed here should never be part of the remembered-toggle system.
+        // These are either window/tab states, temporary UI helpers, or other flags
+        // that should not be restored as gameplay toggles.
+        private static readonly HashSet<string> _rememberedToggleExcludedUiFields =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "_tabPlayerOpen",
+                "_tabEnemiesOpen",
+                "_tabDragonOpen",
+                "_showDemoWindow",
+                "_spawnMobSamePos",
+                "_spamTextExpandBox",
+                "_changeGameTitle",
+            };
+
+        // Returns the set of bool UI fields that are eligible to be remembered.
+        // Requirements:
+        // 1. Must be a private static bool on IGMainUI
+        // 2. Must not be explicitly excluded
+        // 3. Must resolve to a valid Action<bool> callback so it can be re-applied
+        private static IEnumerable<FieldInfo> GetRememberedToggleUiFields()
+        {
+            return typeof(IGMainUI)
+                .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(f => f.FieldType == typeof(bool))
+                .Where(f => !_rememberedToggleExcludedUiFields.Contains(f.Name))
+                .Where(f => ResolveRememberedToggleCallback(f.Name) != null);
+        }
+
+        // Builds the default callback name from a UI field name.
+        // Example:
+        //   "_godMode" -> "OnGodMode"
+        //   "_rapidFire" -> "OnRapidFire"
+        private static string BuildDefaultRememberedToggleCallbackName(string uiFieldName)
+        {
+            string core = uiFieldName.TrimStart('_');
+            if (string.IsNullOrEmpty(core)) return null;
+            return "On" + char.ToUpperInvariant(core[0]) + core.Substring(1);
+        }
+
+        // Resolves the callback that should be used for a given remembered UI field.
+        // It first checks the alias table for special cases, then falls back to the
+        // default "On<FieldName>" naming convention. Only public static Action<bool>
+        // fields on Callbacks are considered valid.
+        private static Action<bool> ResolveRememberedToggleCallback(string uiFieldName)
+        {
+            if (!_rememberedToggleCallbackAliases.TryGetValue(uiFieldName, out string callbackName))
+                callbackName = BuildDefaultRememberedToggleCallbackName(uiFieldName);
+
+            var field = typeof(Callbacks).GetField(callbackName, BindingFlags.Public | BindingFlags.Static);
+            if (field == null || field.FieldType != typeof(Action<bool>))
+                return null;
+
+            return field.GetValue(null) as Action<bool>;
+        }
+
+        // Loads remembered toggle values from the separate remembered-toggle store
+        // into the UI backing fields. This only updates the bool fields themselves;
+        // it does NOT invoke callbacks or turn features on yet.
+        private static void LoadRememberedToggleUiState()
+        {
+            foreach (var field in GetRememberedToggleUiFields())
+            {
+                if (RememberedToggleStore.TryGetToggle(field.Name, out var value))
+                    field.SetValue(null, value);
+            }
+
+            _rememberedToggleUiLoaded = true;
+        }
+
+        /// <summary>
+        /// Loads remembered slider values from the dedicated remembered-state store
+        /// into the UI backing fields. This only updates the cached numeric fields;
+        /// it does NOT invoke runtime callbacks or turn features on by itself.
+        /// </summary>
+        private static void LoadRememberedSliderUiState()
+        {
+            foreach (var kv in _rememberedIntSliderFields)
+            {
+                var field = ResolveRememberedSliderUiField(kv.Key, typeof(int));
+                if (field == null) continue;
+
+                if (RememberedToggleStore.TryGetInt(kv.Key, out int value))
+                    field.SetValue(null, ClampRememberedIntSlider(kv.Key, value));
+            }
+
+            foreach (var kv in _rememberedFloatSliderFields)
+            {
+                var field = ResolveRememberedSliderUiField(kv.Key, typeof(float));
+                if (field == null) continue;
+
+                if (RememberedToggleStore.TryGetFloat(kv.Key, out float value))
+                    field.SetValue(null, ClampRememberedFloatSlider(kv.Key, value));
+            }
+
+            _rememberedSliderUiLoaded = true;
+        }
+
+        /// <summary>
+        /// Ensures the UI slider backing fields are populated from remembered storage,
+        /// but only when that is actually allowed.
+        ///
+        /// Rules:
+        /// - If already loaded, do nothing
+        /// - If remember-on-reload is disabled, do nothing
+        /// - If not in-game and out-of-game edits are disabled, do nothing
+        ///
+        /// This keeps menu-time resets from overwriting the last valid in-game snapshot,
+        /// while still allowing stored values to reappear when menu editing is permitted.
+        /// </summary>
+        internal static void EnsureRememberedSliderUiStateLoaded()
+        {
+            if (_rememberedSliderUiLoaded) return;
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try { LoadRememberedSliderUiState(); } catch { }
+        }
+
+        /// <summary>
+        /// Captures the current remembered slider values into the dedicated remembered-state config.
+        ///
+        /// Important behavior:
+        /// - Only captures when remember-on-reload is enabled
+        /// - Outside a live game, capture is blocked unless out-of-game edits are allowed
+        /// - This prevents forced out-of-game resets/defaults from overwriting the last
+        ///   valid in-game slider snapshot
+        /// </summary>
+        internal static void CaptureRememberedSliderSnapshot()
+        {
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try
+            {
+                EnsureRememberedSliderUiStateLoaded();
+
+                foreach (var kv in _rememberedIntSliderFields)
+                {
+                    var field = ResolveRememberedSliderUiField(kv.Key, typeof(int));
+                    if (field == null) continue;
+
+                    int value = (int)field.GetValue(null);
+                    RememberedToggleStore.SetInt(kv.Key, ClampRememberedIntSlider(kv.Key, value));
+                }
+
+                foreach (var kv in _rememberedFloatSliderFields)
+                {
+                    var field = ResolveRememberedSliderUiField(kv.Key, typeof(float));
+                    if (field == null) continue;
+
+                    float value = (float)field.GetValue(null);
+                    RememberedToggleStore.SetFloat(kv.Key, ClampRememberedFloatSlider(kv.Key, value));
+                }
+
+                RememberedToggleStore.Save();
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Marks remembered slider values for restoration later.
+        /// This intentionally does not restore immediately.
+        /// </summary>
+        internal static void QueueRememberedSliderRestore()
+        {
+            _rememberedSliderUiLoaded = false;
+            _rememberedSliderRestorePending = true;
+        }
+
+        /// <summary>
+        /// If restoration is pending, and we are back in-game, this method:
+        /// 1. Loads remembered slider values into the UI backing fields
+        /// 2. Invokes each remembered slider callback that is currently eligible to apply
+        ///
+        /// Notes:
+        /// - Slider restore is intentionally separate from checkbox restore.
+        /// - This should run after remembered toggles have already been re-enabled,
+        ///   so parent feature toggles are in the correct state first.
+        /// - Per-slider ShouldApply predicates prevent inactive child values from
+        ///   being pushed when their parent feature is currently off.
+        /// </summary>
+        internal static void ApplyRememberedSlidersIfPending()
+        {
+            if (!_rememberedSliderRestorePending) return;
+
+            if (!RememberedToggleStore.RememberEnabled)
+            {
+                _rememberedSliderRestorePending = false;
+                return;
+            }
+
+            if (!CastleWallsMk2.IsInGame())
+                return;
+
+            try
+            {
+                LoadRememberedSliderUiState();
+
+                foreach (var kv in _rememberedIntSliderFields)
+                {
+                    var field = ResolveRememberedSliderUiField(kv.Key, typeof(int));
+                    if (field == null) continue;
+
+                    var meta = kv.Value;
+                    if (meta.ShouldApply != null && !meta.ShouldApply())
+                        continue;
+
+                    int wanted = (int)field.GetValue(null);
+                    var callback = ResolveRememberedIntSliderCallback(kv.Key);
+                    try { callback?.Invoke(wanted); } catch { }
+                }
+
+                foreach (var kv in _rememberedFloatSliderFields)
+                {
+                    var field = ResolveRememberedSliderUiField(kv.Key, typeof(float));
+                    if (field == null) continue;
+
+                    var meta = kv.Value;
+                    if (meta.ShouldApply != null && !meta.ShouldApply())
+                        continue;
+
+                    float wanted = (float)field.GetValue(null);
+                    var callback = ResolveRememberedFloatSliderCallback(kv.Key);
+                    try { callback?.Invoke(wanted); } catch { }
+                }
+            }
+            finally
+            {
+                _rememberedSliderRestorePending = false;
+            }
+        }
+
+        // Ensures the UI backing fields are populated from remembered storage,
+        // but only when that is actually allowed.
+        //
+        // Rules:
+        // - If already loaded, do nothing
+        // - If remember-toggles is disabled, do nothing
+        // - If not in-game and out-of-game edits are disabled, do nothing
+        //
+        // This is mainly used so the UI can reflect stored values without
+        // necessarily re-enabling the gameplay effects immediately.
+        internal static void EnsureRememberedToggleUiStateLoaded()
+        {
+            if (_rememberedToggleUiLoaded) return;
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try { LoadRememberedToggleUiState(); } catch { }
+        }
+
+        // Captures the current UI toggle state into the separate remembered-toggle config.
+        //
+        // Important behavior:
+        // - Only captures when remember-toggles is enabled
+        // - Outside a live game, capture is blocked unless out-of-game edits are allowed
+        // - This prevents forced out-of-game resets from overwriting the last valid
+        //   in-game snapshot with all-false values
+        internal static void CaptureRememberedToggleSnapshot()
+        {
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try
+            {
+                // Make sure the UI fields are initialized before reading them.
+                EnsureRememberedToggleUiStateLoaded();
+
+                // Persist every eligible remembered toggle.
+                foreach (var field in GetRememberedToggleUiFields())
+                {
+                    bool value = (bool)field.GetValue(null);
+                    RememberedToggleStore.SetToggle(field.Name, value);
+                }
+
+                RememberedToggleStore.Save();
+            }
+            catch { }
+        }
+
+        // Marks remembered toggles for restoration later.
+        // This is useful when leaving/rejoining a world or after resetting live states.
+        // It intentionally does not restore immediately.
+        internal static void QueueRememberedToggleRestore()
+        {
+            _rememberedToggleUiLoaded       = false;
+            _rememberedToggleRestorePending = true;
+        }
+
+        // If restoration is pending, and we are back in-game, this method:
+        // 1. Loads remembered toggle values into the UI fields
+        // 2. Invokes each toggle callback for fields that were remembered as true
+        //
+        // Only "true" toggles are actively re-applied, since false toggles generally
+        // do not require a callback to remain disabled.
+        internal static void ApplyRememberedTogglesIfPending()
+        {
+            if (!_rememberedToggleRestorePending) return;
+
+            // If the remember feature is disabled, cancel any pending restore.
+            if (!RememberedToggleStore.RememberEnabled)
+            {
+                _rememberedToggleRestorePending = false;
+                return;
+            }
+
+            // Restoration only happens once we are actually back in a live game.
+            if (!CastleWallsMk2.IsInGame())
+                return;
+
+            try
+            {
+                // Load stored values into the UI bools first.
+                LoadRememberedToggleUiState();
+
+                // Re-apply all remembered "on" toggles through their real callbacks.
+                foreach (var field in GetRememberedToggleUiFields())
+                {
+                    bool wanted = (bool)field.GetValue(null);
+                    if (!wanted) continue;
+
+                    var callback = ResolveRememberedToggleCallback(field.Name);
+                    try { callback?.Invoke(true); } catch { }
+                }
+            }
+            finally
+            {
+                // Always clear the pending flag so we do not repeatedly re-apply.
+                _rememberedToggleRestorePending = false;
+            }
+        }
+
+        /// <summary>
+        /// Resolves an IGMainUI backing field by name and expected numeric type.
+        /// Returns null when the field is missing or no longer matches the expected type.
+        /// </summary>
+        private static FieldInfo ResolveRememberedSliderUiField(string fieldName, Type expectedFieldType)
+        {
+            var field = typeof(IGMainUI).GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (field == null || field.FieldType != expectedFieldType)
+                return null;
+
+            return field;
+        }
+
+        /// <summary>
+        /// Resolves the Action&lt;int&gt; callback used to apply a remembered integer slider value.
+        /// </summary>
+        private static Action<int> ResolveRememberedIntSliderCallback(string uiFieldName)
+        {
+            if (!_rememberedIntSliderFields.TryGetValue(uiFieldName, out var meta))
+                return null;
+
+            var field = typeof(Callbacks).GetField(meta.CallbackFieldName, BindingFlags.Public | BindingFlags.Static);
+            if (field == null || field.FieldType != typeof(Action<int>))
+                return null;
+
+            return field.GetValue(null) as Action<int>;
+        }
+
+        /// <summary>
+        /// Resolves the Action&lt;float&gt; callback used to apply a remembered float slider value.
+        /// </summary>
+        private static Action<float> ResolveRememberedFloatSliderCallback(string uiFieldName)
+        {
+            if (!_rememberedFloatSliderFields.TryGetValue(uiFieldName, out var meta))
+                return null;
+
+            var field = typeof(Callbacks).GetField(meta.CallbackFieldName, BindingFlags.Public | BindingFlags.Static);
+            if (field == null || field.FieldType != typeof(Action<float>))
+                return null;
+
+            return field.GetValue(null) as Action<float>;
+        }
+
+        /// <summary>
+        /// Clamps a remembered integer slider value into the current safe range for that field.
+        /// This prevents stale configs from restoring values outside the slider's live bounds.
+        /// </summary>
+        private static int ClampRememberedIntSlider(string uiFieldName, int value)
+        {
+            if (!_rememberedIntSliderFields.TryGetValue(uiFieldName, out var meta))
+                return value;
+
+            return Math.Max(meta.Min, Math.Min(meta.Max, value));
+        }
+
+        /// <summary>
+        /// Clamps a remembered float slider value into the current safe range for that field.
+        /// This prevents stale configs from restoring values outside the slider's live bounds.
+        /// </summary>
+        private static float ClampRememberedFloatSlider(string uiFieldName, float value)
+        {
+            if (!_rememberedFloatSliderFields.TryGetValue(uiFieldName, out var meta))
+                return value;
+
+            return Math.Max(meta.Min, Math.Min(meta.Max, value));
+        }
+        #endregion
+
         #region Helpers: Window Placement / Size Tracking / Splitter
 
         // Title shows version + FPS + current visibility toggle text.
@@ -12519,7 +13091,12 @@ namespace CastleWallsMk2
             if (!enabled) ImGui.EndDisabled();
 
             // Only invoke when the control is enabled and actually changed.
-            if (enabled && value != before) cb?.Invoke(value);
+            if (enabled && value != before)
+            {
+                cb?.Invoke(value);
+                CaptureRememberedToggleSnapshot();
+                QueueRememberedToggleRestore();
+            }
         }
         #endregion
 
@@ -12559,7 +13136,11 @@ namespace CastleWallsMk2
 
             // Only notify when the stored value actually changed.
             if (changed && value != before)
+            {
                 cb?.Invoke(value);
+                CaptureRememberedToggleSnapshot();
+                QueueRememberedToggleRestore();
+            }
 
             return changed;
         }
@@ -12693,7 +13274,11 @@ namespace CastleWallsMk2
             if (!enabled) ImGui.EndDisabled();
 
             if (changed && value != before)
+            {
                 onChanged?.Invoke(value);
+                CaptureRememberedSliderSnapshot();
+                QueueRememberedSliderRestore();
+            }
 
             return changed;
         }
@@ -12757,7 +13342,14 @@ namespace CastleWallsMk2
 
             if (!enabled) ImGui.EndDisabled();
 
-            if (value != before) { changed = true; onChanged?.Invoke(value); }
+            if (value != before)
+            {
+                changed = true;
+                onChanged?.Invoke(value);
+                CaptureRememberedSliderSnapshot();
+                QueueRememberedSliderRestore();
+            }
+
             return changed;
         }
         #endregion
@@ -12794,7 +13386,11 @@ namespace CastleWallsMk2
             if (!enabled) ImGui.EndDisabled();
 
             if (changed && value != before)
+            {
                 onChanged?.Invoke(value);
+                CaptureRememberedSliderSnapshot();
+                QueueRememberedSliderRestore();
+            }
 
             return changed;
         }
@@ -12858,7 +13454,14 @@ namespace CastleWallsMk2
 
             if (!enabled) ImGui.EndDisabled();
 
-            if (value != before) { changed = true; onChanged?.Invoke(value); }
+            if (value != before)
+            {
+                changed = true;
+                onChanged?.Invoke(value);
+                CaptureRememberedSliderSnapshot();
+                QueueRememberedSliderRestore();
+            }
+
             return changed;
         }
         #endregion

@@ -111,6 +111,7 @@
     <Compile Include="ModExtensions\BlacklistExtensions.cs" />
     <Compile Include="ModExtensions\HomesExtensions.cs" />
     <Compile Include="ImGui\DrawVertDeclaration.cs" />
+    <Compile Include="Startup\RememberedToggleStore.cs" />
     <Compile Include="UI\IGMainUI.cs" />
     <Compile Include="ImGui\ImGuiXnaRenderer.cs" />
     <Compile Include="ImGui\OverlayController.cs" />

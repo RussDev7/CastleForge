@@ -138,13 +138,15 @@ namespace CastleWallsMk2
         {
             try
             {
-                try { ServerHistory.SaveIfDirty();                                  } catch (Exception ex) { Log($"Flush server history failed: {ex.Message}.");  } // Flush server host history to disk.
-                try { GamePatches.DisableAll();                                     } catch (Exception ex) { Log($"Disable hooks failed: {ex.Message}.");         } // Unpatch Harmony.
-                try { IGMainUI.DisposeLogFilter();                                  } catch (Exception ex) { Log($"Log-filter dispose failed: {ex.Message}.");    } // Dispose log filter.
-                try { IGMainUI.DisposeNetLogFilter();                               } catch (Exception ex) { Log($"NetLog-filter dispose failed: {ex.Message}."); } // Dispose log filter.
-                try { ConsoleLogStreamer.Disable();                                 } catch (Exception ex) { Log($"Log-streamer dispose failed: {ex.Message}.");  } // Dispose log streamer.
-                try { IGMainUI.ImGuiSettings_Save();                                } catch (Exception ex) { Log($"Save imgui settings failed: {ex.Message}.");   } // Save the imgui settings to file.
-                try { ImGuiXnaRenderer.Shutdown(); Log("ImGui Renderer disposed."); } catch (Exception ex) { Log($"Renderer shutdown failed: {ex.Message}.");     } // Let the renderer clean up everything.
+                try { IGMainUI.CaptureRememberedToggleSnapshot();                   } catch (Exception ex) { Log($"Save remembered toggles failed: {ex.Message}."); } // Flush remembered gameplay toggles.
+                try { IGMainUI.CaptureRememberedSliderSnapshot();                   } catch (Exception ex) { Log($"Save remembered sliders failed: {ex.Message}."); } // Flush remembered gameplay toggles.
+                try { ServerHistory.SaveIfDirty();                                  } catch (Exception ex) { Log($"Flush server history failed: {ex.Message}.");    } // Flush server host history to disk.
+                try { GamePatches.DisableAll();                                     } catch (Exception ex) { Log($"Disable hooks failed: {ex.Message}.");           } // Unpatch Harmony.
+                try { IGMainUI.DisposeLogFilter();                                  } catch (Exception ex) { Log($"Log-filter dispose failed: {ex.Message}.");      } // Dispose log filter.
+                try { IGMainUI.DisposeNetLogFilter();                               } catch (Exception ex) { Log($"NetLog-filter dispose failed: {ex.Message}.");   } // Dispose log filter.
+                try { ConsoleLogStreamer.Disable();                                 } catch (Exception ex) { Log($"Log-streamer dispose failed: {ex.Message}.");    } // Dispose log streamer.
+                try { IGMainUI.ImGuiSettings_Save();                                } catch (Exception ex) { Log($"Save imgui settings failed: {ex.Message}.");     } // Save the imgui settings to file.
+                try { ImGuiXnaRenderer.Shutdown(); Log("ImGui Renderer disposed."); } catch (Exception ex) { Log($"Renderer shutdown failed: {ex.Message}.");       } // Let the renderer clean up everything.
 
                 // Notify in log that the mod teardown was complete.
                 // Lazy: Use this namespace as the 'mods' name.
@@ -3645,6 +3647,8 @@ namespace CastleWallsMk2
             if (inGame && !_wasInGame)
             {
                 ReapplySessionLocalState();
+                IGMainUI.ApplyRememberedTogglesIfPending();
+                IGMainUI.ApplyRememberedSlidersIfPending();
             }
 
             // One-time transition: Just LEFT the game -> clean up & disable features.
@@ -3725,13 +3729,19 @@ namespace CastleWallsMk2
                         = Vector3.Zero;
 
                     #endregion
-                    
+
+                    // Persist the last in-game checkbox states before the out-of-game reset runs.
+                    try { IGMainUI.CaptureRememberedToggleSnapshot(); } catch { }
+                    try { IGMainUI.CaptureRememberedSliderSnapshot(); } catch { }
+
                     // Clear UI selection data.
                     // (Optional) Don't populate the players if the UI is hidden.
                     if (ImGuiXnaRenderer.Visible && !GameIsMinimiMob()) SetPlayers(Array.Empty<NetworkGamer>());
 
                     // Untick the UI checkboxes so the panel matches reality.
                     ResetToggleStates();
+                    IGMainUI.QueueRememberedToggleRestore();
+                    IGMainUI.QueueRememberedSliderRestore();
                 }
             }
 

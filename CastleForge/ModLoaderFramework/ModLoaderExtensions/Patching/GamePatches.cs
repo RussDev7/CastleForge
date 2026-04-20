@@ -5369,6 +5369,263 @@ namespace ModLoaderExt
         }
         #endregion
 
+        #region MainMenu: Bottom-Left Discord Button
+
+        /// <summary>
+        /// Draws a small embedded Discord button in the bottom-left corner of the main menu.
+        /// Clicking it opens the project's Discord invite in the user's default browser.
+        /// </summary>
+        [HarmonyPatch(typeof(MainMenu), "OnDraw")]
+        internal static class Patch_MainMenu_DiscordButton_Draw
+        {
+            [HarmonyPostfix]
+            private static void Postfix(GraphicsDevice device, GameTime gameTime)
+            {
+                DiscordInviteButton.Draw(device);
+            }
+        }
+
+        /// <summary>
+        /// Handles mouse hover / click input for the embedded Discord button while the main menu is active.
+        /// This mirrors the vanilla ad-click pattern, but uses our own button rectangle and URL.
+        /// </summary>
+        [HarmonyPatch(typeof(MainMenu), "OnPlayerInput")]
+        internal static class Patch_MainMenu_DiscordButton_Input
+        {
+            [HarmonyPrefix]
+            private static void Prefix(InputManager input)
+            {
+                DiscordInviteButton.HandleInput(input);
+            }
+        }
+
+        /// <summary>
+        /// Shared helper that lazy-loads the embedded Discord button textures, draws the
+        /// correct image for normal / hover states, tracks click state, and opens the
+        /// project's Discord invite when the button is clicked.
+        /// </summary>
+        /// <remarks>
+        /// Flow:
+        /// 1. Lazy-load the embedded textures on first draw.
+        /// 2. Recompute the button rectangle each frame from the current screen size.
+        /// 3. Draw the hover texture when the cursor is inside the button bounds.
+        /// 4. Only open the invite when the mouse press begins and ends over the button.
+        /// </remarks>
+        internal static class DiscordInviteButton
+        {
+            /// <summary>Discord invite URL opened when the button is clicked.</summary>
+            private const string InviteUrl = "https://discord.gg/j3PcNJmry5";
+
+            /// <summary>
+            /// Embedded manifest resource name for the normal button texture.
+            /// This must match the assembly/root namespace + folder + file name.
+            /// </summary>
+            private const string ResourceName_Normal = "ModLoaderExtensions.Embedded.DiscordButton.png";
+
+            /// <summary>
+            /// Embedded manifest resource name for the hover button texture.
+            /// This must match the assembly/root namespace + folder + file name.
+            /// </summary>
+            private const string ResourceName_Hover = "ModLoaderExtensions.Embedded.DiscordButton_Hover.png";
+
+            /// <summary>Cached texture used while the cursor is not hovering the button.</summary>
+            private static Texture2D _textureNormal;
+
+            /// <summary>Cached texture used while the cursor is hovering the button.</summary>
+            private static Texture2D _textureHover;
+
+            /// <summary>Private sprite batch used only for this menu overlay.</summary>
+            private static SpriteBatch _spriteBatch;
+
+            /// <summary>
+            /// Current on-screen clickable bounds of the button.
+            /// This is rebuilt during draw so input always matches the visible position.
+            /// </summary>
+            private static Rectangle _buttonRect = Rectangle.Empty;
+
+            /// <summary>Tracks whether the mouse is currently inside the button bounds.</summary>
+            private static bool _hovered;
+
+            /// <summary>
+            /// Press latch used so the invite only opens when the click starts on the button
+            /// and is released on the button.
+            /// </summary>
+            private static bool _pressed;
+
+            /// <summary>Small hover text shown while the cursor is over the button.</summary>
+            private const string HoverText = "Join the CastleForge Discord";
+
+            /// <summary>Base scale used for the hover text.</summary>
+            private const float HoverTextScale = 0.75f;
+
+            /// <summary>
+            /// Lazy-loads the embedded normal and hover textures the first time they are needed,
+            /// and recreates them if the graphics device ever disposes them.
+            /// </summary>
+            /// <param name="gd">Active graphics device used to create the textures.</param>
+            private static void EnsureTextures(GraphicsDevice gd)
+            {
+                if (gd == null)
+                    return;
+
+                if (_spriteBatch == null)
+                    _spriteBatch = new SpriteBatch(gd);
+
+                if (_textureNormal == null || _textureNormal.IsDisposed)
+                {
+                    var asm = typeof(DiscordInviteButton).Assembly;
+
+                    using (Stream s = asm.GetManifestResourceStream(ResourceName_Normal))
+                    {
+                        if (s != null)
+                            _textureNormal = Texture2D.FromStream(gd, s);
+                    }
+                }
+
+                if (_textureHover == null || _textureHover.IsDisposed)
+                {
+                    var asm = typeof(DiscordInviteButton).Assembly;
+
+                    using (Stream s = asm.GetManifestResourceStream(ResourceName_Hover))
+                    {
+                        if (s != null)
+                            _textureHover = Texture2D.FromStream(gd, s);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Draws the Discord button in the bottom-left corner of the current screen.
+            /// While hovered, also draws a small text hint next to the button.
+            /// </summary>
+            /// <param name="device">Graphics device used for texture creation and drawing.</param>
+            public static void Draw(GraphicsDevice device)
+            {
+                try
+                {
+                    EnsureTextures(device);
+
+                    if (_spriteBatch == null || _textureNormal == null || _textureNormal.IsDisposed)
+                        return;
+
+                    Rectangle screen = Screen.Adjuster.ScreenRect;
+                    float scale = Screen.Adjuster.ScaleFactor.Y;
+
+                    int padding = (int)(12f * scale);
+                    int size = (int)(48f * scale);
+
+                    _buttonRect = new Rectangle(
+                        screen.Left + padding,
+                        screen.Bottom - size - padding,
+                        size,
+                        size);
+
+                    // Prefer the hover texture while hovered. Fall back to the normal texture
+                    // if the hover texture is missing for any reason.
+                    Texture2D drawTexture = (_hovered && _textureHover != null && !_textureHover.IsDisposed)
+                        ? _textureHover
+                        : _textureNormal;
+
+                    _spriteBatch.Begin(
+                        SpriteSortMode.Deferred,
+                        BlendState.NonPremultiplied,
+                        SamplerState.LinearClamp,
+                        DepthStencilState.None,
+                        RasterizerState.CullNone);
+
+                    _spriteBatch.Draw(drawTexture, _buttonRect, Color.White);
+
+                    // Draw a small hover label beside the icon for discoverability.
+                    if (_hovered && CastleMinerZGame.Instance != null && CastleMinerZGame.Instance.DebugFont != null)
+                    {
+                        SpriteFont font = CastleMinerZGame.Instance.DebugFont;
+                        float textScale = HoverTextScale * Math.Max(scale, 1f);
+
+                        Vector2 textSize = font.MeasureString(HoverText) * textScale;
+
+                        float textX = _buttonRect.Right + (8f * scale);
+                        float textY = _buttonRect.Center.Y - (textSize.Y * 0.5f);
+
+                        // If the label would run off the right edge, move it to the left side instead.
+                        if (textX + textSize.X > screen.Right - (8f * scale))
+                            textX = _buttonRect.Left - (8f * scale) - textSize.X;
+
+                        Vector2 textPos = new Vector2(textX, textY);
+
+                        _spriteBatch.DrawOutlinedText(
+                            font,
+                            HoverText,
+                            textPos,
+                            Color.White,
+                            Color.Black,
+                            2,
+                            textScale,
+                            0f,
+                            Vector2.Zero);
+                    }
+
+                    _spriteBatch.End();
+                }
+                catch
+                {
+                    // Never let menu overlay rendering crash the main menu.
+                }
+            }
+
+            /// <summary>
+            /// Handles hover / press / release logic for the button.
+            /// Opens the invite only when the cursor is inside the button and the click completes there.
+            /// </summary>
+            /// <param name="input">Current input manager for mouse state checks.</param>
+            public static void HandleInput(InputManager input)
+            {
+                try
+                {
+                    if (input == null)
+                        return;
+
+                    bool inside = _buttonRect.Contains(input.Mouse.Position);
+                    _hovered = inside;
+
+                    // Latch the press only if it began on the button.
+                    if (inside && input.Mouse.LeftButtonPressed)
+                        _pressed = true;
+
+                    // Only open if the cursor is still on the button when released.
+                    if (inside && _pressed && input.Mouse.LeftButtonReleased)
+                        OpenInvite();
+
+                    // Clear the latch once the mouse is no longer held.
+                    if (!input.Mouse.LeftButtonDown)
+                        _pressed = false;
+                }
+                catch
+                {
+                    // Never let menu input handling break the main menu.
+                }
+            }
+
+            /// <summary>
+            /// Opens the Discord invite using the user's default shell/browser.
+            /// </summary>
+            private static void OpenInvite()
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = InviteUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch
+                {
+                    // Ignore shell-launch failures.
+                }
+            }
+        }
+        #endregion
+
         #region In-Game Chat: History & Input
 
         #region Class: InGameChatHistory
