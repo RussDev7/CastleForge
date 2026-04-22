@@ -6565,10 +6565,94 @@ namespace CastleWallsMk2
         #region Lava Visuals Toggle
 
         /// <summary>
+        /// Patch: DNA.CastleMinerZ.UI.InGameHUD.OnDraw(...)
+        /// Purpose:
+        /// - Hide the red lava screen overlay when No Lava Visuals is enabled.
+        /// 
+        /// Why patch OnDraw?
+        /// - Directly patching PercentSubmergedLava is crashing in this runtime's
+        ///   AbiFixup wrapper.
+        /// - The red fullscreen tint is applied inside InGameHUD.OnDraw using
+        ///   Player.PercentSubmergedLava and Player.UnderLava.
+        /// - Filtering those values only at the draw call site keeps the change
+        ///   visual-only for the overlay path and avoids touching the unstable getter.
+        /// </summary>
+        [HarmonyPatch]
+        internal static class InGameHUD_OnDraw_NoLavaVisuals
+        {
+            static MethodBase TargetMethod()
+            {
+                return AccessTools.Method(
+                    typeof(InGameHUD),
+                    "OnDraw",
+                    new[] { typeof(GraphicsDevice), typeof(SpriteBatch), typeof(GameTime) });
+            }
+
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                MethodInfo getPercentSubmergedLava = AccessTools.PropertyGetter(typeof(Player), nameof(Player.PercentSubmergedLava));
+                MethodInfo getUnderLava = AccessTools.PropertyGetter(typeof(Player), nameof(Player.UnderLava));
+
+                MethodInfo filterPercentMethod = AccessTools.Method(
+                    typeof(InGameHUD_OnDraw_NoLavaVisuals),
+                    nameof(FilterPercentSubmergedLava));
+
+                MethodInfo filterUnderLavaMethod = AccessTools.Method(
+                    typeof(InGameHUD_OnDraw_NoLavaVisuals),
+                    nameof(FilterUnderLava));
+
+                foreach (CodeInstruction instruction in instructions)
+                {
+                    if (instruction.Calls(getPercentSubmergedLava))
+                    {
+                        // Keep the original getter call, then filter the returned float.
+                        yield return instruction;
+                        yield return new CodeInstruction(OpCodes.Call, filterPercentMethod);
+                        continue;
+                    }
+
+                    if (instruction.Calls(getUnderLava))
+                    {
+                        // Keep the original getter call, then filter the returned bool.
+                        yield return instruction;
+                        yield return new CodeInstruction(OpCodes.Call, filterUnderLavaMethod);
+                        continue;
+                    }
+
+                    yield return instruction;
+                }
+            }
+
+            /// <summary>
+            /// Returns the original lava submersion amount unless No Lava Visuals is enabled,
+            /// in which case the HUD should behave as though lava submersion is zero.
+            /// </summary>
+            static float FilterPercentSubmergedLava(float originalValue)
+            {
+                return CastleWallsMk2._noLavaVisualsEnabled ? 0f : originalValue;
+            }
+
+            /// <summary>
+            /// Returns the original UnderLava state unless No Lava Visuals is enabled,
+            /// in which case the HUD should not draw the full red underwater-lava screen.
+            /// </summary>
+            static bool FilterUnderLava(bool originalValue)
+            {
+                return !CastleWallsMk2._noLavaVisualsEnabled && originalValue;
+            }
+        }
+
+        /// <summary>
         /// Patch: DNA.CastleMinerZ.Player.InLava (getter)
-        /// When CastleWallsMk2._lavaVisualsEnabled is enabled, force InLava = false.
+        /// Purpose:
+        /// - Force the game to treat the player as not being in lava when
+        ///   No Lava Visuals is enabled.
         ///
-        /// This will affect any logic that relies on Player.InLava (damage, audio, HUD, etc.)
+        /// Why patch InLava?
+        /// - This is a broad gameplay-facing override that affects any code path
+        ///   which checks Player.InLava.
+        /// - It can suppress more than just visuals, depending on how the game
+        ///   uses the property.
         /// </summary>
         [HarmonyPatch(typeof(Player), nameof(Player.InLava), MethodType.Getter)]
         internal static class Patch_Player_get_InLava_LavaVisuals
@@ -6578,7 +6662,7 @@ namespace CastleWallsMk2
             {
                 // Only override when the feature is enabled.
                 if (!CastleWallsMk2._noLavaVisualsEnabled)
-                    return true; // Run original getter (PercentSubmergedLava > 0).
+                    return true;  // Run original getter (PercentSubmergedLava > 0).
 
                 __result = false; // Force "not in lava".
                 return false;     // Skip original getter.
