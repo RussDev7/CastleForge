@@ -13,7 +13,7 @@ using System;
 namespace CastleWallsMk2
 {
     /// <summary>
-    /// Separate persisted store for remembered gameplay checkbox states.
+    /// Separate persisted store for remembered gameplay UI/session values.
     ///
     /// Why separate?
     /// - Keeps the main mod config small/readable.
@@ -31,6 +31,9 @@ namespace CastleWallsMk2
         private static readonly Dictionary<string, float> _floatSliders =
             new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
+        private static readonly Dictionary<string, int> _comboIndices =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         private static bool _loaded;
         private static bool _rememberEnabled;
 
@@ -42,7 +45,7 @@ namespace CastleWallsMk2
             Path.Combine(ModConfig.FolderPath, $"{typeof(EmbeddedResolver).Namespace}.RememberedToggles.ini");
 
         /// <summary>
-        /// Master on/off flag for restoring checkbox states across session reloads.
+        /// Master on/off flag for restoring remembered gameplay UI/session values across session reloads.
         /// Stored inside this same dedicated INI.
         /// </summary>
         public static bool RememberEnabled
@@ -120,6 +123,25 @@ namespace CastleWallsMk2
         }
 
         /// <summary>
+        /// Reads one remembered combo index by UI field name.
+        /// </summary>
+        public static bool TryGetComboIndex(string key, out int value)
+        {
+            EnsureLoaded();
+            return _comboIndices.TryGetValue(key, out value);
+        }
+
+        /// <summary>
+        /// Updates one remembered combo index in memory.
+        /// Call <see cref="Save"/> to flush it to disk.
+        /// </summary>
+        public static void SetComboIndex(string key, int value)
+        {
+            EnsureLoaded();
+            _comboIndices[key] = value;
+        }
+
+        /// <summary>
         /// Writes the dedicated remembered-state INI to disk.
         /// Non-fatal if I/O fails.
         ///
@@ -128,6 +150,7 @@ namespace CastleWallsMk2
         /// - [Toggles]      : Remembered checkbox states.
         /// - [IntSliders]   : Remembered integer slider values.
         /// - [FloatSliders] : Remembered float slider values.
+        /// - [Combos]       : Remembered combos values.
         /// </summary>
         public static void Save()
         {
@@ -157,6 +180,11 @@ namespace CastleWallsMk2
                     "#   Keys are private/public IGMainUI slider backing field names.",
                     "#   Values are persisted using invariant culture formatting.",
                     "#",
+                    "# [Combos]",
+                    "#   Keys are private/public IGMainUI int combo backing field names.",
+                    "#   Values are saved as the selected option index and are clamped on restore",
+                    "#   if the valid option range changes later.",
+                    "#",
                     $"# Saved: {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)}",
                     "# ================================================================================",
                     "",
@@ -181,6 +209,12 @@ namespace CastleWallsMk2
                 foreach (var kv in _floatSliders.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
                     lines.Add($"{kv.Key}={kv.Value.ToString(CultureInfo.InvariantCulture)}");
 
+                lines.Add("");
+                lines.Add("[Combos]");
+
+                foreach (var kv in _comboIndices.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+                    lines.Add($"{kv.Key}={kv.Value.ToString(CultureInfo.InvariantCulture)}");
+
                 File.WriteAllLines(ConfigPath, lines);
             }
             catch
@@ -201,6 +235,7 @@ namespace CastleWallsMk2
             _toggles.Clear();
             _intSliders.Clear();
             _floatSliders.Clear();
+            _comboIndices.Clear();
             _rememberEnabled = false;
 
             if (!File.Exists(ConfigPath))
@@ -260,6 +295,14 @@ namespace CastleWallsMk2
 
                         continue;
                     }
+
+                    if (section.Equals("Combos", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedCombo))
+                            _comboIndices[key] = parsedCombo;
+
+                        continue;
+                    }
                 }
             }
             catch
@@ -268,6 +311,7 @@ namespace CastleWallsMk2
                 _toggles.Clear();
                 _intSliders.Clear();
                 _floatSliders.Clear();
+                _comboIndices.Clear();
                 _rememberEnabled = false;
             }
         }

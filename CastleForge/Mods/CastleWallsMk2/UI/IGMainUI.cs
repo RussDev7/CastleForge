@@ -1134,6 +1134,7 @@ namespace CastleWallsMk2
                 // Reload remembered toggle values into the UI when allowed.
                 EnsureRememberedToggleUiStateLoaded();
                 EnsureRememberedSliderUiStateLoaded();
+                EnsureRememberedComboUiStateLoaded();
 
                 // If the user clicked the X this frame, IsOpen is now false.
                 // Mirror that into the renderer state immediately and end this window cleanly.
@@ -2297,6 +2298,7 @@ namespace CastleWallsMk2
                                 {
                                     EnsureRememberedToggleUiStateLoaded();
                                     EnsureRememberedSliderUiStateLoaded();
+                                    EnsureRememberedComboUiStateLoaded();
                                 }
                             }
 
@@ -2317,6 +2319,7 @@ namespace CastleWallsMk2
                                     // Re-show stored values when menu edits are allowed again.
                                     EnsureRememberedToggleUiStateLoaded();
                                     EnsureRememberedSliderUiStateLoaded();
+                                    EnsureRememberedComboUiStateLoaded();
                                 }
                                 else if (!CastleWallsMk2.IsInGame())
                                 {
@@ -2344,15 +2347,18 @@ namespace CastleWallsMk2
 
                                 if (value)
                                 {
-                                    // Only snapshot live/current values when edits are actually allowed.
                                     CaptureRememberedToggleSnapshot();
+                                    CaptureRememberedComboSnapshot();
+                                    CaptureRememberedSliderSnapshot();
+
                                     QueueRememberedToggleRestore();
+                                    QueueRememberedComboRestore();
                                     QueueRememberedSliderRestore();
                                 }
                             }
 
                             if (ImGui.IsItemHovered())
-                                ImGui.SetTooltip("Saves gameplay checkbox states to a separate config and restores them when you enter a game again.");
+                                ImGui.SetTooltip("Saves supported gameplay toggles, sliders, and dropdown values to a separate config and restores them when you enter a game again.");
                         });
 
                         if (outOfGameLocked) ImGui.BeginDisabled();
@@ -12851,6 +12857,195 @@ namespace CastleWallsMk2
         }
         #endregion
 
+        #region Helpers: Remembered Combo Snapshot
+
+        // Tracks whether remembered combo values have been loaded into the UI backing fields
+        // for the current app/session state.
+        private static bool _rememberedComboUiLoaded;
+
+        // When true, remembered combo values should be re-applied the next time
+        // we are back in-game and restoration is allowed.
+        private static bool _rememberedComboRestorePending = true;
+
+        private sealed class RememberedComboMeta
+        {
+            public readonly int Min;
+            public readonly int Max;
+            public readonly Func<bool> ShouldApply;
+            public readonly Action<int> ApplyIndex;
+
+            public RememberedComboMeta(int min, int max, Action<int> applyIndex, Func<bool> shouldApply = null)
+            {
+                Min = min;
+                Max = max;
+                ApplyIndex = applyIndex;
+                ShouldApply = shouldApply;
+            }
+        }
+
+        /// <summary>
+        /// Explicit allowlist for combo boxes that are safe to remember and re-apply.
+        /// Keys are the IGMainUI backing field names.
+        /// </summary>
+        private static readonly Dictionary<string, RememberedComboMeta> _rememberedComboFields =
+            new Dictionary<string, RememberedComboMeta>(StringComparer.Ordinal)
+            {
+                {
+                    "_difficultyIndex",
+                    new RememberedComboMeta(
+                        0,
+                        _difficultyOptions.Length - 1,
+                        idx => Callbacks.OnDifficulty?.Invoke(_difficultyOptions[idx]))
+                },
+                {
+                    "_gameModeIndex",
+                    new RememberedComboMeta(
+                        0,
+                        _gameModeOptions.Length - 1,
+                        idx => Callbacks.OnGameMode?.Invoke(_gameModeOptions[idx]))
+                },
+            };
+
+        /// <summary>
+        /// Resolves an IGMainUI combo backing field by name.
+        /// Returns null when the field is missing or no longer matches the expected type.
+        /// </summary>
+        private static FieldInfo ResolveRememberedComboUiField(string fieldName)
+        {
+            var field = typeof(IGMainUI).GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (field == null || field.FieldType != typeof(int))
+                return null;
+
+            return field;
+        }
+
+        /// <summary>
+        /// Clamps a remembered combo index into the current safe range for that field.
+        /// This prevents stale configs from restoring values outside the current options range.
+        /// </summary>
+        private static int ClampRememberedComboIndex(string uiFieldName, int value)
+        {
+            if (!_rememberedComboFields.TryGetValue(uiFieldName, out var meta))
+                return value;
+
+            return Math.Max(meta.Min, Math.Min(meta.Max, value));
+        }
+
+        /// <summary>
+        /// Loads remembered combo values into the UI backing fields.
+        /// This updates only the UI state, not the live game state.
+        /// </summary>
+        private static void LoadRememberedComboUiState()
+        {
+            foreach (var kv in _rememberedComboFields)
+            {
+                var field = ResolveRememberedComboUiField(kv.Key);
+                if (field == null) continue;
+
+                if (RememberedToggleStore.TryGetComboIndex(kv.Key, out int value))
+                    field.SetValue(null, ClampRememberedComboIndex(kv.Key, value));
+            }
+
+            _rememberedComboUiLoaded = true;
+        }
+
+        /// <summary>
+        /// Ensures the UI combo backing fields are populated from remembered storage,
+        /// but only when that is actually allowed.
+        /// </summary>
+        internal static void EnsureRememberedComboUiStateLoaded()
+        {
+            if (_rememberedComboUiLoaded) return;
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try { LoadRememberedComboUiState(); } catch { }
+        }
+
+        /// <summary>
+        /// Captures the current remembered combo values into the dedicated remembered-state config.
+        /// </summary>
+        internal static void CaptureRememberedComboSnapshot()
+        {
+            if (!RememberedToggleStore.RememberEnabled) return;
+
+            bool inGame = CastleWallsMk2.IsInGame();
+            if (!inGame && !AllowOutOfGameSettingEdits()) return;
+
+            try
+            {
+                EnsureRememberedComboUiStateLoaded();
+
+                foreach (var kv in _rememberedComboFields)
+                {
+                    var field = ResolveRememberedComboUiField(kv.Key);
+                    if (field == null) continue;
+
+                    int value = (int)field.GetValue(null);
+                    RememberedToggleStore.SetComboIndex(kv.Key, ClampRememberedComboIndex(kv.Key, value));
+                }
+
+                RememberedToggleStore.Save();
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Marks remembered combo values for restoration later.
+        /// This intentionally does not restore immediately.
+        /// </summary>
+        internal static void QueueRememberedComboRestore()
+        {
+            _rememberedComboUiLoaded = false;
+            _rememberedComboRestorePending = true;
+        }
+
+        /// <summary>
+        /// If restoration is pending, and we are back in-game, this method:
+        /// 1. Loads remembered combo values into the UI backing fields
+        /// 2. Invokes each remembered combo callback that is currently eligible to apply
+        /// </summary>
+        internal static void ApplyRememberedCombosIfPending()
+        {
+            if (!_rememberedComboRestorePending) return;
+
+            if (!RememberedToggleStore.RememberEnabled)
+            {
+                _rememberedComboRestorePending = false;
+                return;
+            }
+
+            if (!CastleWallsMk2.IsInGame())
+                return;
+
+            try
+            {
+                LoadRememberedComboUiState();
+
+                foreach (var kv in _rememberedComboFields)
+                {
+                    var field = ResolveRememberedComboUiField(kv.Key);
+                    if (field == null) continue;
+
+                    var meta = kv.Value;
+                    if (meta.ShouldApply != null && !meta.ShouldApply())
+                        continue;
+
+                    int wanted = (int)field.GetValue(null);
+                    wanted = ClampRememberedComboIndex(kv.Key, wanted);
+
+                    try { meta.ApplyIndex?.Invoke(wanted); } catch { }
+                }
+            }
+            finally
+            {
+                _rememberedComboRestorePending = false;
+            }
+        }
+        #endregion
+
         #region Helpers: Window Placement / Size Tracking / Splitter
 
         // Title shows version + FPS + current visibility toggle text.
@@ -13767,7 +13962,17 @@ namespace CastleWallsMk2
 
             if (!enabled) ImGui.EndDisabled();
 
-            if (changed) onChanged?.Invoke(options[index]);
+            if (changed)
+            {
+                // If menu edits are allowed while not in-game, keep the UI value now
+                // and defer the live apply until we are back in a session.
+                if (!ShouldDeferLiveApply())
+                    onChanged?.Invoke(options[index]);
+
+                CaptureRememberedComboSnapshot();
+                QueueRememberedComboRestore();
+            }
+
             return changed;
         }
         #endregion

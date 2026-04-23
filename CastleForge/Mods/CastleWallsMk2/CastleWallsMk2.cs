@@ -138,8 +138,9 @@ namespace CastleWallsMk2
         {
             try
             {
-                try { IGMainUI.CaptureRememberedToggleSnapshot();                   } catch (Exception ex) { Log($"Save remembered toggles failed: {ex.Message}."); } // Flush remembered gameplay toggles.
-                try { IGMainUI.CaptureRememberedSliderSnapshot();                   } catch (Exception ex) { Log($"Save remembered sliders failed: {ex.Message}."); } // Flush remembered gameplay toggles.
+                try { IGMainUI.CaptureRememberedToggleSnapshot();                   } catch (Exception ex) { Log($"Save remembered toggles failed: {ex.Message}."); } // Flush remembered gameplay toggle values.
+                try { IGMainUI.CaptureRememberedSliderSnapshot();                   } catch (Exception ex) { Log($"Save remembered sliders failed: {ex.Message}."); } // Flush remembered gameplay combo values.
+                try { IGMainUI.CaptureRememberedComboSnapshot();                    } catch (Exception ex) { Log($"Save remembered combos failed: {ex.Message}.");  } // Flush remembered gameplay slider values.
                 try { ServerHistory.SaveIfDirty();                                  } catch (Exception ex) { Log($"Flush server history failed: {ex.Message}.");    } // Flush server host history to disk.
                 try { GamePatches.DisableAll();                                     } catch (Exception ex) { Log($"Disable hooks failed: {ex.Message}.");           } // Unpatch Harmony.
                 try { IGMainUI.DisposeLogFilter();                                  } catch (Exception ex) { Log($"Log-filter dispose failed: {ex.Message}.");      } // Dispose log filter.
@@ -3648,6 +3649,7 @@ namespace CastleWallsMk2
             {
                 ReapplySessionLocalState();
                 IGMainUI.ApplyRememberedTogglesIfPending();
+                IGMainUI.ApplyRememberedCombosIfPending();
                 IGMainUI.ApplyRememberedSlidersIfPending();
             }
 
@@ -3669,6 +3671,27 @@ namespace CastleWallsMk2
                 try { BlockEspRenderer.Invalidate();                                                                         } catch { } // Ensure we clear the Block ESP cache.
                 if (GamePatches.XRayConfig.Enabled)                   try { GamePatches.XRayRuntime.SetEnabled(false);       } catch { } // Ensure we turn off the xray mod.
                 if (GamePatches.FullBrightRuntime.UseFullBrightTiles) try { GamePatches.FullBrightRuntime.SetEnabled(false); } catch { } // Ensure we turn off the full-bright mod.
+
+                // Capture the latest remembered gameplay UI values before leaving the session.
+                try { IGMainUI.CaptureRememberedToggleSnapshot(); } catch { }
+                try { IGMainUI.CaptureRememberedSliderSnapshot(); } catch { }
+
+                // NOTE:
+                // Do not capture remembered combos here. Difficulty/GameMode may reset to
+                // their default enum values during the leave-session transition, which would
+                // overwrite the user-selected remembered combo values with 0.
+                //
+                // try { IGMainUI.CaptureRememberedComboSnapshot(); } catch { }
+
+                // Clear UI selection data.
+                // (Optional) Don't populate the players if the UI is hidden.
+                if (ImGuiXnaRenderer.Visible && !GameIsMinimiMob()) SetPlayers(Array.Empty<NetworkGamer>());
+
+                // Queue remembered gameplay UI values so they can be restored after entering the next session.
+                ResetToggleStates();
+                IGMainUI.QueueRememberedToggleRestore();
+                IGMainUI.QueueRememberedSliderRestore();
+                IGMainUI.QueueRememberedComboRestore();
 
                 // Reset states when config allows.
                 if (!cfg.PreserveTogglesWhenLeavingGame)
@@ -3729,19 +3752,6 @@ namespace CastleWallsMk2
                         = Vector3.Zero;
 
                     #endregion
-
-                    // Persist the last in-game checkbox states before the out-of-game reset runs.
-                    try { IGMainUI.CaptureRememberedToggleSnapshot(); } catch { }
-                    try { IGMainUI.CaptureRememberedSliderSnapshot(); } catch { }
-
-                    // Clear UI selection data.
-                    // (Optional) Don't populate the players if the UI is hidden.
-                    if (ImGuiXnaRenderer.Visible && !GameIsMinimiMob()) SetPlayers(Array.Empty<NetworkGamer>());
-
-                    // Untick the UI checkboxes so the panel matches reality.
-                    ResetToggleStates();
-                    IGMainUI.QueueRememberedToggleRestore();
-                    IGMainUI.QueueRememberedSliderRestore();
                 }
             }
 
