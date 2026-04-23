@@ -88,9 +88,9 @@
     "preview_path": "CastleForge/Servers/CMZDedicatedLidgrenServer/_Images/Preview.png",
     "official": true,
     "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Servers/CMZDedicatedLidgrenServer",
-    "releases_url": "",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/servers-v0.1.0/CMZDedicatedLidgrenServer-servers-v0.1.0.zip",
     "game_version": "v1.9.9.8",
-    "castleforge_version": "",
+    "castleforge_version": "0.1.0",
     "license": "GPL-3.0-or-later",
     "tags": [
       "server",
@@ -113,9 +113,9 @@
     "preview_path": "CastleForge/Servers/CMZDedicatedSteamServer/_Images/Preview.png",
     "official": true,
     "source_repo": "https://github.com/RussDev7/CastleForge/tree/main/CastleForge/Servers/CMZDedicatedSteamServer",
-    "releases_url": "",
+    "releases_url": "https://github.com/RussDev7/CastleForge/releases/download/servers-v0.1.0/CMZDedicatedSteamServer-servers-v0.1.0.zip",
     "game_version": "v1.9.9.8",
-    "castleforge_version": "",
+    "castleforge_version": "0.1.0",
     "license": "GPL-3.0-or-later",
     "tags": [
       "server",
