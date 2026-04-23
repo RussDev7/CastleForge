@@ -1,0 +1,18 @@
+# One relative path per line to preserve a file or folder during cleanup.
+# Use an exact relative file path to keep one file.
+# End the path with "\" to keep an entire folder and everything under it.
+# Paths must match the scan output's relative paths.
+# Examples:
+# CastleForge\Assets\Branding\Logo.png
+# CastleForge\ModLoaderFramework\ModLoader\_Images\
+# CastleForge\Mods\WeaponAddons\WeaponAddons\Packs\Raygun\icon.png
+
+CastleForge\ModLoaderFramework\ModLoaderExtensions\Embedded\
+CastleForge\Mods\TacticalNuke\TacticalNuke\Textures\Blocks\
+CastleForge\Mods\WeaponAddons\WeaponAddons\Packs\
+CastleForge\Mods\WorldEditPixelart\WE_ImageToPixelart\Images\
+CastleForge\Mods\MoreAchievements\MoreAchievements\CustomIcons\
+CastleForge\Mods\Restore360Water\Restore360Water\Textures\Terrain\
+CastleForge\Mods\TacticalNuke\TacticalNuke\Textures\Icons\
+CastleForge\Mods\TexturePacks\Assets\
+CastleForge\Mods\TooManyItems\TooManyItems\Textures\

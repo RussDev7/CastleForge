@@ -88,7 +88,7 @@ pause
 exit /b 0
 
 :ShouldSkip
-setlocal EnableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 set "P=%~1"
 set "SKIP=0"
 
@@ -105,10 +105,22 @@ if exist "%KEEP_FILE%" (
         set "K=%%K"
         if defined K (
             if /I not "!K:~0,1!"=="#" (
+                set "K=!K:"=!"
                 set "K=!K:/=\!"
                 if "!K:~0,1!"=="\" set "K=!K:~1!"
-                set "KEEPABS=%ROOT%!K!"
-                if /I "!P!"=="!KEEPABS!" set "SKIP=1"
+
+                if defined K (
+                    set "KEEPABS=%ROOT%!K!"
+
+                    rem Exact file match
+                    if /I "!P!"=="!KEEPABS!" set "SKIP=1"
+
+                    rem Folder match: if keep entry ends with "\" keep everything under it
+                    if "!K:~-1!"=="\" (
+                        call set "TEST=%%P:!KEEPABS!=%%"
+                        if /I not "!TEST!"=="!P!" set "SKIP=1"
+                    )
+                )
             )
         )
     )
