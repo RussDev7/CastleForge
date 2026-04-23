@@ -6136,7 +6136,7 @@ namespace CastleWallsMk2
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)gamer.Tag, yMinWorld: -64, yMaxWorld: 64, to: gamer);    } catch { } // Corrupt existing position.
 
-            try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
+            try { await Task.Delay(500);                                                                                                                    } catch { } // Small delay.
             try { if (crash) CrashSelectedPlayer(gamer);                                                                                                    } catch { } // Send crash packets.
             try
             {
@@ -6186,7 +6186,7 @@ namespace CastleWallsMk2
                                 SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
                         try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
                         crashedPeersCount++;
                     }
@@ -6204,7 +6204,7 @@ namespace CastleWallsMk2
                                 SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
                         try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
                         crashedHostCount++;
                         break;
