@@ -6131,6 +6131,9 @@ namespace CastleWallsMk2
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { TpToSelectedPlayer    (gamer);                                                                                                            } catch { } // Teleport to player.
             try { await Task.Delay(500);                                                                                                                    } catch { } // Small delay.
+            try { for (int i = 0; i < 10; i++)
+                    SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)gamer.Tag).Gamer, DragonTypeEnum.SKELETON);                } catch { } // Send damage packet.
+            try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)gamer.Tag, yMinWorld: -64, yMaxWorld: 64, to: gamer);    } catch { } // Corrupt existing position.
 
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
@@ -6177,8 +6180,11 @@ namespace CastleWallsMk2
                         IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all so host saves
                                                                                                                                                                              // the locations of its peers.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player
+                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
                         try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                        try { for (int i = 0; i < 10; i++)
+                                SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
+                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
@@ -6192,8 +6198,11 @@ namespace CastleWallsMk2
                     {
                         IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player
+                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
                         try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                        try { for (int i = 0; i < 10; i++)
+                                SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
+                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
                         try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                         try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
