@@ -36,6 +36,7 @@ namespace CastleWallsMk2
 
         private static bool _loaded;
         private static bool _rememberEnabled;
+        private static bool _rememberCombosEnabled;
 
         /// <summary>
         /// Full path to the remembered-toggle INI:
@@ -61,6 +62,27 @@ namespace CastleWallsMk2
                 if (_rememberEnabled == value) return;
 
                 _rememberEnabled = value;
+                Save();
+            }
+        }
+
+        /// <summary>
+        /// Master on/off flag for restoring remembered combo/dropdown values across session reloads.
+        /// Stored inside this same dedicated INI, but kept separate from remembered toggles.
+        /// </summary>
+        public static bool RememberCombosEnabled
+        {
+            get
+            {
+                EnsureLoaded();
+                return _rememberCombosEnabled;
+            }
+            set
+            {
+                EnsureLoaded();
+                if (_rememberCombosEnabled == value) return;
+
+                _rememberCombosEnabled = value;
                 Save();
             }
         }
@@ -168,9 +190,14 @@ namespace CastleWallsMk2
                     "#",
                     "# [Session]",
                     "#   RememberToggleStatesOnReload = true|false",
-                    "#     - true  -> Saves remembered gameplay values and restores them on the next",
-                    "#                game/session load.",
-                    "#     - false -> Disables automatic restore, but keeps the last snapshot.",
+                    "#     - true  -> Saves remembered gameplay toggles/sliders and restores them",
+                    "#                on the next game/session load.",
+                    "#     - false -> Disables automatic toggle/slider restore, but keeps the last snapshot.",
+                    "#",
+                    "#   RememberComboStatesOnReload = true|false",
+                    "#     - true  -> Saves remembered combo/dropdown indexes and restores them",
+                    "#                on the next game/session load.",
+                    "#     - false -> Disables automatic combo restore, but keeps the last snapshot.",
                     "#",
                     "# [Toggles]",
                     "#   Keys are private/public IGMainUI bool field names on purpose so restores stay",
@@ -190,6 +217,9 @@ namespace CastleWallsMk2
                     "",
                     "[Session]",
                     $"RememberToggleStatesOnReload={(_rememberEnabled ? "true" : "false")}",
+                    $"RememberComboStatesOnReload={(_rememberCombosEnabled ? "true" : "false")}",
+                    "",
+                    "[Toggles]",
                     "",
                     "[Toggles]",
                 };
@@ -237,6 +267,7 @@ namespace CastleWallsMk2
             _floatSliders.Clear();
             _comboIndices.Clear();
             _rememberEnabled = false;
+            _rememberCombosEnabled = false;
 
             if (!File.Exists(ConfigPath))
             {
@@ -269,7 +300,16 @@ namespace CastleWallsMk2
                     if (section.Equals("Session", StringComparison.OrdinalIgnoreCase))
                     {
                         if (key.Equals("RememberToggleStatesOnReload", StringComparison.OrdinalIgnoreCase))
+                        {
                             _rememberEnabled = string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
+                            continue;
+                        }
+
+                        if (key.Equals("RememberComboStatesOnReload", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _rememberCombosEnabled = string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
+                            continue;
+                        }
 
                         continue;
                     }
@@ -313,6 +353,7 @@ namespace CastleWallsMk2
                 _floatSliders.Clear();
                 _comboIndices.Clear();
                 _rememberEnabled = false;
+                _rememberCombosEnabled = false;
             }
         }
     }

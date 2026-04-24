@@ -2348,17 +2348,33 @@ namespace CastleWallsMk2
                                 if (value)
                                 {
                                     CaptureRememberedToggleSnapshot();
-                                    CaptureRememberedComboSnapshot();
                                     CaptureRememberedSliderSnapshot();
 
                                     QueueRememberedToggleRestore();
-                                    QueueRememberedComboRestore();
                                     QueueRememberedSliderRestore();
                                 }
                             }
 
                             if (ImGui.IsItemHovered())
-                                ImGui.SetTooltip("Saves supported gameplay toggles, sliders, and dropdown values to a separate config and restores them when you enter a game again.");
+                                ImGui.SetTooltip("Saves supported gameplay toggles and slider values to a separate config and restores them when you enter a game again.");
+                        });
+
+                        Cell(() =>
+                        {
+                            bool value = RememberedToggleStore.RememberCombosEnabled;
+                            if (ImGui.Checkbox("Remember combos", ref value))
+                            {
+                                RememberedToggleStore.RememberCombosEnabled = value;
+
+                                if (value)
+                                {
+                                    CaptureRememberedComboSnapshot();
+                                    QueueRememberedComboRestore();
+                                }
+                            }
+
+                            if (ImGui.IsItemHovered())
+                                ImGui.SetTooltip("Saves supported dropdown/combo selections to a separate config and restores them when you enter a game again.");
                         });
 
                         if (outOfGameLocked) ImGui.BeginDisabled();
@@ -12956,7 +12972,7 @@ namespace CastleWallsMk2
         internal static void EnsureRememberedComboUiStateLoaded()
         {
             if (_rememberedComboUiLoaded) return;
-            if (!RememberedToggleStore.RememberEnabled) return;
+            if (!RememberedToggleStore.RememberCombosEnabled) return;
 
             bool inGame = CastleWallsMk2.IsInGame();
             if (!inGame && !AllowOutOfGameSettingEdits()) return;
@@ -12969,7 +12985,7 @@ namespace CastleWallsMk2
         /// </summary>
         internal static void CaptureRememberedComboSnapshot()
         {
-            if (!RememberedToggleStore.RememberEnabled) return;
+            if (!RememberedToggleStore.RememberCombosEnabled) return;
 
             bool inGame = CastleWallsMk2.IsInGame();
             if (!inGame && !AllowOutOfGameSettingEdits()) return;
@@ -13011,7 +13027,7 @@ namespace CastleWallsMk2
         {
             if (!_rememberedComboRestorePending) return;
 
-            if (!RememberedToggleStore.RememberEnabled)
+            if (!RememberedToggleStore.RememberCombosEnabled)
             {
                 _rememberedComboRestorePending = false;
                 return;
@@ -13969,8 +13985,11 @@ namespace CastleWallsMk2
                 if (!ShouldDeferLiveApply())
                     onChanged?.Invoke(options[index]);
 
-                CaptureRememberedComboSnapshot();
-                QueueRememberedComboRestore();
+                if (RememberedToggleStore.RememberCombosEnabled)
+                {
+                    CaptureRememberedComboSnapshot();
+                    QueueRememberedComboRestore();
+                }
             }
 
             return changed;

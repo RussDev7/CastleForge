@@ -139,8 +139,8 @@ namespace CastleWallsMk2
             try
             {
                 try { IGMainUI.CaptureRememberedToggleSnapshot();                   } catch (Exception ex) { Log($"Save remembered toggles failed: {ex.Message}."); } // Flush remembered gameplay toggle values.
-                try { IGMainUI.CaptureRememberedSliderSnapshot();                   } catch (Exception ex) { Log($"Save remembered sliders failed: {ex.Message}."); } // Flush remembered gameplay combo values.
-                try { IGMainUI.CaptureRememberedComboSnapshot();                    } catch (Exception ex) { Log($"Save remembered combos failed: {ex.Message}.");  } // Flush remembered gameplay slider values.
+                try { IGMainUI.CaptureRememberedSliderSnapshot();                   } catch (Exception ex) { Log($"Save remembered sliders failed: {ex.Message}."); } // Flush remembered gameplay slider values.
+                try { IGMainUI.CaptureRememberedComboSnapshot();                    } catch (Exception ex) { Log($"Save remembered combos failed: {ex.Message}.");  } // Flush remembered gameplay combo values.
                 try { ServerHistory.SaveIfDirty();                                  } catch (Exception ex) { Log($"Flush server history failed: {ex.Message}.");    } // Flush server host history to disk.
                 try { GamePatches.DisableAll();                                     } catch (Exception ex) { Log($"Disable hooks failed: {ex.Message}.");           } // Unpatch Harmony.
                 try { IGMainUI.DisposeLogFilter();                                  } catch (Exception ex) { Log($"Log-filter dispose failed: {ex.Message}.");      } // Dispose log filter.
@@ -3763,14 +3763,16 @@ namespace CastleWallsMk2
             }
 
             // If in-game, update the enum dropdown comboxes.
-            if (inGame)
+            if (inGame && !RememberedToggleStore.RememberCombosEnabled)
             {
                 if (IGMainUI._difficultyIndex != (int)CastleMinerZGame.Instance.Difficulty)
-                    IGMainUI._difficultyIndex  = (int)CastleMinerZGame.Instance.Difficulty;
+                    IGMainUI._difficultyIndex = (int)CastleMinerZGame.Instance.Difficulty;
 
-                if (IGMainUI._gameModeIndex   != (int)CastleMinerZGame.Instance.GameMode)
-                    IGMainUI._gameModeIndex    = (int)CastleMinerZGame.Instance.GameMode;
-
+                if (IGMainUI._gameModeIndex != (int)CastleMinerZGame.Instance.GameMode)
+                    IGMainUI._gameModeIndex = (int)CastleMinerZGame.Instance.GameMode;
+            }
+            if (inGame)
+            {
                 /// [Homes]
 
                 // Update the per-world homes.
