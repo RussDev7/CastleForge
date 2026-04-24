@@ -312,7 +312,7 @@ Before extracting the ZIP:
 If you already extracted the files, you can also unblock the copied DLLs with PowerShell:
 
 ```powershell
-Get-ChildItem "C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z\!Mods" -Recurse | Unblock-File
+Get-ChildItem "C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z" -Recurse | Unblock-File
 ````
 
 > If all mods fail with `FileLoadException` and `HRESULT: 0x80131515`, Windows likely blocked the downloaded files.
