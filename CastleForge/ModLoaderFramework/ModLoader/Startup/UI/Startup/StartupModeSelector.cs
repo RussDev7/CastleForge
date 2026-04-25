@@ -12,19 +12,27 @@ namespace ModLoader
     /// <summary>
     /// Resolves the launch mode (with mods / without mods / abort) by:
     /// 1) Reading ModLoader.ini if "Remember" was set previously.
-    /// 2) Otherwise showing <see cref="StartupPromptForm"/> on a temporary STA thread.
+    /// 2) Creating a default ModLoader.ini on first successful launch if one does not exist.
+    /// 3) Otherwise showing <see cref="StartupPromptForm"/> on a temporary STA thread.
     ///
     /// Notes:
     /// • Dialogs must run on an STA thread; many hosts are MTA by default.
     /// • 'Abort' is never persisted (user exit should not stick).
     /// • Thread.Join() blocks until the prompt closes (simple & deterministic).
+    /// • If no ModLoader.ini exists yet, choosing With Mods / Without Mods once will create it.
+    /// • "Remember" only controls whether the prompt is skipped next time.
     /// </summary>
     internal static class StartupModeSelector
     {
         public static LaunchMode ResolveLaunchMode()
         {
+            // Load the config once so we can:
+            // - Respect remembered choices.
+            // - Know whether this is the first launch with no ModLoader.ini yet.
+            bool hasConfig = ModLoaderConfig.TryLoad(out var cfg);
+
             // Fast-path: Respect remembered choice if present.
-            if (ModLoaderConfig.TryLoad(out var cfg) && cfg.Remember)
+            if (hasConfig && cfg.Remember)
                 return cfg.Mode;
 
             // Otherwise block on a tiny STA thread that shows the dialog.
@@ -64,8 +72,28 @@ namespace ModLoader
             thread.Join();                                // Wait synchronously.
 
             // Only persist WithMods/WithoutMods; never persist Abort.
-            if (remember && mode != LaunchMode.Abort)
-                new ModLoaderConfig { Remember = true, Mode = mode }.Save();
+            if (mode != LaunchMode.Abort)
+            {
+                // If the user checked "Always use this option", save the remembered choice.
+                if (remember)
+                {
+                    new ModLoaderConfig
+                    {
+                        Remember = true,
+                        Mode     = mode
+                    }.Save();
+                }
+                // If this is the first successful launch and no ModLoader.ini exists yet,
+                // create a default editable config without skipping the prompt next time.
+                else if (!hasConfig)
+                {
+                    new ModLoaderConfig
+                    {
+                        Remember = false,
+                        Mode     = mode
+                    }.Save();
+                }
+            }
 
             return mode;
         }

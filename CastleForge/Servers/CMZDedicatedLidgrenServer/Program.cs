@@ -202,7 +202,9 @@ namespace CMZDedicatedLidgrenServer
                     pvpState: config.PvpState,
                     difficulty: config.Difficulty,
                     gameName: config.GameName,
-                    networkVersion: config.NetworkVersion);
+                    networkVersion: config.NetworkVersion,
+                    logNetworkPackets: config.LogNetworkPackets,
+                    logHostMessages: config.LogHostMessages);
 
                 #endregion
 

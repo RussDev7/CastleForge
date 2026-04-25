@@ -4,11 +4,12 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedSteamServer.Plugins.RegionProtect;
+using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
 using CMZDedicatedSteamServer.Config;
 using CMZDedicatedSteamServer.Steam;
 using System.Collections.Generic;
-using CMZDedicatedLidgrenServer;
 using System.Collections;
 using System.Reflection;
 using System.Linq;
@@ -34,32 +35,140 @@ namespace CMZDedicatedSteamServer.Hosting
     /// </summary>
     internal sealed class SteamDedicatedServer(string baseDir, SteamServerConfig config, Action<string> log) : IDisposable
     {
+        #region Fields
+
+        #region Constructor-provided state
+
+        /// <summary>
+        /// Server executable/base directory used for config, plugin storage, and relative path resolution.
+        /// </summary>
         private readonly string _baseDir = baseDir ?? AppDomain.CurrentDomain.BaseDirectory;
+
+        /// <summary>
+        /// Loaded Steam dedicated server configuration.
+        /// </summary>
         private readonly SteamServerConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+
+        /// <summary>
+        /// Logging callback supplied by the host process.
+        /// </summary>
         private readonly Action<string> _log = log ?? (_ => { });
 
+        #endregion
+
+        #region Runtime services
+
+        /// <summary>
+        /// True while the server update loop should continue processing Steam events and packets.
+        /// </summary>
         private bool _running;
+
+        /// <summary>
+        /// Resolves and loads CastleMiner Z, DNA.Common, and Steam runtime assemblies.
+        /// </summary>
         private ServerAssemblyLoader _assemblyLoader;
+
+        /// <summary>
+        /// Steam bootstrap wrapper responsible for initializing Steam and reading packets.
+        /// </summary>
         private SteamServerBootstrap _steam;
+
+        /// <summary>
+        /// Validates incoming connection approval requests.
+        /// </summary>
         private SteamConnectionApproval _approval;
+
+        /// <summary>
+        /// Tracks connected Steam peers and their allocated CastleMiner Z gamer ids.
+        /// </summary>
         private SteamPeerRegistry _peers;
+
+        /// <summary>
+        /// Owns lobby creation and lobby metadata publishing.
+        /// </summary>
         private SteamLobbyHost _lobbyHost;
+
+        /// <summary>
+        /// Reflected host/server gamer object sent in connection responses.
+        /// </summary>
         private object _hostGamer;
+
+        /// <summary>
+        /// Host-side world handler for recipient id 0 packets.
+        /// </summary>
         private ServerWorldHandler _worldHandler;
+
+        /// <summary>
+        /// Message id/type lookup helper used for logging and selected packet detection.
+        /// </summary>
         private CmzMessageCodec _codec;
 
+        /// <summary>
+        /// Optional server plugin manager used by the world handler.
+        /// </summary>
+        private ServerPluginManager _plugins;
+
+        #endregion
+
+        #region Peer / packet state
+
+        /// <summary>
+        /// Maps Steam connection objects/ids to reflected NetworkGamer objects.
+        /// </summary>
         private readonly Dictionary<object, object> _connectionToGamer = [];
+
+        /// <summary>
+        /// Cached PlayerExistsMessage payloads keyed by player id for replaying to late joiners.
+        /// </summary>
         private readonly Dictionary<byte, byte[]> _playerExistsPayloadById = [];
+
+        /// <summary>
+        /// Cached message id for DNA.CastleMinerZ.Net.PlayerExistsMessage.
+        /// </summary>
         private byte? _playerExistsMessageId;
 
+        #endregion
+
+        #region Time-of-day state
+
+        /// <summary>
+        /// Authoritative server day value. The fractional part controls visual time; the integer part controls day number.
+        /// </summary>
         private float _timeOfDay = 0.41f;
+
+        /// <summary>
+        /// Last time a TimeOfDayMessage was broadcast to connected clients.
+        /// </summary>
         private DateTime _lastTimeOfDaySend = DateTime.MinValue;
+
+        /// <summary>
+        /// Last wall-clock timestamp used to advance the authoritative day value.
+        /// </summary>
         private DateTime _lastTimeOfDayAdvance = DateTime.UtcNow;
 
+        /// <summary>
+        /// Number of real seconds per full CastleMiner Z day cycle.
+        /// </summary>
         private const float SecondsPerFullDay = 960f;
 
+        #endregion
+
+        #endregion
+
+        #region Properties
+
+        /// <summary>
+        /// Gets whether the server is currently running.
+        /// </summary>
         public bool IsRunning => _running;
 
+        #endregion
+
+        #region Lifecycle
+
+        /// <summary>
+        /// Starts the Steam dedicated server, initializes Steam/lobby state, loads assemblies, and initializes the world handler.
+        /// </summary>
         public void Start()
         {
             string gamePath = string.IsNullOrWhiteSpace(_config.GamePath)
@@ -102,13 +211,25 @@ namespace CMZDedicatedSteamServer.Hosting
             ulong effectiveSaveOwnerSteamId = _config.SaveOwnerSteamId != 0UL ? _config.SaveOwnerSteamId : _steam.SteamPlayerId;
             if (!string.IsNullOrWhiteSpace(_config.WorldFolder) && effectiveSaveOwnerSteamId != 0UL)
             {
+                _plugins = new ServerPluginManager(_log);
+                _plugins.Register(new ServerRegionProtectPlugin());
+
+                _plugins.InitializeAll(new ServerPluginContext
+                {
+                    BaseDir = _baseDir,
+                    WorldGuid = _config.WorldGuid,
+                    Log = _log
+                });
+
                 _worldHandler = new ServerWorldHandler(
                     gamePath,
                     _config.WorldFolder,
                     _baseDir,
                     effectiveSaveOwnerSteamId,
                     _log,
-                    _config.ViewDistanceChunks);
+                    _config.ViewDistanceChunks,
+                    _plugins,
+                    _config.LogHostMessages);
 
                 _worldHandler.Init(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly);
                 _codec = new CmzMessageCodec(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly, _log);
@@ -122,11 +243,17 @@ namespace CMZDedicatedSteamServer.Hosting
             _running = true;
         }
 
+        /// <summary>
+        /// Stops the server update loop.
+        /// </summary>
         public void Stop()
         {
             _running = false;
         }
 
+        /// <summary>
+        /// Pumps the server runtime once: advances time, broadcasts time updates, polls Steam, and processes packets.
+        /// </summary>
         public void Update()
         {
             if (!_running)
@@ -152,7 +279,13 @@ namespace CMZDedicatedSteamServer.Hosting
                 }
             }
         }
+        #endregion
 
+        #region Steam Packet Dispatch
+
+        /// <summary>
+        /// Dispatches a raw Steam packet to the appropriate high-level handler based on MessageType.
+        /// </summary>
         private void ProcessPacket(object packet)
         {
             object messageType = ReflectEx.GetRequiredMemberValue(packet, "MessageType");
@@ -175,6 +308,9 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Validates and accepts/denies an incoming Steam connection approval request.
+        /// </summary>
         private void HandleConnectionApproval(object packet, ulong senderSteamId)
         {
             ApprovalDecision decision = _approval.ValidateRequest(packet, senderSteamId);
@@ -189,6 +325,9 @@ namespace CMZDedicatedSteamServer.Hosting
             _log($"[ConnectionApproval] Denied {senderSteamId} -> {decision.ResultCode}");
         }
 
+        /// <summary>
+        /// Handles Steam connection status changes and updates peer/gamer tracking.
+        /// </summary>
         private void HandleStatusChanged(object packet, ulong senderSteamId)
         {
             byte statusCode = Convert.ToByte(ReflectEx.GetRequiredMethod(packet.GetType(), "ReadByte", Type.EmptyTypes).Invoke(packet, null));
@@ -246,6 +385,9 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Routes incoming Steam data packets by CastleMiner Z channel.
+        /// </summary>
         private void HandleData(object packet, ulong senderSteamId)
         {
             int channel = Convert.ToInt32(ReflectEx.GetRequiredMemberValue(packet, "Channel"));
@@ -259,6 +401,9 @@ namespace CMZDedicatedSteamServer.Hosting
             HandleChannel0Data(packet, senderSteamId);
         }
 
+        /// <summary>
+        /// Handles channel-1 packets, including peer-directed channel-0 forwarding and broadcast-style payloads.
+        /// </summary>
         private void HandleChannel1Data(object packet, ulong senderSteamId)
         {
             MethodInfo readByte = ReflectEx.GetRequiredMethod(packet.GetType(), "ReadByte", Type.EmptyTypes);
@@ -296,7 +441,10 @@ namespace CMZDedicatedSteamServer.Hosting
                 if (payloadBytes == null || payloadBytes.Length < 1)
                     return;
 
-                _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
+                if (_config.LogNetworkPackets)
+                {
+                    _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
+                }
 
                 bool acceptedClientTimeSync = TryApplyIncomingTimeOfDay(senderId, payloadBytes);
                 if (acceptedClientTimeSync)
@@ -334,6 +482,9 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Handles normal channel-0 gameplay packets and forwards them through the host/world pipeline.
+        /// </summary>
         private void HandleChannel0Data(object packet, ulong senderSteamId)
         {
             MethodInfo readByte = ReflectEx.GetRequiredMethod(packet.GetType(), "ReadByte", Type.EmptyTypes);
@@ -348,7 +499,10 @@ namespace CMZDedicatedSteamServer.Hosting
             if (data == null || data.Length < 1)
                 return;
 
-            _log($"CH0 recv: recipient={recipientId}, sender={senderId}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
+            if (_config.LogNetworkPackets)
+            {
+                _log($"CH0 recv: recipient={recipientId}, sender={senderId}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
+            }
 
             object reliableOrdered = GetReliableOrderedDeliveryMethod();
             IEnumerable liveConnections = GetLiveConnectionObjects();
@@ -378,7 +532,13 @@ namespace CMZDedicatedSteamServer.Hosting
                 SendChannel0PayloadToSteam(peer.SteamId, peer.Gid, senderId, data, reliableOrdered);
             }
         }
+        #endregion
 
+        #region Gamer / Peer Construction
+
+        /// <summary>
+        /// Creates the reflected SimpleGamer instance used to represent the dedicated server host.
+        /// </summary>
         private object CreateHostGamer()
         {
             Type simpleGamerType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.GamerServices.SimpleGamer");
@@ -387,6 +547,9 @@ namespace CMZDedicatedSteamServer.Hosting
             return Activator.CreateInstance(simpleGamerType, [nullPlayerId, "Server"]);
         }
 
+        /// <summary>
+        /// Creates a reflected NetworkGamer object for a newly connected remote Steam peer.
+        /// </summary>
         private object CreateConnectedRemoteGamer(object baseGamer, byte gid, ulong steamId)
         {
             Type gamerType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.GamerServices.Gamer");
@@ -407,6 +570,9 @@ namespace CMZDedicatedSteamServer.Hosting
                 : ctor.Invoke([baseGamer, null, false, false, gid, steamId]);
         }
 
+        /// <summary>
+        /// Sends the initial ResponseToConnection packet containing the joiner's assigned gid and known peers.
+        /// </summary>
         private void SendConnectedResponse(ulong recipientSteamId, byte playerGid)
         {
             object packet = _steam.AllocPacket();
@@ -429,6 +595,9 @@ namespace CMZDedicatedSteamServer.Hosting
             _steam.SendPacket(packet, recipientSteamId, reliableOrdered, 1);
         }
 
+        /// <summary>
+        /// Notifies existing peers that a new peer joined the session.
+        /// </summary>
         private void BroadcastNewPeerToOthers(ConnectedSteamPeer newPeer)
         {
             object reliableOrdered = GetReliableOrderedDeliveryMethod();
@@ -446,6 +615,9 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Notifies existing peers that a peer left the session.
+        /// </summary>
         private void BroadcastDropPeerToOthers(ConnectedSteamPeer droppedPeer)
         {
             object reliableOrdered = GetReliableOrderedDeliveryMethod();
@@ -461,7 +633,13 @@ namespace CMZDedicatedSteamServer.Hosting
                 _steam.SendPacket(packet, existingPeer.SteamId, reliableOrdered, 1);
             }
         }
+        #endregion
 
+        #region Channel Send Helpers
+
+        /// <summary>
+        /// Writes the CastleMiner Z channel-0 packet envelope into a Steam packet object.
+        /// </summary>
         private void WriteChannel0Packet(object packet, byte recipientId, byte senderId, byte[] payload)
         {
             WriteByte(packet, recipientId);
@@ -469,6 +647,9 @@ namespace CMZDedicatedSteamServer.Hosting
             WriteByteArray(packet, payload);
         }
 
+        /// <summary>
+        /// Sends a channel-0 gameplay payload directly to a Steam peer.
+        /// </summary>
         private void SendChannel0PayloadToSteam(ulong recipientSteamId, byte recipientId, byte senderId, byte[] payload, object delivery = null)
         {
             if (recipientSteamId == 0UL || payload == null)
@@ -481,6 +662,9 @@ namespace CMZDedicatedSteamServer.Hosting
             _steam.SendPacket(packet, recipientSteamId, delivery, 0);
         }
 
+        /// <summary>
+        /// Sends a channel-0 gameplay payload to a connection object after converting it to a Steam id.
+        /// </summary>
         private void SendChannel0PayloadToClient(object conn, byte recipientId, byte senderId, byte[] payload, object delivery = null)
         {
             if (!TryConvertConnectionObjectToSteamId(conn, out ulong recipientSteamId))
@@ -489,6 +673,9 @@ namespace CMZDedicatedSteamServer.Hosting
             SendChannel0PayloadToSteam(recipientSteamId, recipientId, senderId, payload, delivery);
         }
 
+        /// <summary>
+        /// Converts a server connection object into a Steam id when possible.
+        /// </summary>
         private bool TryConvertConnectionObjectToSteamId(object conn, out ulong steamId)
         {
             if (conn is ulong u)
@@ -509,16 +696,28 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Resolves a CastleMiner Z gamer id to its connected Steam id.
+        /// </summary>
         private bool TryGetSteamIdForPlayer(byte gid, out ulong steamId)
         {
             return _peers.TryGetSteamId(gid, out steamId);
         }
 
+        /// <summary>
+        /// Gets a snapshot of currently connected peer connection objects.
+        /// </summary>
         private IEnumerable GetLiveConnectionObjects()
         {
             return _peers.GetConnectedPeersSnapshot().Select(p => (object)p.SteamId).ToList();
         }
+        #endregion
 
+        #region PlayerExists Replay Helpers
+
+        /// <summary>
+        /// Detects whether a payload is PlayerExistsMessage and extracts its request-response flag.
+        /// </summary>
         private bool TryParsePlayerExistsHeader(byte[] payload, out bool requestResponse)
         {
             requestResponse = false;
@@ -543,6 +742,9 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Replays cached PlayerExistsMessage payloads to a new joiner so existing players appear correctly.
+        /// </summary>
         private void ReplayCachedPlayerExistsToJoiner(ulong joinerSteamId, byte joinerId)
         {
             foreach (KeyValuePair<byte, byte[]> kvp in _playerExistsPayloadById.OrderBy(p => p.Key))
@@ -557,7 +759,13 @@ namespace CMZDedicatedSteamServer.Hosting
                 _log($"Replayed cached PlayerExistsMessage: existing={existingPlayerId} -> joiner={joinerId}");
             }
         }
+        #endregion
 
+        #region Packet Debug Helpers
+
+        /// <summary>
+        /// Returns a readable message-id/type description for logging an inner channel payload.
+        /// </summary>
         private string DescribeInnerPayload(byte[] payload)
         {
             if (_codec == null || payload == null || payload.Length < 1)
@@ -574,7 +782,13 @@ namespace CMZDedicatedSteamServer.Hosting
                 return "<decode failed>";
             }
         }
+        #endregion
 
+        #region Time-of-Day Sync
+
+        /// <summary>
+        /// Applies a client-provided TimeOfDayMessage when client time sync is enabled.
+        /// </summary>
         private bool TryApplyIncomingTimeOfDay(byte senderId, byte[] payload)
         {
             if (!_config.AllowClientTimeSync || _codec == null || payload == null || payload.Length < 6)
@@ -599,20 +813,34 @@ namespace CMZDedicatedSteamServer.Hosting
             }
         }
 
+        /// <summary>
+        /// Advances the authoritative server day value using real elapsed time.
+        ///
+        /// Important:
+        /// - This value is not just a 0..1 time-of-day value.
+        /// - The vanilla game expects GameScreen.Day to keep increasing forever.
+        /// - The client derives visual time-of-day from the fractional part.
+        /// - The HUD derives the visible day number from the integer part.
+        /// </summary>
         private void AdvanceTimeOfDay()
         {
             DateTime now = DateTime.UtcNow;
             double deltaSeconds = (now - _lastTimeOfDayAdvance).TotalSeconds;
             _lastTimeOfDayAdvance = now;
 
-            if (deltaSeconds <= 0)
-                return;
+            if (deltaSeconds < 0)
+                deltaSeconds = 0;
+
+            // Avoid large jumps if the process pauses, breaks in debugger, or stalls.
+            if (deltaSeconds > 1.0)
+                deltaSeconds = 1.0;
 
             _timeOfDay += (float)(deltaSeconds / SecondsPerFullDay);
-            while (_timeOfDay >= 1f)
-                _timeOfDay -= 1f;
         }
 
+        /// <summary>
+        /// Periodically broadcasts the authoritative server day value to all connected peers.
+        /// </summary>
         private void BroadcastTimeOfDayIfNeeded()
         {
             if (_worldHandler == null)
@@ -632,6 +860,9 @@ namespace CMZDedicatedSteamServer.Hosting
             _lastTimeOfDaySend = DateTime.UtcNow;
         }
 
+        /// <summary>
+        /// Sends the current authoritative day value to a newly connected peer.
+        /// </summary>
         private void SendInitialTimeOfDayToJoiner(ulong joinerSteamId, byte joinerGid)
         {
             if (_worldHandler == null)
@@ -643,19 +874,31 @@ namespace CMZDedicatedSteamServer.Hosting
 
             SendChannel0PayloadToSteam(joinerSteamId, joinerGid, 0, todPayload, GetReliableOrderedDeliveryMethod());
         }
+        #endregion
 
+        #region Reflected Write Helpers
+
+        /// <summary>
+        /// Gets the reflected reliable-ordered Lidgren delivery enum value used by CastleMiner Z.
+        /// </summary>
         private object GetReliableOrderedDeliveryMethod()
         {
             Type deliveryType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.Lidgren.NetDeliveryMethod");
             return Enum.ToObject(deliveryType, 67);
         }
 
+        /// <summary>
+        /// Writes a byte into a reflected Steam/Lidgren packet object.
+        /// </summary>
         private void WriteByte(object packet, byte value)
         {
             MethodInfo writeByte = ReflectEx.GetRequiredMethod(packet.GetType(), "Write", typeof(byte));
             writeByte.Invoke(packet, [value]);
         }
 
+        /// <summary>
+        /// Writes a reflected Gamer object into a packet using DNA.Net.GamerServices.LidgrenExtensions.
+        /// </summary>
         private void WriteGamer(object packet, object gamer)
         {
             Type netBufferType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.Lidgren.NetBuffer");
@@ -665,6 +908,9 @@ namespace CMZDedicatedSteamServer.Hosting
             writeGamer.Invoke(null, [packet, gamer]);
         }
 
+        /// <summary>
+        /// Writes an array of reflected Gamer objects into a packet.
+        /// </summary>
         private void WriteGamerArray(object packet, List<object> gamers)
         {
             Type netBufferType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.Lidgren.NetBuffer");
@@ -679,6 +925,9 @@ namespace CMZDedicatedSteamServer.Hosting
             writeArray.Invoke(null, [packet, gamerArray]);
         }
 
+        /// <summary>
+        /// Writes a byte array into a packet using DNA.Net.GamerServices.LidgrenExtensions.
+        /// </summary>
         private void WriteByteArray(object packet, byte[] ids)
         {
             Type netBufferType = ReflectEx.GetRequiredType(_assemblyLoader.CommonAssembly, "DNA.Net.Lidgren.NetBuffer");
@@ -686,7 +935,13 @@ namespace CMZDedicatedSteamServer.Hosting
             MethodInfo writeArray = ReflectEx.GetRequiredMethod(extensionsType, "WriteArray", netBufferType, typeof(byte[]));
             writeArray.Invoke(null, [packet, ids]);
         }
+        #endregion
 
+        #region IDisposable
+
+        /// <summary>
+        /// Disposes the Steam bootstrap and marks the server as stopped.
+        /// </summary>
         public void Dispose()
         {
             try
@@ -698,5 +953,6 @@ namespace CMZDedicatedSteamServer.Hosting
                 _running = false;
             }
         }
+        #endregion
     }
 }

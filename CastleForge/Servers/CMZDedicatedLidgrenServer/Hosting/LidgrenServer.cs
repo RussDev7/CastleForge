@@ -4,6 +4,8 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
+using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Net;
@@ -110,6 +112,16 @@ namespace CMZDedicatedLidgrenServer
         /// </summary>
         private readonly Action<string> _log;
 
+        /// <summary>
+        /// Enables verbose raw network packet logging, such as CH0/CH1 packet receive traces.
+        /// </summary>
+        private readonly bool _logNetworkPackets;
+
+        /// <summary>
+        /// Enables verbose host/world message logging, such as block edits, crate edits, doors, and pickups.
+        /// </summary>
+        private readonly bool _logHostMessages;
+
         #endregion
 
         #region Fields: Networking Runtime State
@@ -170,6 +182,11 @@ namespace CMZDedicatedLidgrenServer
         private readonly int _viewRadiusChunks;
 
         private CmzMessageCodec _codec;
+
+        /// <summary>
+        /// Server-side world plugin manager used for host-authoritative protections.
+        //// </summary>
+        private readonly ServerPluginManager _plugins;
 
         /// <summary>
         /// Cached raw PlayerExistsMessage payloads keyed by player id.
@@ -261,7 +278,9 @@ namespace CMZDedicatedLidgrenServer
             int pvpState = 0,
             int difficulty = 1,
             string gameName = "CastleMinerZSteam",
-            int networkVersion = 4)
+            int networkVersion = 4,
+            bool logNetworkPackets = false,
+            bool logHostMessages = false)
         {
             _gamePath = gamePath ?? throw new ArgumentNullException(nameof(gamePath));
             _port = port;
@@ -282,18 +301,39 @@ namespace CMZDedicatedLidgrenServer
             _gameName = string.IsNullOrWhiteSpace(gameName) ? "CastleMinerZSteam" : gameName;
             _networkVersion = networkVersion > 0 ? networkVersion : 4;
 
+            _logNetworkPackets = logNetworkPackets;
+            _logHostMessages = logHostMessages;
+
             if (_gameAsm != null &&
                 !string.IsNullOrWhiteSpace(_worldFolder) &&
                 !string.IsNullOrWhiteSpace(_saveRoot) &&
                 _saveOwnerSteamId != 0UL)
             {
+                _plugins = new ServerPluginManager(_log);
+                _plugins.Register(new ServerRegionProtectPlugin());
+
+                _plugins.InitializeAll(new ServerPluginContext
+                {
+                    // saveRoot is the server exe directory.
+                    // This creates:
+                    // CMZDedicatedLidgrenServer\Plugins\RegionProtect
+                    BaseDir = _saveRoot,
+
+                    // Use only the final world folder name/GUID instead of "Worlds\GUID".
+                    WorldGuid = GetWorldKey(_worldFolder),
+
+                    Log = _log
+                });
+
                 _worldHandler = new ServerWorldHandler(
                     _gamePath,
                     _worldFolder,   // relative, e.g. Worlds\{guid}
                     _saveRoot,      // absolute server root
                     _saveOwnerSteamId,
                     _log,
-                    _viewRadiusChunks);
+                    _viewRadiusChunks,
+                    _plugins,
+                    _logHostMessages);
             }
         }
         #endregion
@@ -1358,7 +1398,10 @@ namespace CMZDedicatedLidgrenServer
                     if (payloadBytes == null || payloadBytes.Length < 1)
                         return;
 
-                    _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
+                    if (_logNetworkPackets)
+                    {
+                        _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
+                    }
 
                     bool acceptedClientTimeSync = TryApplyIncomingTimeOfDay(senderId, payloadBytes);
                     if (acceptedClientTimeSync)
@@ -1456,7 +1499,10 @@ namespace CMZDedicatedLidgrenServer
             if (data == null || data.Length < 1)
                 return;
 
-            _log($"CH0 recv: recipient={recipientId}, sender={senderId0}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
+            if (_logNetworkPackets)
+            {
+                _log($"CH0 recv: recipient={recipientId}, sender={senderId0}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
+            }
 
             var reliableOrdered = Enum.Parse(_commonAsm.GetType("DNA.Net.Lidgren.NetDeliveryMethod"), "ReliableOrdered");
 
@@ -1648,6 +1694,28 @@ namespace CMZDedicatedLidgrenServer
 
             // SenderId = 0 because the dedicated server is acting as host.
             BroadcastChannel0Payload(0, payload);
+        }
+        #endregion
+
+        #region Plugin Helpers
+
+        /// <summary>
+        /// Extracts the stable world key used by plugins for per-world config folders.
+        /// </summary>
+        private static string GetWorldKey(string worldFolder)
+        {
+            if (string.IsNullOrWhiteSpace(worldFolder))
+                return "default";
+
+            string trimmed = worldFolder.TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar);
+
+            string name = Path.GetFileName(trimmed);
+
+            return string.IsNullOrWhiteSpace(name)
+                ? "default"
+                : name;
         }
         #endregion
     }

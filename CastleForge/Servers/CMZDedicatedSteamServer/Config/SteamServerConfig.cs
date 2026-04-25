@@ -25,6 +25,13 @@ namespace CMZDedicatedSteamServer.Config
     /// </summary>
     internal sealed class SteamServerConfig
     {
+        #region Logging
+
+        public bool LogNetworkPackets { get; set; } = false;
+        public bool LogHostMessages { get; set; } = false;
+
+        #endregion
+
         #region Core Identity
 
         public string ServerName { get; private set; } = "CMZ Steam Server";
@@ -88,6 +95,12 @@ namespace CMZDedicatedSteamServer.Config
 
                 map[line.Substring(0, eq).Trim()] = line.Substring(eq + 1).Trim();
             }
+
+            if (map.TryGetValue("log-network-packets", out string logNetworkPackets) && bool.TryParse(logNetworkPackets, out bool logNetwork))
+                cfg.LogNetworkPackets = logNetwork;
+
+            if (map.TryGetValue("log-host-messages", out string logHostMessages) && bool.TryParse(logHostMessages, out bool logHost))
+                cfg.LogHostMessages = logHost;
 
             if (map.TryGetValue("server-name", out string serverName) && !string.IsNullOrWhiteSpace(serverName))
                 cfg.ServerName = serverName;

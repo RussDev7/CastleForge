@@ -412,6 +412,124 @@ It is especially useful with:
 
 ---
 
+## Server Plugins
+
+CastleForge Dedicated Servers now include basic **server-side plugin support** for host-authoritative world protections and future server extensions.
+
+Plugins run inside the dedicated server process and can inspect selected host/world packets before the server applies or relays them. This allows the server to enforce rules even when connecting players do **not** have the matching client-side mod installed.
+
+Current built-in plugin support includes:
+
+- **RegionProtect** server enforcement
+- block mining / placing protection
+- explosion protection
+- crate item protection
+- crate break protection
+- per-world plugin configuration
+
+> Server plugins are currently compiled into the dedicated server build. External plugin DLL loading may be added later.
+```
+
+Then add a dedicated RegionProtect subsection:
+
+````markdown
+## RegionProtect Server Plugin
+
+The dedicated servers include a built-in **RegionProtect** plugin that protects configured world areas directly from the server.
+
+Unlike the normal client/host RegionProtect mod, the dedicated server version does not require players to install anything client-side. The server checks protected actions before saving or relaying world changes.
+
+### Protected actions
+
+RegionProtect currently protects:
+
+| Action                  | Packet handled                                     | Description                                              |
+|-------------------------|----------------------------------------------------|----------------------------------------------------------|
+| Mining / block breaking | `AlterBlockMessage`                                | Blocks protected terrain removal                         |
+| Block placing           | `AlterBlockMessage`                                | Blocks protected block placement                         |
+| Explosions              | `DetonateExplosiveMessage` / `RemoveBlocksMessage` | Blocks protected explosion damage                        |
+| Crate item edits        | `ItemCrateMessage`                                 | Blocks adding/removing crate contents in protected areas |
+| Crate breaking          | `DestroyCrateMessage`                              | Blocks crate destruction in protected areas              |
+
+### Config location
+
+RegionProtect stores its configuration beside each dedicated server executable:
+
+```text
+CMZDedicatedLidgrenServer/
+└─ Plugins/
+   └─ RegionProtect/
+      ├─ RegionProtect.Config.ini
+      └─ Worlds/
+         └─ <world-guid>/
+            └─ RegionProtect.Regions.ini
+````
+
+For the Steam dedicated server:
+
+```text
+CMZDedicatedSteamServer/
+└─ Plugins/
+   └─ RegionProtect/
+      ├─ RegionProtect.Config.ini
+      └─ Worlds/
+         └─ <world-guid>/
+            └─ RegionProtect.Regions.ini
+```
+
+### General config
+
+`RegionProtect.Config.ini` controls which protection systems are enabled:
+
+```ini
+[General]
+Enabled                = true
+ProtectMining          = true
+ProtectPlacing         = true
+ProtectExplosions      = true
+ProtectCrateItems      = true
+ProtectCrateMining     = true
+WarnPlayers            = true
+WarningCooldownSeconds = 2
+LogDenied              = true
+```
+
+### Region config
+
+Each world has its own `RegionProtect.Regions.ini` file:
+
+```ini
+[SpawnProtection]
+Enabled        = true
+Range          = 64
+AllowedPlayers = RussDev7
+
+[Region:SpawnTown]
+Min            = -80,0,-80
+Max            = 80,120,80
+AllowedPlayers = RussDev7,SomeAdmin
+```
+
+### Player warning behavior
+
+When a player tries to edit a protected area, the server blocks the action and sends a warning such as:
+
+```text
+[RegionProtect] Protected by region 'SpawnTown'. Breaking blocks here was blocked. Client-only desync; not saved to server.
+```
+
+In some cases, the client may briefly show a block as broken or changed. The server does **not** save that blocked change, and the area will correct itself after resyncing or rejoining.
+
+### Notes and limitations
+
+* RegionProtect is server-authoritative.
+* Players do not need the RegionProtect mod installed to be blocked by protected regions.
+* Commands such as `/regionpos` and `/regioncreate` are not currently part of the dedicated server plugin.
+* Regions are currently edited manually through the `.ini` files.
+* Explosion restoration can visually desync on the attacking client, but protected explosion damage is not saved to the server.
+
+---
+
 ## Troubleshooting
 
 <details>

@@ -29,6 +29,20 @@ namespace CMZDedicatedLidgrenServer
     /// </summary>
     internal sealed class ServerConfig
     {
+        #region Logging
+
+        /// <summary>
+        /// Enables verbose channel packet logging such as CH0 recv and CH1 OP4 recv.
+        /// </summary>
+        public bool LogNetworkPackets { get; set; } = false;
+
+        /// <summary>
+        /// Enables verbose host/world mutation logging such as AlterBlockMessage and ItemCrateMessage.
+        /// </summary>
+        public bool LogHostMessages { get; set; } = false;
+
+        #endregion
+
         #region Core Server Identity
 
         /// <summary>
@@ -203,6 +217,16 @@ namespace CMZDedicatedLidgrenServer
                 string val = line.Substring(idx + 1).Trim();
                 map[key] = val;
             }
+            #endregion
+
+            #region Verbose Packet / Debug Logging
+
+            if (map.TryGetValue("log-network-packets", out string logNetworkPackets) && bool.TryParse(logNetworkPackets, out bool logNetwork))
+                cfg.LogNetworkPackets = logNetwork;
+
+            if (map.TryGetValue("log-host-messages", out string logHostMessages) && bool.TryParse(logHostMessages, out bool logHost))
+                cfg.LogHostMessages = logHost;
+
             #endregion
 
             #region Core Server Identity

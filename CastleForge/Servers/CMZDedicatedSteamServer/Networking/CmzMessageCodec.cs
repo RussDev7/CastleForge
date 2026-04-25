@@ -11,7 +11,7 @@ using System.Reflection;
 using System.IO;
 using System;
 
-namespace CMZDedicatedLidgrenServer
+namespace CMZDedicatedSteamServer
 {
     /// <summary>
     /// Builds normal CastleMiner Z / DNA.Net message payloads:

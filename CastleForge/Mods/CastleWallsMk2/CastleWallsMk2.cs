@@ -742,9 +742,9 @@ namespace CastleWallsMk2
 
             void Detonate100GrenadesOnPlayer(NetworkGamer gamer)
             {
-                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                    //if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                              // Exclude ourselves.
-                        if (((Player)networkGamer.Tag).Gamer == gamer)                                           // Match the selected gamer.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                          // Iterate through all network gamers.
+                    //if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (((Player)networkGamer.Tag).Gamer == gamer)                                                                    // Match the selected gamer.
                         {
                             for (int i = 0; i < 100; i++)
                                 DetonateGrenadeMessage.Send(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer?.Tag)?.LocalPosition ?? Vector3.Zero, GrenadeTypeEnum.HE, true);
@@ -763,9 +763,9 @@ namespace CastleWallsMk2
 
             void GrenadeRainOnPlayer(NetworkGamer gamer)
             {
-                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                    // if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                             // Exclude ourselves.
-                        if (((Player)networkGamer.Tag).Gamer == gamer)                                           // Match the selected gamer.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                           // Iterate through all network gamers.
+                    // if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (((Player)networkGamer.Tag).Gamer == gamer)                                                                     // Match the selected gamer.
                         {
                             var pos          = new Vector3(((Player)networkGamer?.Tag)?.LocalPosition.X ?? 0f, 64, ((Player)networkGamer?.Tag)?.LocalPosition.Z ?? 0f);
                             const int radius = 25;
@@ -1038,17 +1038,17 @@ namespace CastleWallsMk2
             void KickAllPlayers()
             {
                 // 1) Kick all non-host players.
-                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                        if (!((Player)networkGamer.Tag).Gamer.IsHost)                                            // Ensure the gamer is not the host.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (!((Player)networkGamer.Tag).Gamer.IsHost)                                                                   // Ensure the gamer is not the host.
                         {
                             KickPlayerPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
                         }
 
                 // 2) Kick host last.
-                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                        if (((Player)networkGamer.Tag).Gamer.IsHost)                                             // Ensure the gamer is not the host.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (((Player)networkGamer.Tag).Gamer.IsHost)                                                                    // Ensure the gamer is not the host.
                         {
                             KickPlayerPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
                             break;
@@ -2629,7 +2629,7 @@ namespace CastleWallsMk2
                     try
                     {
                         foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)
-                            if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)
+                            if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)
                                 PlayerExistsPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer, true);
                     }
                     catch { }
@@ -4344,19 +4344,19 @@ namespace CastleWallsMk2
 
         public static void ForceRespawnTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_forceRespawnTargetMode == PlayerTargetMode.None)                                        // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                // Iterate through all network gamers.
+                if (_forceRespawnTargetMode == PlayerTargetMode.None)                                                       // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_forceRespawnTargetMode == PlayerTargetMode.AllPlayers)                            // If player mode is 'AllPlayers', restart all.
+                else if (_forceRespawnTargetMode == PlayerTargetMode.AllPlayers)                                            // If player mode is 'AllPlayers', restart all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                           // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         RestartLevelPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
                 }
                 else
-                    if (_forceRespawnTargetMode == PlayerTargetMode.Player &&                               // If player mode is 'Player', restart only the
-                        IdMatchUtils.ContainsId(_forceRespawnTargetNetids, networkGamer.Id))                             // selected '_forceRespawnTargetNetid' players.
+                    if (_forceRespawnTargetMode == PlayerTargetMode.Player &&                                               // If player mode is 'Player', restart only the
+                        IdMatchUtils.ContainsId(_forceRespawnTargetNetids, networkGamer.Id))                                // selected '_forceRespawnTargetNetid' players.
                         RestartLevelPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
         }
         #endregion
@@ -4365,19 +4365,19 @@ namespace CastleWallsMk2
 
         public static void RapidItemsTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_rapidItemsTargetMode == PlayerTargetMode.None)                                          // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_rapidItemsTargetMode == PlayerTargetMode.None)                                                                     // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_rapidItemsTargetMode == PlayerTargetMode.AllPlayers)                               // If player mode is 'AllPlayers', shower all.
+                else if (_rapidItemsTargetMode == PlayerTargetMode.AllPlayers)                                                          // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         GivePlayerItems(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer, _rapidItemsType, 1);
                 }
                 else
-                    if (_rapidItemsTargetMode == PlayerTargetMode.Player &&                                  // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_rapidItemsTargetNetids, networkGamer.Id))                   // selected '_rapidItemsTargetNetids' players.
+                    if (_rapidItemsTargetMode == PlayerTargetMode.Player &&                                                             // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_rapidItemsTargetNetids, networkGamer.Id))                                              // selected '_rapidItemsTargetNetids' players.
                     {
                         GivePlayerItems(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer, _rapidItemsType, 1);
                         break;
@@ -4402,19 +4402,19 @@ namespace CastleWallsMk2
 
         public static void ShowerTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_showerTargetMode == PlayerTargetMode.None)                                              // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_showerTargetMode == PlayerTargetMode.None)                                                                         // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_showerTargetMode == PlayerTargetMode.AllPlayers)                                   // If player mode is 'AllPlayers', shower all.
+                else if (_showerTargetMode == PlayerTargetMode.AllPlayers)                                                              // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         DoShowerCycle(networkGamer);
                 }
                 else
-                    if (_showerTargetMode == PlayerTargetMode.Player &&                                      // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_showerTargetNetids, networkGamer.Id))                       // selected '_showerTargetNetids' players.
+                    if (_showerTargetMode == PlayerTargetMode.Player &&                                                                 // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_showerTargetNetids, networkGamer.Id))                                                  // selected '_showerTargetNetids' players.
                     {
                         DoShowerCycle(networkGamer);
                         break;
@@ -4469,17 +4469,17 @@ namespace CastleWallsMk2
                 {
                     return;
                 }
-                else if (_reliableFloodTargetMode == PlayerTargetMode.AllPlayers)                            // If player mode is 'AllPlayers', flood all.
+                else if (_reliableFloodTargetMode == PlayerTargetMode.AllPlayers)                                                           // If player mode is 'AllPlayers', flood all.
                 {
-                    for (int y = 1; y < _reliableFloodBurstValue + 1; y++)                                   // Message burst amount.
-                        if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                        // Exclude ourselves.
+                    for (int y = 1; y < _reliableFloodBurstValue + 1; y++)                                                                  // Message burst amount.
+                        if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                             PrivateCreatePickup(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer, InventoryItemIDs.BloodstonePickAxe, 1);
                 }
                 else
-                    if (_reliableFloodTargetMode == PlayerTargetMode.Player &&                               // If player mode is 'Player', flood only the
-                        IdMatchUtils.ContainsId(_reliableFloodTargetNetids, networkGamer.Id))                             // selected '_reliableFloodTargetNetids' players.
+                    if (_reliableFloodTargetMode == PlayerTargetMode.Player &&                                                              // If player mode is 'Player', flood only the
+                        IdMatchUtils.ContainsId(_reliableFloodTargetNetids, networkGamer.Id))                                               // selected '_reliableFloodTargetNetids' players.
                     {
-                        for (int y = 1; y < _reliableFloodBurstValue + 1; y++)                               // Message burst amount.
+                        for (int y = 1; y < _reliableFloodBurstValue + 1; y++)                                                              // Message burst amount.
                             PrivateCreatePickup(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer, InventoryItemIDs.BloodstonePickAxe, 1);
                         break;
                     }
@@ -4506,19 +4506,19 @@ namespace CastleWallsMk2
 
         public static void HugTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_hugTargetMode == PlayerTargetMode.None)                                                 // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_hugTargetMode == PlayerTargetMode.None)                                                                            // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_hugTargetMode == PlayerTargetMode.AllPlayers)                                      // If player mode is 'AllPlayers', shower all.
+                else if (_hugTargetMode == PlayerTargetMode.AllPlayers)                                                                 // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         HugPlayer(networkGamer);
                 }
                 else
-                    if (_hugTargetMode == PlayerTargetMode.Player &&                                         // If player mode is 'Player', shower only the
-                        _hugTargetNetid == networkGamer.Id)                                                  // selected '_showerTargetNetids' players.
+                    if (_hugTargetMode == PlayerTargetMode.Player &&                                                                    // If player mode is 'Player', shower only the
+                        _hugTargetNetid == networkGamer.Id)                                                                             // selected '_showerTargetNetids' players.
                     {
                         HugPlayer(networkGamer);
                         break;
@@ -4677,19 +4677,19 @@ namespace CastleWallsMk2
 
         public static void DisableControlsTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_disableControlsTargetMode == PlayerTargetMode.None)                                     // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_disableControlsTargetMode == PlayerTargetMode.None)                                                                // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_disableControlsTargetMode == PlayerTargetMode.AllPlayers)                          // If player mode is 'AllPlayers', shower all.
+                else if (_disableControlsTargetMode == PlayerTargetMode.AllPlayers)                                                     // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         ClearPlayersInventory(networkGamer);
                 }
                 else
-                    if (_disableControlsTargetMode == PlayerTargetMode.Player &&                             // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_disableControlsTargetNetids, networkGamer.Id))              // selected '_disableControlsTargetNetids' players.
+                    if (_disableControlsTargetMode == PlayerTargetMode.Player &&                                                        // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_disableControlsTargetNetids, networkGamer.Id))                                         // selected '_disableControlsTargetNetids' players.
                     {
                         ClearPlayersInventory(networkGamer);
                         break;
@@ -4763,26 +4763,26 @@ namespace CastleWallsMk2
 
         public static void TrailTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)        // Iterate through all network gamers.
-                if (_trailTargetMode == PlayerTargetMode.None)                                                      // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                // Iterate through all network gamers.
+                if (_trailTargetMode == PlayerTargetMode.None)                                                              // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_trailTargetMode == PlayerTargetMode.AllPlayers)                                           // If player mode is 'AllPlayers', shower all.
+                else if (_trailTargetMode == PlayerTargetMode.AllPlayers)                                                   // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                   // Exclude ourselves.
-                        if (InGameHUD.GetBlock((IntVector3)((Player)networkGamer.Tag).LocalPosition) != _trailType) // Dont waste performance on existing locations.
-                            if (_trailPrivateEnabled)                                                               // If private mode, send torches private.
+                    if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (InGameHUD.GetBlock((IntVector3)((Player)networkGamer.Tag).LocalPosition) != _trailType)         // Dont waste performance on existing locations.
+                            if (_trailPrivateEnabled)                                                                       // If private mode, send torches private.
                                 PlaceBlocksPrivate(CastleMinerZGame.Instance?.MyNetworkGamer, (IntVector3)((Player)networkGamer.Tag).LocalPosition, _trailType, networkGamer);
                             else
                                 AlterBlockMessage.Send(CastleMinerZGame.Instance?.MyNetworkGamer, (IntVector3)((Player)networkGamer.Tag).LocalPosition, _trailType);
                 }
                 else
-                    if (_trailTargetMode == PlayerTargetMode.Player &&                                              // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_trailTargetNetids, networkGamer.Id))                               // selected '_trailTargetNetids' players.
+                    if (_trailTargetMode == PlayerTargetMode.Player &&                                                      // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_trailTargetNetids, networkGamer.Id))                                       // selected '_trailTargetNetids' players.
                     {
-                        if (InGameHUD.GetBlock((IntVector3)((Player)networkGamer.Tag).LocalPosition) != _trailType) // Dont waste performance on existing locations.
-                            if (_trailPrivateEnabled)                                                               // If private mode, send torches private.
+                        if (InGameHUD.GetBlock((IntVector3)((Player)networkGamer.Tag).LocalPosition) != _trailType)         // Dont waste performance on existing locations.
+                            if (_trailPrivateEnabled)                                                                       // If private mode, send torches private.
                                 PlaceBlocksPrivate(CastleMinerZGame.Instance?.MyNetworkGamer, (IntVector3)((Player)networkGamer.Tag).LocalPosition, _trailType, networkGamer);
                             else
                                 AlterBlockMessage.Send(CastleMinerZGame.Instance?.MyNetworkGamer, (IntVector3)((Player)networkGamer.Tag).LocalPosition, _trailType);
@@ -4808,19 +4808,19 @@ namespace CastleWallsMk2
                 return;
             }
 
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_itemVortexTargetMode == PlayerTargetMode.None)                                          // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_itemVortexTargetMode == PlayerTargetMode.None)                                                                     // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_itemVortexTargetMode == PlayerTargetMode.AllPlayers)                               // If player mode is 'AllPlayers', shower all.
+                else if (_itemVortexTargetMode == PlayerTargetMode.AllPlayers)                                                          // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         SpawnItemVortex(networkGamer?.Id ?? 0);
                 }
                 else
-                    if (_itemVortexTargetMode == PlayerTargetMode.Player &&                                  // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_itemVortexTargetNetids, networkGamer.Id))                   // selected '_itemVortexTargetNetids' players.
+                    if (_itemVortexTargetMode == PlayerTargetMode.Player &&                                                             // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_itemVortexTargetNetids, networkGamer.Id))                                              // selected '_itemVortexTargetNetids' players.
                     {
                         SpawnItemVortex(networkGamer?.Id ?? 0);
                         break;
@@ -4949,19 +4949,19 @@ namespace CastleWallsMk2
 
         public static void DoorSpamTick()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (_doorSpamTargetMode == PlayerTargetMode.None)                                            // If player mode is 'None', return.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                            // Iterate through all network gamers.
+                if (_doorSpamTargetMode == PlayerTargetMode.None)                                                                       // If player mode is 'None', return.
                 {
                     return;
                 }
-                else if (_doorSpamTargetMode == PlayerTargetMode.AllPlayers)                                 // If player mode is 'AllPlayers', shower all.
+                else if (_doorSpamTargetMode == PlayerTargetMode.AllPlayers)                                                            // If player mode is 'AllPlayers', shower all.
                 {
-                    if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                            // Exclude ourselves.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                         DoDoorSpam(networkGamer);
                 }
                 else
-                    if (_doorSpamTargetMode == PlayerTargetMode.Player &&                                    // If player mode is 'Player', shower only the
-                        IdMatchUtils.ContainsId(_doorSpamTargetNetids, networkGamer.Id))                     // selected '_showerTargetNetids' players.
+                    if (_doorSpamTargetMode == PlayerTargetMode.Player &&                                                               // If player mode is 'Player', shower only the
+                        IdMatchUtils.ContainsId(_doorSpamTargetNetids, networkGamer.Id))                                                // selected '_showerTargetNetids' players.
                     {
                         DoDoorSpam(networkGamer);
                         break;
@@ -5709,9 +5709,9 @@ namespace CastleWallsMk2
 
         public static void TpToSelectedPlayer(NetworkGamer gamer)
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer == gamer)                                           // Match the selected gamer.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer == gamer)                                                      // Match the selected gamer.
                     {
                         CastleMinerZGame.Instance.GameScreen.TeleportToLocation(((Player)gamer?.Tag)?.LocalPosition ?? Vector3.Zero, false);
                         break;
@@ -5841,9 +5841,9 @@ namespace CastleWallsMk2
 
         private static void KickSelectedPlayer(NetworkGamer gamer, bool banned = false)
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)  // Iterate through all network gamers.
-                // if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                              // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer == gamer)                                            // Match the selected gamer.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                           // Iterate through all network gamers.
+                // if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer == gamer)                                                                     // Match the selected gamer.
                     {
                         KickPlayerPrivate(CastleMinerZGame.Instance.MyNetworkGamer, gamer, banned);
                         break;
@@ -5864,16 +5864,16 @@ namespace CastleWallsMk2
 
         public static void KillSelectedPlayer(NetworkGamer gamer)
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)  // Iterate through all network gamers.
-                // if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                              // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer == gamer)                                            // Match the selected gamer.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                           // Iterate through all network gamers.
+                // if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer == gamer)                                                                     // Match the selected gamer.
                     {
-                        if (((Player)networkGamer.Tag).ValidLivingGamer)                                      // Ensure the gamer is alive.
-                            if (((Player)networkGamer.Tag).Gamer == CastleMinerZGame.Instance.MyNetworkGamer) // Use 'KillPlayer()' to target ourselves.
-                            {
+                        if (((Player)networkGamer.Tag).ValidLivingGamer)                                                               // Ensure the gamer is alive.
+                            if (((Player)networkGamer.Tag).Gamer == CastleMinerZGame.Instance.MyNetworkGamer)                          // Use 'KillPlayer()' to target ourselves.
+                        {
                                 InGameHUD.Instance.KillPlayer();
                             }
-                            else                                                                              // Send damage packet.
+                            else                                                                                                       // Send damage packet.
                                 for (int i = 0; i < 10; i++)
                                     SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);
                         break;
@@ -5882,10 +5882,10 @@ namespace CastleWallsMk2
 
         public static void KillAllPlayers()
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).ValidLivingGamer)                                         // Ensure the gamer is alive.
-                        for (int i = 0; i < 10; i++)                                                         // Send damage packet.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).ValidLivingGamer)                                                    // Ensure the gamer is alive.
+                        for (int i = 0; i < 10; i++)                                                                    // Send damage packet.
                             SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);
             // if (!_godEnabled) InGameHUD.Instance.KillPlayer();
         }
@@ -5913,9 +5913,9 @@ namespace CastleWallsMk2
 
         public static void FreezeSelectedPlayer(NetworkGamer gamer)
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer == gamer)                                           // Match the selected gamer.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer == gamer)                                                      // Match the selected gamer.
                     {
                         SendFreezePackets(((Player)networkGamer.Tag).Gamer);
                         break;
@@ -5925,18 +5925,18 @@ namespace CastleWallsMk2
         public static void FreezeAllPlayers()
         {
             // 1) Freeze all non-host players.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (!((Player)networkGamer.Tag).Gamer.IsHost)                                            // Ensure the gamer is not the host.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (!((Player)networkGamer.Tag).Gamer.IsHost)                                                       // Ensure the gamer is not the host.
                     {
                         SendFreezePackets(((Player)networkGamer.Tag).Gamer);
                         break;
                     }
 
             // 2) Freeze host last.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer.IsHost)                                             // Ensure the gamer is not the host.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer.IsHost)                                                                    // Ensure the gamer is not the host.
                     {
                         SendFreezePackets(((Player)networkGamer.Tag).Gamer);
                         break;
@@ -5977,9 +5977,9 @@ namespace CastleWallsMk2
 
         public static void CrashSelectedPlayer(NetworkGamer gamer)
         {
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                // if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                             // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer == gamer)                                           // Match the selected gamer.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                           // Iterate through all network gamers.
+                // if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer == gamer)                                                                     // Match the selected gamer.
                     {
                         SendCrashPackets(((Player)networkGamer.Tag).Gamer);
                         break;
@@ -5989,18 +5989,18 @@ namespace CastleWallsMk2
         public static void CrashAllPlayers()
         {
             // 1) Crash all non-host players.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (!((Player)networkGamer.Tag).Gamer.IsHost)                                            // Ensure the gamer is not the host.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (!((Player)networkGamer.Tag).Gamer.IsHost)                                                       // Ensure the gamer is not the host.
                     {
                         SendCrashPackets(((Player)networkGamer.Tag).Gamer);
                         break;
                     }
 
             // 2) Crash host last.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer.IsHost)                                             // Ensure the gamer is not the host.
+            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    if (((Player)networkGamer.Tag).Gamer.IsHost)                                                                    // Ensure the gamer is not the host.
                     {
                         SendCrashPackets(((Player)networkGamer.Tag).Gamer);
                         break;
@@ -6131,7 +6131,7 @@ namespace CastleWallsMk2
         public static async void CorruptSelectedPlayer(NetworkGamer gamer, bool crash = false)
         {
             _corruptWorldActive = true; // Enable godmode + vanish in-place.
-            var oldLocation = CastleMinerZGame.Instance?.LocalPlayer.LocalPosition ?? Vector3.Zero;
+            var oldLocation = CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition ?? Vector3.Zero;
 
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { CastleMinerZGame.Instance.GameScreen.TeleportToLocation(Vector3.Zero, true);                                                              } catch { } // Teleport to spawn.
@@ -6169,81 +6169,92 @@ namespace CastleWallsMk2
 
         public static async void CorruptAllPlayers()
         {
-            // Define counts.
-            int crashedPeersCount = 0, crashedHostCount = 0;
-
-            // Enable godmode + vanish in-place.
-            _corruptWorldActive = true;
-            var oldLocation = CastleMinerZGame.Instance?.LocalPlayer.LocalPosition ?? Vector3.Zero;
-
-            // 1) Corrupt spawn first.
-            try { await Task.Delay(10);  } catch { } // Small delay.
-            try { CastleMinerZGame.Instance.GameScreen.TeleportToLocation(Vector3.Zero, true); } catch { } // Teleport to spawn.
-
-            try { await Task.Delay(500); } catch { } // Small delay.
-            try { PlaceHollow3x3Tube(CastleMinerZGame.Instance.MyNetworkGamer, new IntVector3(8, -64, -8), new IntVector3(8, 64, -8)); } catch { } // Corrut respawn.
-            try { PlaceHollow3x3Tube(CastleMinerZGame.Instance.MyNetworkGamer, new IntVector3(3, -64, -3), new IntVector3(3, 64, -3)); } catch { } // Corrut spawn.
-
-            // 2) Corrupt all non-host players.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (!((Player)networkGamer.Tag).Gamer.IsHost)                                            // Ensure the gamer is not the host.
-                    {
-                        IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all so host saves
-                                                                                                                                                                             // the locations of its peers.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
-                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                        try { for (int i = 0; i < 10; i++)
-                                SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
-                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                        try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
-                        crashedPeersCount++;
-                    }
-
-            // 3) Corrupt host last.
-            foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers) // Iterate through all network gamers.
-                if (networkGamer != CastleMinerZGame.Instance.MyNetworkGamer)                                // Exclude ourselves.
-                    if (((Player)networkGamer.Tag).Gamer.IsHost)                                             // Ensure the gamer is the host.
-                    {
-                        IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
-                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                        try { for (int i = 0; i < 10; i++)
-                                SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
-                        try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
-                        try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
-                        try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                        try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
-                        crashedHostCount++;
-                        break;
-                    }
-
-            // Teleport to spawn.
-            try { await Task.Delay(10);                                                                                                                          } catch { } // Small delay
             try
             {
-                // Teleport to old position, fallback to spawn.
-                if (CastleMinerZGame.Instance.CurrentNetworkSession != null)
-                    if (oldLocation != Vector3.Zero)
-                        CastleMinerZGame.Instance.LocalPlayer.LocalPosition = oldLocation;
-                    else
-                        CastleMinerZGame.Instance.GameScreen.TeleportToLocation(Vector3.Zero, true);
+                // Define counts.
+                int crashedPeersCount = 0, crashedHostCount = 0;
+
+                // Enable godmode + vanish in-place.
+                _corruptWorldActive = true;
+                var oldLocation = CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition ?? Vector3.Zero;
+
+                // 1) Corrupt spawn first.
+                try { await Task.Delay(10);  } catch { } // Small delay.
+                try { CastleMinerZGame.Instance.GameScreen.TeleportToLocation(Vector3.Zero, true); } catch { } // Teleport to spawn.
+
+                try { await Task.Delay(500); } catch { } // Small delay.
+                try { PlaceHollow3x3Tube(CastleMinerZGame.Instance.MyNetworkGamer, new IntVector3(8, -64, -8), new IntVector3(8, 64, -8)); } catch { } // Corrut respawn.
+                try { PlaceHollow3x3Tube(CastleMinerZGame.Instance.MyNetworkGamer, new IntVector3(3, -64, -3), new IntVector3(3, 64, -3)); } catch { } // Corrut spawn.
+
+                // 2) Corrupt all non-host players.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (!((Player)networkGamer.Tag).Gamer.IsHost)                                                                   // Ensure the gamer is not the host.
+                        {
+                            IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all so host saves
+                                                                                                                                                                                 // the locations of its peers.
+                            try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                            try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
+                            try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                            try { for (int i = 0; i < 10; i++)
+                                    SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
+                            try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                            try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
+                            try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                            try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
+                            crashedPeersCount++;
+                        }
+
+                // 3) Corrupt host last.
+                foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)                        // Iterate through all network gamers.
+                    if (TryGetReadyPlayer(networkGamer, out Player player) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                        if (((Player)networkGamer.Tag).Gamer.IsHost)                                                                    // Ensure the gamer is the host.
+                        {
+                            IntVector3 playerPos = (IntVector3)(((Player)networkGamer?.Tag)?.LocalPosition ?? IntVector3.Zero);                                                  // Broadcast to all.
+                            try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                            try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
+                            try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                            try { for (int i = 0; i < 10; i++)
+                                    SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
+                            try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
+                            try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
+                            try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
+                            try { CrashSelectedPlayer(networkGamer);                                                                                                 } catch { } // Send crash packets.
+                            crashedHostCount++;
+                            break;
+                        }
+
+                // Teleport to spawn.
+                try { await Task.Delay(10);                                                                                                                          } catch { } // Small delay
+                try
+                {
+                    // Teleport to old position, fallback to spawn.
+                    if (CastleMinerZGame.Instance.CurrentNetworkSession != null)
+                        if (oldLocation != Vector3.Zero)
+                            CastleMinerZGame.Instance.LocalPlayer.LocalPosition = oldLocation;
+                        else
+                            CastleMinerZGame.Instance.GameScreen.TeleportToLocation(Vector3.Zero, true);
+                }
+                catch { }
+
+                // Disable godmode + vanish in-place.
+                _corruptWorldActive = false;
+
+                if (crashedPeersCount > 0)
+                    SendLog($"Corrupted '{crashedPeersCount}' Peers & '1' Host");
+                else if (crashedHostCount > 0)
+                    SendLog($"Corrupted '1' Host (no peers found)");
+                else
+                    SendLog($"No players where found to corrupt");
             }
-            catch { }
-
-            // Disable godmode + vanish in-place.
-            _corruptWorldActive = false;
-
-            if (crashedPeersCount > 0)
-                SendLog($"Corrupted '{crashedPeersCount}' Peers & '1' Host");
-            else if (crashedHostCount > 0)
-                SendLog($"Corrupted '1' Host (no peers found)");
-            else
-                SendLog($"No players where found to corrupt");
+            catch (Exception ex)
+            {
+                SendLog($"Corrupt All Players failed: {ex.GetType().Name}: {ex.Message}.");
+            }
+            finally
+            {
+                _corruptWorldActive = false;
+            }
         }
         #endregion
 
@@ -6856,6 +6867,36 @@ namespace CastleWallsMk2
         #endregion
 
         #region Helpers
+
+        #region Player Validation Helpers
+
+        /// <summary>
+        /// Returns true only when a NetworkGamer has a fully-created CastleMinerZ Player attached.
+        /// This prevents features from touching players who are joining, leaving, or not fully loaded yet.
+        /// </summary>
+        private static bool TryGetReadyPlayer(NetworkGamer gamer, out Player player)
+        {
+            player = null;
+
+            if (gamer == null)
+                return false;
+
+            if (gamer.IsDisposed || gamer.HasLeftSession)
+                return false;
+
+            player = gamer.Tag as Player;
+            if (player == null)
+                return false;
+
+            if (player.Gamer == null)
+                return false;
+
+            if (player.Gamer.IsDisposed || player.Gamer.HasLeftSession)
+                return false;
+
+            return true;
+        }
+        #endregion
 
         #region Has Screen In Stack
 

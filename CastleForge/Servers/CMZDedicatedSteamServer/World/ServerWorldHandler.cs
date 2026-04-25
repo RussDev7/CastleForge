@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedSteamServer.Plugins;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Reflection;
@@ -11,7 +12,7 @@ using System.Text;
 using System.IO;
 using System;
 
-namespace CMZDedicatedLidgrenServer
+namespace CMZDedicatedSteamServer
 {
     /// <summary>
     /// Handles host-side CastleMiner Z world, terrain, and inventory message flow for recipientId 0.
@@ -36,15 +37,26 @@ namespace CMZDedicatedLidgrenServer
     /// - The view radius is clamped to a reasonable range.
     /// - No reflection work is performed until <see cref="Init(Assembly, Assembly)"/>.
     /// </remarks>
-    public sealed class ServerWorldHandler(
+    internal sealed class ServerWorldHandler(
         string gamePath,
         string worldFolder,
         string saveRoot,
         ulong saveOwnerSteamId,
         Action<string> log,
-        int viewRadiusChunks = 8)
+        int viewRadiusChunks = 8,
+        ServerPluginManager plugins = null,
+        bool logHostMessages = false)
     {
         #region Fields
+
+        #region Verbose packet / debug logging
+
+        /// <summary>
+        /// Enables verbose host/world mutation logging.
+        /// </summary>
+        private readonly bool _logHostMessages = logHostMessages;
+
+        #endregion
 
         #region Config / ctor-provided state
 
@@ -133,6 +145,42 @@ namespace CMZDedicatedLidgrenServer
 
         #endregion
 
+        #region Server plugin bridge state
+
+        /// <summary>
+        /// Optional plugin manager used to intercept host-side world mutations before apply/relay.
+        /// </summary>
+        private readonly ServerPluginManager _plugins = plugins;
+
+        /// <summary>
+        /// Recent DigMessage block snapshots by player.
+        /// Used to restore natural/procedural blocks when a denied AlterBlockMessage tries to mine them.
+        /// </summary>
+        private readonly Dictionary<byte, RecentDigBlock> _recentDigBlockByPlayer =
+            [];
+
+        /// <summary>
+        /// Stores the most recent original block type reported by a player's DigMessage.
+        /// </summary>
+        /// <remarks>
+        /// This is a short-lived visual correction aid. It lets server-side RegionProtect restore
+        /// natural terrain after a denied mine action even when the block was never present in the
+        /// saved chunk delta.
+        /// </remarks>
+        private struct RecentDigBlock
+        {
+            /// <summary>
+            /// Raw BlockTypeEnum integer value reported by the client's DigMessage.
+            /// </summary>
+            public int BlockTypeValue;
+
+            /// <summary>
+            /// UTC timestamp used to expire stale dig snapshots.
+            /// </summary>
+            public DateTime UtcTime;
+        }
+        #endregion
+
         #endregion
 
         #region Initialization
@@ -202,12 +250,161 @@ namespace CMZDedicatedLidgrenServer
                 _log("ServerWorld: Loaded " + _messageIdToType.Count + " message types.");
 
                 InitSaveDevice();
+                InitInventoryRegistry();
                 LoadWorldInfo();
                 ReadSpawnHintFromWorldInfo();
             }
             catch (Exception ex)
             {
                 _log("ServerWorld Init: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Initializes the vanilla InventoryItem registry with headless-safe placeholder item classes.
+        /// </summary>
+        /// <remarks>
+        /// The normal game calls InventoryItem.Initalize(ContentManager), but that initializer creates
+        /// render/model-heavy item classes and some of them directly access CastleMinerZGame.Instance.
+        /// The dedicated server only needs item classes for crate/inventory serialization, so lightweight
+        /// placeholder classes are enough as long as each placeholder preserves the correct InventoryItemIDs.
+        /// </remarks>
+        private void InitInventoryRegistry()
+        {
+            try
+            {
+                Type inventoryItemType = ResolveType("DNA.CastleMinerZ.Inventory.InventoryItem");
+                Type inventoryItemIdsType = ResolveType("DNA.CastleMinerZ.Inventory.InventoryItemIDs");
+                Type blockInventoryItemClassType = ResolveType("DNA.CastleMinerZ.Inventory.BlockInventoryItemClass");
+                Type blockTypeEnumType = ResolveType("DNA.CastleMinerZ.Terrain.BlockTypeEnum");
+
+                if (inventoryItemType == null)
+                {
+                    _log("ServerWorld: InventoryItem type not found.");
+                    return;
+                }
+
+                if (inventoryItemIdsType == null)
+                {
+                    _log("ServerWorld: InventoryItemIDs type not found.");
+                    return;
+                }
+
+                if (blockInventoryItemClassType == null)
+                {
+                    _log("ServerWorld: BlockInventoryItemClass type not found.");
+                    return;
+                }
+
+                if (blockTypeEnumType == null)
+                {
+                    _log("ServerWorld: BlockTypeEnum type not found.");
+                    return;
+                }
+
+                FieldInfo allItemsField = inventoryItemType.GetField(
+                    "AllItems",
+                    BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+
+                if (allItemsField == null)
+                {
+                    _log("ServerWorld: InventoryItem.AllItems field not found.");
+                    return;
+                }
+
+                object allItems = allItemsField.GetValue(null);
+
+                if (allItems is System.Collections.ICollection beforeCollection &&
+                    beforeCollection.Count > 0)
+                {
+                    _log("ServerWorld: Inventory registry already initialized. Items=" + beforeCollection.Count);
+                    return;
+                }
+
+                MethodInfo registerMethod = inventoryItemType.GetMethod(
+                    "RegisterItemClass",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+
+                if (registerMethod == null)
+                {
+                    _log("ServerWorld: InventoryItem.RegisterItemClass(...) not found.");
+                    return;
+                }
+
+                ConstructorInfo placeholderCtor = blockInventoryItemClassType.GetConstructor(
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    [
+                        inventoryItemIdsType,
+                        blockTypeEnumType,
+                        typeof(string),
+                        typeof(float)
+                    ],
+                    null);
+
+                if (placeholderCtor == null)
+                {
+                    _log("ServerWorld: BlockInventoryItemClass placeholder constructor not found.");
+                    return;
+                }
+
+                object dirtBlockType = Enum.Parse(blockTypeEnumType, "Dirt");
+
+                int registered = 0;
+
+                foreach (object itemId in Enum.GetValues(inventoryItemIdsType))
+                {
+                    try
+                    {
+                        // Server-only placeholder.
+                        // The ID is the important part. This lets InventoryItem.Write(...) persist
+                        // the original item id back to world.info.
+                        object placeholderClass = placeholderCtor.Invoke(
+                        [
+                            itemId,
+                            dirtBlockType,
+                            "Server placeholder item class",
+                            0.01f
+                        ]);
+
+                        registerMethod.Invoke(null, [placeholderClass]);
+                        registered++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                            ? tie.InnerException
+                            : ex;
+
+                        _log(
+                            "ServerWorld: Failed to register placeholder inventory item " +
+                            itemId +
+                            ": " +
+                            inner.GetType().FullName +
+                            ": " +
+                            inner.Message);
+                    }
+                }
+
+                allItems = allItemsField.GetValue(null);
+
+                int afterCount = 0;
+                if (allItems is System.Collections.ICollection afterCollection)
+                    afterCount = afterCollection.Count;
+
+                _log("ServerWorld: Headless inventory registry initialized. Items=" + afterCount + ", attempted=" + registered);
+
+                if (afterCount <= 0)
+                    _log("ServerWorld: WARNING - Inventory registry is still empty after headless initialization.");
+            }
+            catch (Exception ex)
+            {
+                Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+
+                _log("ServerWorld InitInventoryRegistry: " + inner.GetType().FullName + ": " + inner.Message);
+                _log(inner.StackTrace ?? "(no stack trace)");
             }
         }
         #endregion
@@ -434,6 +631,7 @@ namespace CMZDedicatedLidgrenServer
                 return false;
 
             // Consumed by host, not relayed.
+            // These messages are direct client-to-host requests. The host answers them and stops relay.
             if (typeName == "DNA.CastleMinerZ.Net.RequestWorldInfoMessage")
             {
                 HandleRequestWorldInfo(senderId, senderConn, sendToClient);
@@ -465,6 +663,7 @@ namespace CMZDedicatedLidgrenServer
             }
 
             // Apply on host, then allow normal relay to peers.
+            // These messages mutate host-side state but still need to reach other clients when allowed.
             if (typeName == "DNA.CastleMinerZ.Net.PlayerExistsMessage")
             {
                 HandlePlayerExistsMessage(senderId, data);
@@ -473,12 +672,28 @@ namespace CMZDedicatedLidgrenServer
 
             if (typeName == "DNA.CastleMinerZ.Net.AlterBlockMessage")
             {
+                // Give server plugins first chance to consume protected edits.
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
                 HandleAlterBlockMessage(senderId, data);
+                return false;
+            }
+
+            if (typeName == "DNA.CastleMinerZ.Net.DetonateExplosiveMessage")
+            {
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
+                // Not consumed. Let normal relay continue.
                 return false;
             }
 
             if (typeName == "DNA.CastleMinerZ.Net.RemoveBlocksMessage")
             {
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
                 HandleRemoveBlocksMessage(senderId, data);
                 return false;
             }
@@ -497,13 +712,27 @@ namespace CMZDedicatedLidgrenServer
 
             if (typeName == "DNA.CastleMinerZ.Net.ItemCrateMessage")
             {
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
                 HandleItemCrateMessage(senderId, data);
                 return false;
             }
 
             if (typeName == "DNA.CastleMinerZ.Net.DestroyCrateMessage")
             {
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
                 HandleDestroyCrateMessage(senderId, data);
+                return false;
+            }
+
+            if (typeName == "DNA.CastleMinerZ.Net.DigMessage")
+            {
+                CacheDigMessage(senderId, data);
+
+                // Do not consume it. Let the normal relay continue.
                 return false;
             }
 
@@ -516,7 +745,11 @@ namespace CMZDedicatedLidgrenServer
             if (typeName == "DNA.CastleMinerZ.Net.RequestPickupMessage")
             {
                 HandleRequestPickupMessage(senderId, data, senderConn, connections, connectionToGamer, sendToClient);
-                return false;
+
+                // RequestPickupMessage is host-authoritative.
+                // The host resolves it by sending ConsumePickupMessage, so the original request
+                // should not be relayed afterward.
+                return true;
             }
 
             return false;
@@ -1195,7 +1428,13 @@ namespace CMZDedicatedLidgrenServer
                 }
 
                 applyMethod.Invoke(msg, [_worldInfo]);
-                _log($"[HostMsg] ItemCrateMessage from player {senderId} applied to world.");
+
+                // Important:
+                // ItemCrateMessage.Apply(...) only mutates the in-memory WorldInfo.Crates dictionary.
+                // SaveWorldInfo() is required so the updated crate inventory is written back to world.info.
+                SaveWorldInfo();
+
+                _log($"[HostMsg] ItemCrateMessage from player {senderId} applied and saved to world.");
             }
             catch (Exception ex)
             {
@@ -1227,7 +1466,11 @@ namespace CMZDedicatedLidgrenServer
                     TrySetMemberValue(crate, "_destroyed", true);
                     DictionaryRemove(crates, location);
 
-                    _log($"[HostMsg] DestroyCrateMessage from player {senderId} at {FormatIntVector3(location)}");
+                    // Important:
+                    // Destroying a crate mutates WorldInfo.Crates, so save world.info immediately.
+                    SaveWorldInfo();
+
+                    _log($"[HostMsg] DestroyCrateMessage from player {senderId} at {FormatIntVector3(location)} saved to world.");
                 }
             }
             catch (Exception ex)
@@ -1288,7 +1531,10 @@ namespace CMZDedicatedLidgrenServer
 
                 ApplyTerrainBlockChange(x, y, z, blockTypeValue);
 
-                _log($"[HostMsg] AlterBlockMessage from player {senderId} at ({x},{y},{z}) -> {blockTypeValue}");
+                if (_logHostMessages)
+                {
+                    _log($"[HostMsg] AlterBlockMessage from player {senderId} at ({x},{y},{z}) -> {blockTypeValue}");
+                }
             }
             catch (Exception ex)
             {
@@ -1485,11 +1731,13 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
-        /// Persists the current reflected WorldInfo back through the original SaveToStorage method.
-        ///
-        /// Notes:
-        /// - Searches for a 2-parameter overload named SaveToStorage.
+        /// Persists the current reflected WorldInfo directly to the active world.info file.
         /// </summary>
+        /// <remarks>
+        /// Do not call WorldInfo.SaveToStorage(...) here because vanilla SaveToStorage depends on
+        /// WorldInfo.SavePath, and SavePath can return null when OwnerGamerTag is null. It also
+        /// swallows exceptions, which makes dedicated-server save failures hard to diagnose.
+        /// </remarks>
         private void SaveWorldInfo()
         {
             if (_worldInfo == null || _saveDevice == null)
@@ -1498,27 +1746,48 @@ namespace CMZDedicatedLidgrenServer
                 return;
             }
 
-            MethodInfo saveMethod = null;
-            foreach (MethodInfo mi in _worldInfo.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            try
             {
-                if (mi.Name != "SaveToStorage")
-                    continue;
+                MethodInfo saveMethod = _worldInfo.GetType().GetMethod(
+                    "Save",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    [typeof(BinaryWriter)],
+                    null);
 
-                var pars = mi.GetParameters();
-                if (pars.Length == 2)
+                if (saveMethod == null)
                 {
-                    saveMethod = mi;
-                    break;
+                    _log("ServerWorld: WorldInfo.Save(BinaryWriter) not found.");
+                    return;
+                }
+
+                string relativePath = Path.Combine(_worldFolder, "world.info");
+
+                bool ok = InvokeSaveDeviceSave(relativePath, stream =>
+                {
+                    using var writer = new BinaryWriter(stream);
+                    saveMethod.Invoke(_worldInfo, [writer]);
+                    writer.Flush();
+                });
+
+                if (ok)
+                {
+                    _log("ServerWorld: world.info saved.");
+                }
+                else
+                {
+                    _log("ServerWorld: FAILED to save world.info.");
                 }
             }
-
-            if (saveMethod == null)
+            catch (Exception ex)
             {
-                _log("ServerWorld: WorldInfo.SaveToStorage(...) not found.");
-                return;
-            }
+                Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
 
-            saveMethod.Invoke(_worldInfo, [null, _saveDevice]);
+                _log("ServerWorld SaveWorldInfo: " + inner.GetType().FullName + ": " + inner.Message);
+                _log(inner.StackTrace ?? "(no stack trace)");
+            }
         }
 
         /// <summary>
@@ -1843,6 +2112,10 @@ namespace CMZDedicatedLidgrenServer
                             continue;
 
                         byte recipientId = (byte)gamer.GetType().GetProperty("Id").GetValue(gamer);
+
+                        // Steam-safe skip. Boxed ulong connection objects may not pass ReferenceEquals.
+                        if (recipientId == senderId)
+                            continue;
 
                         _log($"[HostMsg] Sending ConsumePickupMessage pickupId={pickupId} to recipientId={recipientId}");
                         sendToClient(conn, consumePayload, recipientId);
@@ -2379,6 +2652,431 @@ namespace CMZDedicatedLidgrenServer
                 c ^= data[i];
 
             return c;
+        }
+        #endregion
+
+        #region RegionProtect / Server Plugin Bridge
+
+        /// <summary>
+        /// Runs registered world plugins before a mutation packet is applied or relayed.
+        /// </summary>
+        /// <remarks>
+        /// The plugin context exposes safe callbacks for warning the player, correcting local visuals,
+        /// reading saved/original block state, and requesting chunk resyncs.
+        /// </remarks>
+        /// <returns>
+        /// True when a plugin consumed the packet and normal handling should stop.
+        /// False when the packet should continue through normal host handling.
+        /// </returns>
+        private bool TryRunWorldPlugins(
+            string typeName,
+            byte senderId,
+            byte[] data,
+            object senderConn,
+            Dictionary<object, object> connectionToGamer,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (_plugins == null)
+                return false;
+
+            string senderName = ResolveSenderGamertag(senderId, senderConn, connectionToGamer);
+
+            var context = new HostMessageContext
+            {
+                TypeName = typeName,
+                SenderId = senderId,
+                SenderName = senderName,
+                Payload = data,
+
+                DeserializeGameMessage = DeserializeGameMessage,
+                GetMemberValue = GetMemberValue,
+                TryReadIntVector3 = TryReadIntVector3,
+
+                ResyncChunkForBlock = (x, y, z) =>
+                {
+                    SendChunkForBlockToClient(x, y, z, senderId, senderConn, sendToClient);
+                },
+
+                SendWarningToPlayer = message =>
+                {
+                    SendWarningToClient(message, senderId, senderConn, sendToClient);
+                },
+
+                SendAlterBlockToPlayer = (x, y, z, blockTypeValue) =>
+                {
+                    SendAlterBlockToClient(x, y, z, blockTypeValue, senderId, senderConn, sendToClient);
+                },
+
+                TryGetSavedBlockType = TryGetSavedBlockType,
+                TryGetOriginalBlockType = TryGetOriginalBlockType,
+
+                Log = _log
+            };
+
+            return _plugins.BeforeHostMessage(context);
+        }
+
+        /// <summary>
+        /// Resolves the player's visible gamertag from the server's connection-to-gamer map.
+        /// </summary>
+        private string ResolveSenderGamertag(
+            byte senderId,
+            object senderConn,
+            Dictionary<object, object> connectionToGamer)
+        {
+            try
+            {
+                if (connectionToGamer != null &&
+                    senderConn != null &&
+                    connectionToGamer.TryGetValue(senderConn, out object gamer) &&
+                    gamer != null)
+                {
+                    string gamertag = Convert.ToString(GetMemberValue(gamer, "Gamertag"));
+
+                    if (!string.IsNullOrWhiteSpace(gamertag))
+                        return gamertag;
+                }
+            }
+            catch
+            {
+            }
+
+            return "Player" + senderId;
+        }
+
+        /// <summary>
+        /// Sends the authoritative terrain chunk back to the offending client after a blocked edit.
+        /// </summary>
+        /// <remarks>
+        /// CastleMiner Z terrain chunks are column-style chunks with a fixed Y origin of TerrainChunkMinY.
+        /// The supplied blockY is still validated so invalid/non-terrain positions do not trigger useless
+        /// chunk resync packets.
+        /// </remarks>
+        private void SendChunkForBlockToClient(
+            int blockX,
+            int blockY,
+            int blockZ,
+            byte senderId,
+            object senderConn,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (senderConn == null || sendToClient == null)
+                return;
+
+            try
+            {
+                int localY = blockY - TerrainChunkMinY;
+
+                if (localY < 0 || localY >= TerrainChunkHeight)
+                {
+                    _log(
+                        $"[World] Skipped chunk resync for invalid terrain Y. " +
+                        $"Block=({blockX},{blockY},{blockZ}), Sender={senderId}");
+
+                    return;
+                }
+
+                int chunkX = MakeTerrainChunkCorner(blockX);
+                int chunkY = TerrainChunkMinY;
+                int chunkZ = MakeTerrainChunkCorner(blockZ);
+
+                string chunkKey = BuildChunkKey(chunkX, chunkY, chunkZ);
+
+                if (!_chunkCache.TryGetValue(chunkKey, out int[] delta))
+                {
+                    delta = LoadChunkDelta(chunkX, chunkY, chunkZ);
+                    AddChunkToCache(chunkKey, delta);
+                }
+                else
+                {
+                    TouchChunkCacheEntry(chunkKey);
+                }
+
+                if (!_typeToMessageId.TryGetValue("DNA.CastleMinerZ.Net.ProvideChunkMessage", out byte msgId))
+                    return;
+
+                using var ms = new MemoryStream();
+                using var writer = new BinaryWriter(ms);
+
+                writer.Write(msgId);
+                writer.Write(chunkX);
+                writer.Write(chunkY);
+                writer.Write(chunkZ);
+                writer.Write((byte)0);
+
+                if (delta != null && delta.Length > 0)
+                {
+                    writer.Write(delta.Length);
+
+                    for (int i = 0; i < delta.Length; i++)
+                        writer.Write(delta[i]);
+                }
+                else
+                {
+                    writer.Write(0);
+                }
+
+                writer.Flush();
+
+                int len = (int)ms.Position;
+                writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+
+                sendToClient(senderConn, ms.ToArray(), senderId);
+
+                _log($"[World] Resynced chunk ({chunkX},{chunkY},{chunkZ}) to player {senderId} after denied edit.");
+            }
+            catch (Exception ex)
+            {
+                _log("ServerWorld SendChunkForBlockToClient: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Sends a private server warning to one client using BroadcastTextMessage.
+        /// </summary>
+        /// <remarks>
+        /// This is used by RegionProtect-style plugins to notify only the offending player instead of
+        /// broadcasting a warning to the whole server.
+        /// </remarks>
+        private void SendWarningToClient(
+            string message,
+            byte senderId,
+            object senderConn,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (senderConn == null || sendToClient == null)
+                return;
+
+            byte[] payload = BuildBroadcastTextMessagePayload(message);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            sendToClient(senderConn, payload, senderId);
+        }
+
+        /// <summary>
+        /// Builds a raw BroadcastTextMessage payload.
+        /// Packet layout:
+        /// [message id][BinaryWriter string][checksum]
+        /// </summary>
+        private byte[] BuildBroadcastTextMessagePayload(string message)
+        {
+            const string fullTypeName = "DNA.CastleMinerZ.Net.BroadcastTextMessage";
+
+            if (_typeToMessageId == null)
+                return null;
+
+            if (!_typeToMessageId.TryGetValue(fullTypeName, out byte msgId))
+                return null;
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+
+            writer.Write(msgId);
+            writer.Write(message ?? string.Empty);
+
+            writer.Flush();
+
+            int len = (int)ms.Position;
+            writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Sends a single corrective AlterBlockMessage to one client.
+        /// This is used to instantly undo a denied local mine/place visual.
+        /// </summary>
+        /// <remarks>
+        /// This does not apply the block server-side. It only tells the denied client to correct its
+        /// local view after the original packet was consumed by a plugin.
+        /// </remarks>
+        private void SendAlterBlockToClient(
+            int x,
+            int y,
+            int z,
+            int blockTypeValue,
+            byte senderId,
+            object senderConn,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (senderConn == null || sendToClient == null)
+                return;
+
+            byte[] payload = BuildAlterBlockMessagePayload(x, y, z, blockTypeValue);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            sendToClient(senderConn, payload, senderId);
+        }
+
+        /// <summary>
+        /// Builds a raw AlterBlockMessage payload.
+        /// Packet layout:
+        /// [message id][IntVector3 X/Y/Z][BlockType int][checksum]
+        /// </summary>
+        private byte[] BuildAlterBlockMessagePayload(int x, int y, int z, int blockTypeValue)
+        {
+            const string fullTypeName = "DNA.CastleMinerZ.Net.AlterBlockMessage";
+
+            if (_typeToMessageId == null)
+                return null;
+
+            if (!_typeToMessageId.TryGetValue(fullTypeName, out byte msgId))
+                return null;
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+
+            writer.Write(msgId);
+
+            // DNA.IntVector3.Write(BinaryWriter) writes X, Y, Z as Int32.
+            writer.Write(x);
+            writer.Write(y);
+            writer.Write(z);
+
+            // AlterBlockMessage writes BlockTypeEnum as Int32.
+            writer.Write(blockTypeValue);
+
+            writer.Flush();
+
+            int len = (int)ms.Position;
+            writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Attempts to read the current saved terrain-delta block type at a world position.
+        /// Returns false when the block is not present in the saved delta.
+        /// 
+        /// Important:
+        /// - This can read modified/saved terrain entries.
+        /// - It cannot always know the original procedural terrain block if the block
+        ///   was never saved into the delta file.
+        /// </summary>
+        private bool TryGetSavedBlockType(int worldX, int worldY, int worldZ, out int blockTypeValue)
+        {
+            blockTypeValue = 0;
+
+            int chunkX = MakeTerrainChunkCorner(worldX);
+            int chunkZ = MakeTerrainChunkCorner(worldZ);
+
+            int localX = worldX - chunkX;
+            int localY = worldY - TerrainChunkMinY;
+            int localZ = worldZ - chunkZ;
+
+            if (localX < 0 || localX > 15 ||
+                localZ < 0 || localZ > 15 ||
+                localY < 0 || localY >= TerrainChunkHeight)
+            {
+                return false;
+            }
+
+            string chunkKey = BuildChunkKey(chunkX, TerrainChunkMinY, chunkZ);
+
+            if (!_chunkCache.TryGetValue(chunkKey, out int[] delta))
+            {
+                delta = LoadChunkDelta(chunkX, TerrainChunkMinY, chunkZ);
+
+                if (delta != null)
+                    AddChunkToCache(chunkKey, delta);
+            }
+
+            if (delta == null || delta.Length == 0)
+                return false;
+
+            int target = MakeDeltaEntry(localX, localY, localZ, 0);
+
+            for (int i = 0; i < delta.Length; i++)
+            {
+                int entry = delta[i];
+
+                if (!SameDeltaLocation(entry, target))
+                    continue;
+
+                blockTypeValue = (entry >> 24) & 0xFF;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Caches the block type from the player's most recent DigMessage.
+        /// The vanilla client sends DigMessage before AlterBlockMessage, and DigMessage contains
+        /// the original block type being dug.
+        /// </summary>
+        private void CacheDigMessage(byte senderId, byte[] data)
+        {
+            try
+            {
+                object msg = DeserializeGameMessage("DNA.CastleMinerZ.Net.DigMessage", data);
+
+                object placingObj = GetMemberValue(msg, "Placing");
+                object blockTypeObj = GetMemberValue(msg, "BlockType");
+
+                if (placingObj == null || blockTypeObj == null)
+                    return;
+
+                bool placing = Convert.ToBoolean(placingObj);
+
+                // For restoring mined terrain, only cache non-placing dig messages.
+                if (placing)
+                    return;
+
+                int blockTypeValue = Convert.ToInt32(blockTypeObj);
+
+                if (blockTypeValue <= 0)
+                    return;
+
+                _recentDigBlockByPlayer[senderId] = new RecentDigBlock
+                {
+                    BlockTypeValue = blockTypeValue,
+                    UtcTime = DateTime.UtcNow
+                };
+            }
+            catch (Exception ex)
+            {
+                _log("ServerWorld CacheDigMessage: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Gets the best known original block type for a denied terrain edit.
+        /// First checks saved chunk deltas, then falls back to the player's recent DigMessage.
+        /// </summary>
+        /// <remarks>
+        /// Saved deltas are best for player-modified terrain. The recent DigMessage fallback is best for
+        /// natural/procedural terrain that has not yet been written into a chunk delta.
+        /// </remarks>
+        private bool TryGetOriginalBlockType(
+            byte senderId,
+            int worldX,
+            int worldY,
+            int worldZ,
+            out int blockTypeValue)
+        {
+            // Best source: Saved/player-modified terrain.
+            if (TryGetSavedBlockType(worldX, worldY, worldZ, out blockTypeValue))
+                return true;
+
+            // Fallback source: The player's immediately preceding DigMessage.
+            if (_recentDigBlockByPlayer.TryGetValue(senderId, out RecentDigBlock recent))
+            {
+                double ageSeconds = (DateTime.UtcNow - recent.UtcTime).TotalSeconds;
+
+                if (ageSeconds <= 2.0 && recent.BlockTypeValue > 0)
+                {
+                    blockTypeValue = recent.BlockTypeValue;
+                    return true;
+                }
+            }
+
+            blockTypeValue = 0;
+            return false;
         }
         #endregion
     }
