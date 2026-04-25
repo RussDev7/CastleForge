@@ -428,11 +428,7 @@ Current built-in plugin support includes:
 - per-world plugin configuration
 
 > Server plugins are currently compiled into the dedicated server build. External plugin DLL loading may be added later.
-```
 
-Then add a dedicated RegionProtect subsection:
-
-````markdown
 ## RegionProtect Server Plugin
 
 The dedicated servers include a built-in **RegionProtect** plugin that protects configured world areas directly from the server.
