@@ -360,8 +360,12 @@ namespace CMZDedicatedLidgrenServer
                     try
                     {
                         // Server-only placeholder.
-                        // The ID is the important part. This lets InventoryItem.Write(...) persist
-                        // the original item id back to world.info.
+                        // WARNING:
+                        // The ID alone is not enough for every item. Some vanilla item types, such as guns,
+                        // GPS items, teleport blocks, and spawn blocks, serialize extra fields in Write/Read.
+                        // Crate updates must therefore be byte-for-byte round-trip validated before being
+                        // saved to world.info. If the placeholder class would drop bytes, the crate packet
+                        // must be rejected instead of persisted.
                         object placeholderClass = placeholderCtor.Invoke(
                         [
                             itemId,
@@ -484,11 +488,7 @@ namespace CMZDedicatedLidgrenServer
                             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
                             null,
                             [typeof(BinaryReader)],
-                            null);
-
-                        if (ctor == null)
-                            throw new InvalidOperationException("WorldInfo(BinaryReader) constructor not found.");
-
+                            null) ?? throw new InvalidOperationException("WorldInfo(BinaryReader) constructor not found.");
                         backupWorldInfo = ctor.Invoke([reader]);
                     });
 
@@ -743,11 +743,14 @@ namespace CMZDedicatedLidgrenServer
 
             if (typeName == "DNA.CastleMinerZ.Net.ItemCrateMessage")
             {
-                // Give server plugins first chance to consume protected crate edits.
                 if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
                     return true;
 
-                HandleItemCrateMessage(senderId, data);
+                // Returns true when the packet was rejected/consumed and should NOT be relayed.
+                if (HandleItemCrateMessage(senderId, data))
+                    return true;
+
+                // Valid crate edit. Allow normal relay to other clients.
                 return false;
             }
 
@@ -819,34 +822,64 @@ namespace CMZDedicatedLidgrenServer
                     return;
                 }
 
-                using (var ms = new MemoryStream())
-                using (var writer = new BinaryWriter(ms))
+                byte[] payload;
+                long payloadLength;
+                int crateCount;
+                int doorCount;
+                int spawnerCount;
+
+                lock (_worldInfoLock)
                 {
+                    PruneEmptyCrates();
+
+                    using var ms = new MemoryStream();
+                    using var writer = new BinaryWriter(ms);
+
                     writer.Write(msgId);
 
-                    var saveMethod = _worldInfo.GetType().GetMethod("Save", [typeof(BinaryWriter)]);
-                    saveMethod?.Invoke(_worldInfo, [writer]);
+                    MethodInfo saveMethod = _worldInfo.GetType().GetMethod(
+                        "Save",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        null,
+                        [typeof(BinaryWriter)],
+                        null);
+
+                    if (saveMethod == null)
+                    {
+                        _log("ServerWorld: WorldInfo.Save(BinaryWriter) not found.");
+                        return;
+                    }
+
+                    saveMethod.Invoke(_worldInfo, [writer]);
 
                     writer.Flush();
 
                     int len = (int)ms.Position;
                     writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+                    writer.Flush();
 
-                    sendToClient(senderConn, ms.ToArray(), senderId);
+                    payload = ms.ToArray();
+                    payloadLength = payload.LongLength;
 
-                    _log(
-                        $"ServerWorld: Sent WorldInfo to player {senderId}. " +
-                        $"Bytes={ms.Length}, " +
-                        $"Crates={GetWorldInfoDictionaryCount("Crates")}, " +
-                        $"Doors={GetWorldInfoDictionaryCount("Doors")}, " +
-                        $"Spawners={GetWorldInfoDictionaryCount("Spawners")}");
+                    crateCount = GetWorldInfoDictionaryCount("Crates");
+                    doorCount = GetWorldInfoDictionaryCount("Doors");
+                    spawnerCount = GetWorldInfoDictionaryCount("Spawners");
                 }
 
-                _log("ServerWorld: Sent WorldInfo to player " + senderId);
+                sendToClient(senderConn, payload, senderId);
+
+                _log(
+                    $"ServerWorld: Sent WorldInfo to player {senderId}. " +
+                    $"Bytes={payloadLength}, Crates={crateCount}, Doors={doorCount}, Spawners={spawnerCount}");
             }
             catch (Exception ex)
             {
-                _log("ServerWorld HandleRequestWorldInfo: " + ex.Message);
+                Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+
+                _log("ServerWorld HandleRequestWorldInfo: " + inner.GetType().FullName + ": " + inner.Message);
+                _log(inner.StackTrace ?? "(no stack trace)");
             }
         }
 
@@ -1448,20 +1481,37 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
-        /// Applies a crate inventory update to WorldInfo without allowing bogus/null crate
-        /// messages to create permanent empty crate entries in world.info.
+        /// Applies a crate inventory update to WorldInfo only when the item payload can be
+        /// safely round-tripped by the headless server.
         /// </summary>
+        /// <returns>
+        /// True when the packet should be consumed and not relayed.
+        /// False when the packet was accepted and may be relayed normally.
+        /// </returns>
         /// <remarks>
-        /// Vanilla ItemCrateMessage.Apply(WorldInfo) calls GetCrate(location, true), which means
-        /// even a null-item update can create a new Crate entry. On a public dedicated server,
-        /// that can bloat or poison world.info until new clients fail during WorldInfoMessage load.
+        /// This is important because the dedicated server uses a lightweight/headless
+        /// InventoryItem registry. If a gun/GPS/teleport/custom item is deserialized as
+        /// the wrong item class, saving it back into world.info can corrupt the crate
+        /// stream and make new clients disconnect during WorldInfoMessage loading.
         /// </remarks>
-        private void HandleItemCrateMessage(byte senderId, byte[] data)
+        private bool HandleItemCrateMessage(byte senderId, byte[] data)
         {
             try
             {
                 if (_worldInfo == null)
-                    return;
+                    return true;
+
+                if (!TryValidatePacketChecksum(data, out string checksumReason))
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: {checksumReason}");
+                    return true;
+                }
+
+                if (!TryGetItemCrateRawItemBytes(data, out bool packetHasItem, out byte[] rawItemBytes, out string rawReason))
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: {rawReason}");
+                    return true;
+                }
 
                 object msg = DeserializeGameMessage("DNA.CastleMinerZ.Net.ItemCrateMessage", data);
                 object location = GetMemberValue(msg, "Location");
@@ -1469,7 +1519,10 @@ namespace CMZDedicatedLidgrenServer
                 object crates = GetMemberValue(_worldInfo, "Crates");
 
                 if (location == null || crates == null)
-                    return;
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: missing location or crate dictionary.");
+                    return true;
+                }
 
                 int index;
                 try
@@ -1479,13 +1532,39 @@ namespace CMZDedicatedLidgrenServer
                 catch
                 {
                     _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: invalid index value.");
-                    return;
+                    return true;
                 }
 
                 if (index < 0 || index >= 32)
                 {
                     _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: index {index} is outside 0-31.");
-                    return;
+                    return true;
+                }
+
+                if (packetHasItem)
+                {
+                    if (item == null)
+                    {
+                        _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: packet had item bytes but deserialized item was null.");
+                        return true;
+                    }
+
+                    if (!InventoryItemRoundTripsExactly(item, rawItemBytes, out string roundTripReason))
+                    {
+                        _log(
+                            $"[HostMsg] Rejected ItemCrateMessage from player {senderId}: unsafe crate item at " +
+                            $"{FormatIntVector3(location)}, slot={index}. {roundTripReason}");
+
+                        // Important:
+                        // Consume this packet so other clients do not receive a crate item update
+                        // that this headless server cannot safely persist.
+                        return true;
+                    }
+                }
+                else if (item != null)
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: packet had no item bytes but deserialized item was not null.");
+                    return true;
                 }
 
                 lock (_worldInfoLock)
@@ -1496,15 +1575,14 @@ namespace CMZDedicatedLidgrenServer
                     if (!existed && item == null)
                     {
                         _log($"[HostMsg] Ignored null ItemCrateMessage from player {senderId} for non-existing crate at {FormatIntVector3(location)}.");
-                        return;
+                        return true;
                     }
 
                     // If this is a brand-new crate entry, make sure the location is actually a saved crate/container block.
-                    // This prevents clients from creating fake crate records anywhere in world.info.
                     if (!existed && !IsSavedCrateBlockLocation(location))
                     {
                         _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: no saved crate block at {FormatIntVector3(location)}.");
-                        return;
+                        return true;
                     }
 
                     if (!existed)
@@ -1519,25 +1597,23 @@ namespace CMZDedicatedLidgrenServer
                         if (getCrateMethod == null)
                         {
                             _log("ServerWorld: WorldInfo.GetCrate(IntVector3, bool) not found.");
-                            return;
+                            return true;
                         }
 
                         crate = getCrateMethod.Invoke(_worldInfo, [location, true]);
                     }
 
                     if (crate == null)
-                        return;
+                        return true;
 
                     if (GetMemberValue(crate, "Inventory") is not Array inventory || index >= inventory.Length)
                     {
                         _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: crate inventory was invalid.");
-                        return;
+                        return true;
                     }
 
                     inventory.SetValue(item, index);
 
-                    // If the crate has no stored items left, remove it from world.info.
-                    // The actual crate block is stored in chunk delta files, not in this crate inventory dictionary.
                     if (IsCrateEmpty(crate))
                         DictionaryRemove(crates, location);
 
@@ -1545,13 +1621,22 @@ namespace CMZDedicatedLidgrenServer
 
                     SaveWorldInfo();
 
-                    _log($"[HostMsg] ItemCrateMessage from player {senderId} saved. Location={FormatIntVector3(location)}, Index={index}, PrunedEmptyCrates={pruned}");
+                    _log(
+                        $"[HostMsg] ItemCrateMessage from player {senderId} saved. " +
+                        $"Location={FormatIntVector3(location)}, Index={index}, HasItem={packetHasItem}, RawItemBytes={rawItemBytes.Length}, PrunedEmptyCrates={pruned}");
                 }
+
+                // Accepted. Let the original packet relay normally.
+                return false;
             }
             catch (Exception ex)
             {
                 Exception inner = ex is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : ex;
                 _log("ServerWorld HandleItemCrateMessage: " + inner.GetType().FullName + ": " + inner.Message);
+
+                // On crate parse/save errors, consume the packet.
+                // Relaying malformed crate updates can disconnect clients.
+                return true;
             }
         }
 
@@ -2446,9 +2531,6 @@ namespace CMZDedicatedLidgrenServer
             {
             }
         }
-        #endregion
-
-        #region WorldInfo Crate Helpers
 
         /// <summary>
         /// Returns true when the reflected crate has no stored inventory items.
@@ -2552,6 +2634,212 @@ namespace CMZDedicatedLidgrenServer
             catch
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Validates the raw CastleMiner Z packet checksum.
+        /// Packet layout is [messageId][payload...][checksum].
+        /// </summary>
+        private bool TryValidatePacketChecksum(byte[] packetData, out string reason)
+        {
+            reason = null;
+
+            if (packetData == null || packetData.Length < 2)
+            {
+                reason = "packet was null or too small.";
+                return false;
+            }
+
+            byte expected = packetData[packetData.Length - 1];
+            byte actual = XorChecksum(packetData, 0, packetData.Length - 1);
+
+            if (actual != expected)
+            {
+                reason = $"checksum mismatch. Expected={expected}, Actual={actual}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Extracts the exact raw InventoryItem bytes from an ItemCrateMessage packet.
+        /// </summary>
+        /// <remarks>
+        /// ItemCrateMessage payload layout:
+        /// [msgId:1]
+        /// [Location:IntVector3:12]
+        /// [Index:int:4]
+        /// [HasItem:bool:1]
+        /// [Item:variable, only when HasItem=true]
+        /// [checksum:1]
+        /// </remarks>
+        private bool TryGetItemCrateRawItemBytes(
+            byte[] packetData,
+            out bool hasItem,
+            out byte[] rawItemBytes,
+            out string reason)
+        {
+            hasItem = false;
+            rawItemBytes = [];
+            reason = null;
+
+            if (packetData == null)
+            {
+                reason = "packet was null.";
+                return false;
+            }
+
+            const int messageIdSize = 1;
+            const int intVector3Size = 12;
+            const int indexSize = 4;
+            const int hasItemSize = 1;
+            const int checksumSize = 1;
+
+            int hasItemOffset = messageIdSize + intVector3Size + indexSize;
+            int itemOffset = hasItemOffset + hasItemSize;
+            int checksumOffset = packetData.Length - checksumSize;
+
+            if (packetData.Length < itemOffset + checksumSize)
+            {
+                reason = "packet was too small for ItemCrateMessage.";
+                return false;
+            }
+
+            hasItem = packetData[hasItemOffset] != 0;
+
+            int itemLength = checksumOffset - itemOffset;
+            if (itemLength < 0)
+            {
+                reason = "computed item length was negative.";
+                return false;
+            }
+
+            if (!hasItem && itemLength != 0)
+            {
+                reason = "packet said HasItem=false but still contained item bytes.";
+                return false;
+            }
+
+            if (hasItem && itemLength <= 0)
+            {
+                reason = "packet said HasItem=true but had no item bytes.";
+                return false;
+            }
+
+            if (itemLength > 0)
+            {
+                rawItemBytes = new byte[itemLength];
+                Buffer.BlockCopy(packetData, itemOffset, rawItemBytes, 0, itemLength);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true only when the reflected InventoryItem writes back to the exact same bytes
+        /// that the client originally sent.
+        /// </summary>
+        private bool InventoryItemRoundTripsExactly(object item, byte[] originalItemBytes, out string reason)
+        {
+            reason = null;
+
+            if (item == null)
+            {
+                reason = "item was null.";
+                return false;
+            }
+
+            originalItemBytes ??= [];
+
+            try
+            {
+                MethodInfo writeMethod = item.GetType().GetMethod(
+                    "Write",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    null,
+                    [typeof(BinaryWriter)],
+                    null);
+
+                if (writeMethod == null)
+                {
+                    reason = "InventoryItem.Write(BinaryWriter) was not found.";
+                    return false;
+                }
+
+                byte[] rewrittenBytes;
+
+                using (var ms = new MemoryStream())
+                using (var writer = new BinaryWriter(ms))
+                {
+                    writeMethod.Invoke(item, [writer]);
+                    writer.Flush();
+                    rewrittenBytes = ms.ToArray();
+                }
+
+                if (!ByteArrayEquals(originalItemBytes, rewrittenBytes))
+                {
+                    reason =
+                        $"item did not round-trip exactly. OriginalBytes={originalItemBytes.Length}, " +
+                        $"RewrittenBytes={rewrittenBytes.Length}, ItemType={item.GetType().FullName}, " +
+                        $"Item={GetInventoryItemDebugName(item)}.";
+
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
+
+                reason = "round-trip failed: " + inner.GetType().FullName + ": " + inner.Message;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Compares two byte arrays without LINQ allocations.
+        /// </summary>
+        private static bool ByteArrayEquals(byte[] a, byte[] b)
+        {
+            if (ReferenceEquals(a, b))
+                return true;
+
+            if (a == null || b == null || a.Length != b.Length)
+                return false;
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                if (a[i] != b[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Best-effort item debug string for crate rejection logs.
+        /// </summary>
+        private string GetInventoryItemDebugName(object item)
+        {
+            if (item == null)
+                return "<null>";
+
+            try
+            {
+                object itemClass = GetMemberValue(item, "ItemClass");
+                object id = GetMemberValue(itemClass, "ID");
+                object name = GetMemberValue(item, "Name");
+
+                return $"ID={id}, Name={name}";
+            }
+            catch
+            {
+                return item.GetType().FullName;
             }
         }
         #endregion
