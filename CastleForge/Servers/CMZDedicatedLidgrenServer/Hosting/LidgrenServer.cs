@@ -457,7 +457,7 @@ namespace CMZDedicatedLidgrenServer
                     throw new InvalidOperationException("_commonAsm is null.");
 
                 _worldHandler?.Init(_gameAsm, _commonAsm);
-                _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: true);
+                ApplyCurrentServerMessageToWorldInfo(saveToDisk: false);
 
                 _codec = new CmzMessageCodec(_gameAsm, _commonAsm, _log);
             }
@@ -567,7 +567,7 @@ namespace CMZDedicatedLidgrenServer
             _log($"[Config] server-message raw: '{_serverMessage}'");
             _log($"[Config] server-message resolved: '{resolvedMessage}'");
 
-            _worldHandler?.ApplyServerMessage(resolvedMessage, saveToDisk: true);
+            ApplyCurrentServerMessageToWorldInfo(saveToDisk: false);
         }
 
         /// <summary>
@@ -1118,6 +1118,8 @@ namespace CMZDedicatedLidgrenServer
                     _worldHandler?.OnClientDisconnected(disconnectedId);
                     NotifyPluginsPlayerLeft(disconnectedId);
 
+                    ApplyCurrentServerMessageToWorldInfo(saveToDisk: false);
+
                     _log($"Player disconnected: id={disconnectedId}, {_allGamers.Count} remaining.");
 
                     if (_allGamers.Count == 0)
@@ -1288,6 +1290,8 @@ namespace CMZDedicatedLidgrenServer
             _allGamers.Add(remoteGamer);
             _connectionToGamer[senderConn] = remoteGamer;
             NotifyPluginsPlayerJoined(senderConn, _nextPlayerGid, remoteGamer);
+
+            ApplyCurrentServerMessageToWorldInfo(saveToDisk: false);
 
             // Send current time of day so joiner sees correct time immediately.
             try
@@ -1876,6 +1880,16 @@ namespace CMZDedicatedLidgrenServer
                 message = message.Substring(0, 128);
 
             return message;
+        }
+
+        /// <summary>
+        /// Applies the currently resolved server-message template to the loaded WorldInfo.
+        /// Use saveToDisk=false for dynamic tokens like {players}, {day}, and {maxplayers}
+        /// so world.info does not permanently store a stale resolved message.
+        /// </summary>
+        private void ApplyCurrentServerMessageToWorldInfo(bool saveToDisk)
+        {
+            _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk);
         }
 
         /// <summary>

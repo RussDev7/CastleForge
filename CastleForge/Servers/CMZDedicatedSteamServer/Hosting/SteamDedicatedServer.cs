@@ -171,6 +171,12 @@ namespace CMZDedicatedSteamServer.Hosting
         /// </summary>
         private string _lastPublishedLobbyName = string.Empty;
 
+        /// <summary>
+        /// Tracks the last resolved Steam lobby message that was published.
+        /// Used to avoid refreshing Steam lobby metadata when the message has not changed.
+        /// </summary>
+        private string _lastPublishedLobbyMessage = string.Empty;
+
         #endregion
 
         #endregion
@@ -228,6 +234,7 @@ namespace CMZDedicatedSteamServer.Hosting
                 _log);
 
             _lobbyHost.BeginCreateLobby(BuildServerDisplayName(), BuildServerDisplayMessage());
+            _lastPublishedLobbyMessage = BuildServerDisplayMessage();
             _lastPublishedLobbyName = BuildServerDisplayName();
             _lastPublishedLobbyDay = GetDisplayDay();
 
@@ -256,7 +263,7 @@ namespace CMZDedicatedSteamServer.Hosting
                     _config.LogHostMessages);
 
                 _worldHandler.Init(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly);
-                _worldHandler.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: true);
+                _worldHandler.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);
 
                 _codec = new CmzMessageCodec(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly, _log);
                 _log($"[World] World handler initialized. WorldFolder={_config.WorldFolder}, SaveOwner={effectiveSaveOwnerSteamId}");
@@ -340,7 +347,7 @@ namespace CMZDedicatedSteamServer.Hosting
             _log($"[Config] server-message raw: '{_serverMessage}'");
             _log($"[Config] server-message resolved: '{resolvedMessage}'");
 
-            _worldHandler?.ApplyServerMessage(resolvedMessage, saveToDisk: true);
+            _worldHandler?.ApplyServerMessage(resolvedMessage, saveToDisk: false);
 
             PublishCurrentLobbyMetadata();
 
@@ -365,8 +372,9 @@ namespace CMZDedicatedSteamServer.Hosting
 
             _lastPublishedLobbyDay = GetDisplayDay();
             _lastPublishedLobbyName = currentName;
+            _lastPublishedLobbyMessage = currentMessage;
 
-            _log($"[SteamLobby] Republished lobby metadata: {currentName}");
+            _log($"[SteamLobby] Republished lobby metadata: {currentName} | {currentMessage}");
         }
 
         /// <summary>
@@ -379,7 +387,7 @@ namespace CMZDedicatedSteamServer.Hosting
 
             AdvanceTimeOfDay();
             BroadcastTimeOfDayIfNeeded();
-            RefreshLobbyNameIfNeeded();
+            RefreshLobbyMetadataIfNeeded();
 
             // Run optional tick-based plugins, such as Announcements.
             UpdateServerPlugins();
@@ -538,6 +546,8 @@ namespace CMZDedicatedSteamServer.Hosting
                     ConnectedSteamPeer newPeer = _peers.AddConnectedPeer(senderSteamId, gid, pending.Gamertag, remoteGamer);
                     _connectionToGamer[senderSteamId] = remoteGamer;
                     _approval.MarkConnected(senderSteamId, pending.Gamertag, remoteGamer);
+                    _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);
+                    PublishCurrentLobbyMetadata();
                     BroadcastNewPeerToOthers(newPeer);
                     SendInitialTimeOfDayToJoiner(senderSteamId, gid);
                     NotifyPluginsPlayerJoined(senderSteamId, gid, pending.Gamertag);
@@ -554,9 +564,14 @@ namespace CMZDedicatedSteamServer.Hosting
                         _approval.RemovePeer(senderSteamId);
                         _connectionToGamer.Remove(senderSteamId);
                         _playerExistsPayloadById.Remove(peer.Gid);
+
                         _worldHandler?.OnClientDisconnected(peer.Gid);
                         NotifyPluginsPlayerLeft(peer.Gid, peer.Gamertag);
                         BroadcastDropPeerToOthers(peer);
+
+                        _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);
+                        PublishCurrentLobbyMetadata();
+
                         _log($"[StatusChanged] Peer disconnected. SteamID={senderSteamId}, GID={peer.Gid}");
                         return;
                     }
@@ -1172,29 +1187,33 @@ namespace CMZDedicatedSteamServer.Hosting
         }
 
         /// <summary>
-        /// Refreshes Steam lobby metadata when the resolved server display name changes.
+        /// Refreshes Steam lobby metadata when the resolved server display name or message changes.
         /// </summary>
-        private void RefreshLobbyNameIfNeeded()
+        private void RefreshLobbyMetadataIfNeeded()
         {
             if (_lobbyHost == null || !_lobbyHost.IsLobbyReady)
                 return;
 
             int currentDay = GetDisplayDay();
             string currentName = BuildServerDisplayName();
+            string currentMessage = BuildServerDisplayMessage();
 
             if (currentDay == _lastPublishedLobbyDay &&
-                string.Equals(currentName, _lastPublishedLobbyName, StringComparison.Ordinal))
+                string.Equals(currentName, _lastPublishedLobbyName, StringComparison.Ordinal) &&
+                string.Equals(currentMessage, _lastPublishedLobbyMessage, StringComparison.Ordinal))
             {
                 return;
             }
 
             _lobbyHost.SetLobbyName(currentName);
+            _lobbyHost.SetLobbyMessage(currentMessage);
             _lobbyHost.RefreshLobbyMetadata();
 
             _lastPublishedLobbyDay = currentDay;
             _lastPublishedLobbyName = currentName;
+            _lastPublishedLobbyMessage = currentMessage;
 
-            _log($"[SteamLobby] Updated lobby name: {currentName}");
+            _log($"[SteamLobby] Updated lobby metadata: {currentName} | {currentMessage}");
         }
         #endregion
 
