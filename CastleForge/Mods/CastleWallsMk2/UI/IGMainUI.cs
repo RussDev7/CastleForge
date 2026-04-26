@@ -12372,6 +12372,11 @@ namespace CastleWallsMk2
         /// </summary>
         private static bool _rememberedSliderRestorePending = true;
 
+        /// <summary>
+        /// Tracks whether startup-only remembered toggles have already been applied this run.
+        /// </summary>
+        private static bool _startupOnlyRememberedTogglesApplied;
+
         private sealed class RememberedIntSliderMeta
         {
             public readonly string CallbackFieldName;
@@ -12478,6 +12483,31 @@ namespace CastleWallsMk2
                 "_spamTextExpandBox",
                 "_changeGameTitle",
             };
+
+        /// <summary>
+        /// Remembered toggles listed here are allowed to be saved,
+        /// but must NOT be re-applied when entering a lobby/world.
+        ///
+        /// Ghost Mode belongs here because it must be active before the
+        /// lobby join / StartGame / PlayerExists flow begins.
+        /// Applying it after IsInGame becomes true is too late.
+        /// </summary>
+        private static readonly HashSet<string> _rememberedToggleStartupOnlyUiFields =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "_ghostMode",
+                "_ghostModeHideName",
+            };
+
+        /// <summary>
+        /// Returns true when the remembered toggle should only be applied once during mod startup,
+        /// instead of being re-applied when entering a lobby or world.
+        /// </summary>
+        /// <param name="uiFieldName">The backing UI field name for the remembered toggle.</param>
+        private static bool IsStartupOnlyRememberedToggle(string uiFieldName)
+        {
+            return _rememberedToggleStartupOnlyUiFields.Contains(uiFieldName);
+        }
 
         // Returns the set of bool UI fields that are eligible to be remembered.
         // Requirements:
@@ -12639,6 +12669,54 @@ namespace CastleWallsMk2
         }
 
         /// <summary>
+        /// Applies remembered toggles that must be enabled before any lobby/world join.
+        /// This should run once after UI callbacks are wired, not when entering a session.
+        /// </summary>
+        internal static void ApplyStartupOnlyRememberedTogglesOnce()
+        {
+            if (_startupOnlyRememberedTogglesApplied)
+                return;
+
+            _startupOnlyRememberedTogglesApplied = true;
+
+            if (!RememberedToggleStore.RememberEnabled)
+                return;
+
+            try
+            {
+                bool hideName;
+                if (RememberedToggleStore.TryGetToggle("_ghostModeHideName", out hideName))
+                {
+                    _ghostModeHideName = hideName;
+
+                    // Set the runtime flag directly.
+                    // Do NOT invoke OnGhostModeHideName here because that callback mutates
+                    // the gamertag immediately even when Ghost Mode is not enabled yet.
+                    CastleWallsMk2._ghostModeHideNameEnabled = hideName;
+                }
+
+                bool ghostMode;
+                if (RememberedToggleStore.TryGetToggle("_ghostMode", out ghostMode))
+                {
+                    _ghostMode = ghostMode;
+
+                    if (ghostMode)
+                    {
+                        // This sets CastleWallsMk2._ghostModeEnabled before any lobby join.
+                        Callbacks.OnGhostMode?.Invoke(true);
+                    }
+                    else
+                    {
+                        CastleWallsMk2._ghostModeEnabled = false;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
         /// If restoration is pending, and we are back in-game, this method:
         /// 1. Loads remembered slider values into the UI backing fields
         /// 2. Invokes each remembered slider callback that is currently eligible to apply
@@ -12791,6 +12869,11 @@ namespace CastleWallsMk2
                 // Re-apply all remembered "on" toggles through their real callbacks.
                 foreach (var field in GetRememberedToggleUiFields())
                 {
+                    // Ghost Mode must not be restored on lobby/world entry.
+                    // It has to be applied once at game/mod startup instead.
+                    if (IsStartupOnlyRememberedToggle(field.Name))
+                        continue;
+
                     bool wanted = (bool)field.GetValue(null);
                     if (!wanted) continue;
 

@@ -27,6 +27,16 @@ namespace CMZDedicatedSteamServer.Plugins
         private readonly List<IServerWorldPlugin> _plugins = [];
 
         /// <summary>
+        /// Guards plugin initialization/reload while packets are being inspected.
+        /// </summary>
+        private readonly object _pluginLock = new();
+
+        /// <summary>
+        /// Last initialization context. Stored so the console reload command can reload plugins from disk.
+        /// </summary>
+        private ServerPluginContext _lastContext;
+
+        /// <summary>
         /// Server log callback.
         /// </summary>
         private readonly Action<string> _log = log ?? (_ => { });
@@ -53,7 +63,7 @@ namespace CMZDedicatedSteamServer.Plugins
         }
         #endregion
 
-        #region Initialization
+        #region Initialization / Reload
 
         /// <summary>
         /// Initializes all registered plugins using the supplied server plugin context.
@@ -64,17 +74,58 @@ namespace CMZDedicatedSteamServer.Plugins
         /// </remarks>
         public void InitializeAll(ServerPluginContext context)
         {
-            foreach (IServerWorldPlugin plugin in _plugins)
+            lock (_pluginLock)
             {
-                try
+                _lastContext = context;
+
+                foreach (IServerWorldPlugin plugin in _plugins)
                 {
-                    plugin.Initialize(context);
-                    _log($"[Plugins] Initialized {plugin.Name}.");
+                    try
+                    {
+                        plugin.Initialize(context);
+                        _log($"[Plugins] Initialized {plugin.Name}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log($"[Plugins] Failed to initialize {plugin.Name}: {ex.Message}.");
+                    }
                 }
-                catch (Exception ex)
+            }
+        }
+
+        /// <summary>
+        /// Reloads all registered plugins from their files using the last known plugin context.
+        /// </summary>
+        /// <remarks>
+        /// This does not unload/reload plugin assemblies. It re-runs each plugin's Initialize method,
+        /// which should reload config, regions, announcements, and other file-backed state.
+        /// </remarks>
+        public void ReloadAll()
+        {
+            lock (_pluginLock)
+            {
+                if (_lastContext == null)
                 {
-                    _log($"[Plugins] Failed to initialize {plugin.Name}: {ex.Message}.");
+                    _log("[Plugins] Reload skipped: plugins have not been initialized yet.");
+                    return;
                 }
+
+                _log("[Plugins] Reloading plugin files...");
+
+                foreach (IServerWorldPlugin plugin in _plugins)
+                {
+                    try
+                    {
+                        plugin.Initialize(_lastContext);
+                        _log($"[Plugins] Reloaded {plugin.Name}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log($"[Plugins] Failed to reload {plugin.Name}: {ex.Message}.");
+                    }
+                }
+
+                _log("[Plugins] Reload complete.");
             }
         }
         #endregion
@@ -109,6 +160,69 @@ namespace CMZDedicatedSteamServer.Plugins
             }
 
             return false;
+        }
+        #endregion
+
+        #region Player Events
+
+        /// <summary>
+        /// Notifies plugins that a player joined the server.
+        /// </summary>
+        public void NotifyPlayerJoined(ServerPlayerEventContext context)
+        {
+            foreach (IServerWorldPlugin plugin in _plugins)
+            {
+                try
+                {
+                    if (plugin is IServerPlayerEventPlugin playerEvents)
+                        playerEvents.OnPlayerJoined(context);
+                }
+                catch (Exception ex)
+                {
+                    _log($"[Plugins] {plugin.Name} failed during player join event: {ex.Message}.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Notifies plugins that a player left the server.
+        /// </summary>
+        public void NotifyPlayerLeft(ServerPlayerEventContext context)
+        {
+            foreach (IServerWorldPlugin plugin in _plugins)
+            {
+                try
+                {
+                    if (plugin is IServerPlayerEventPlugin playerEvents)
+                        playerEvents.OnPlayerLeft(context);
+                }
+                catch (Exception ex)
+                {
+                    _log($"[Plugins] {plugin.Name} failed during player leave event: {ex.Message}.");
+                }
+            }
+        }
+        #endregion
+
+        #region Tick Events
+
+        /// <summary>
+        /// Runs optional per-tick plugin updates.
+        /// </summary>
+        public void UpdateAll(ServerPluginTickContext context)
+        {
+            foreach (IServerWorldPlugin plugin in _plugins)
+            {
+                try
+                {
+                    if (plugin is IServerTickPlugin tickPlugin)
+                        tickPlugin.Update(context);
+                }
+                catch (Exception ex)
+                {
+                    _log($"[Plugins] {plugin.Name} failed during update: {ex.Message}.");
+                }
+            }
         }
         #endregion
     }

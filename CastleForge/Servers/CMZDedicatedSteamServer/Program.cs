@@ -52,6 +52,7 @@ namespace CMZDedicatedSteamServer
                 #region Resolve Base Paths
 
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                Log($"Config file       : {Path.Combine(baseDir, "server.properties")}");
                 SteamServerConfig config = SteamServerConfig.Load(baseDir);
 
                 string gamePath = string.IsNullOrWhiteSpace(config.GamePath)
@@ -106,6 +107,8 @@ namespace CMZDedicatedSteamServer
 
                 server.Start();
 
+                StartConsoleCommandThread(server, Log);
+
                 int sleepMs = Math.Max(1, 1000 / Math.Max(1, config.TickRateHz));
 
                 while (server.IsRunning)
@@ -128,6 +131,95 @@ namespace CMZDedicatedSteamServer
             {
                 Log("FATAL: " + ex);
                 return 1;
+            }
+        }
+        #endregion
+
+        #region Console Commands
+
+        /// <summary>
+        /// Starts a background console command reader for runtime server commands.
+        /// </summary>
+        private static Thread StartConsoleCommandThread(SteamDedicatedServer server, Action<string> log)
+        {
+            Thread thread = new(() =>
+            {
+                while (server.IsRunning)
+                {
+                    string line;
+
+                    try
+                    {
+                        line = Console.ReadLine();
+                    }
+                    catch
+                    {
+                        break;
+                    }
+
+                    if (line == null)
+                        break;
+
+                    HandleConsoleCommand(server, line, log);
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "ConsoleCommandThread"
+            };
+            thread.Start();
+
+            return thread;
+        }
+
+        /// <summary>
+        /// Handles a single console command.
+        /// </summary>
+        private static void HandleConsoleCommand(SteamDedicatedServer server, string line, Action<string> log)
+        {
+            string command = (line ?? string.Empty).Trim();
+
+            if (command.Length == 0)
+                return;
+
+            switch (command.ToLowerInvariant())
+            {
+                case "help":
+                case "?":
+                    log("Console commands:");
+                    log("  reload            Reload server.properties and plugin files");
+                    log("  reload properties Reload runtime-safe server.properties values");
+                    log("  reload plugins    Reload plugin config/region/announcement files");
+                    log("  stop              Stop the server");
+                    log("  help              Show this command list");
+                    break;
+
+                case "reload":
+                    server.Reload();
+                    break;
+
+                case "reload properties":
+                case "properties reload":
+                case "reload config":
+                case "config reload":
+                    server.ReloadServerProperties();
+                    break;
+
+                case "reload plugins":
+                case "plugins reload":
+                    server.ReloadPlugins();
+                    break;
+
+                case "stop":
+                case "exit":
+                case "quit":
+                    log("Console stop command received. Shutting down...");
+                    server.Stop();
+                    break;
+
+                default:
+                    log("Unknown command. Type 'help' for console commands.");
+                    break;
             }
         }
         #endregion

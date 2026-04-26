@@ -22,7 +22,7 @@ namespace CMZDedicatedSteamServer.Hosting
     /// </summary>
     internal sealed class SteamConnectionApproval(SteamServerConfig config, Assembly commonAssembly, Action<string> log)
     {
-        private readonly SteamServerConfig _config = config;
+        private SteamServerConfig _config = config;
         private readonly Assembly _commonAssembly = commonAssembly;
         private readonly Action<string> _log = log ?? (_ => { });
         private readonly Dictionary<ulong, PendingApprovalInfo> _pendingBySteamId = [];
@@ -89,6 +89,20 @@ namespace CMZDedicatedSteamServer.Hosting
             _pendingBySteamId[senderSteamId] = pending;
             _log($"[Approve] Accepted pending Steam join for '{gamertag}' ({senderSteamId}).");
             return ApprovalDecision.Allow(gamertag, gamer);
+        }
+
+        /// <summary>
+        /// Replaces the runtime config used for future Steam connection approval checks.
+        /// 
+        /// This is used by the console "reload" command after server.properties
+        /// is re-read. Existing connected players and pending joins are left alone.
+        /// </summary>
+        public void ReloadConfig(SteamServerConfig config)
+        {
+            if (config == null)
+                return;
+
+            _config = config;
         }
 
         public bool TryGetPending(ulong steamId, out PendingApprovalInfo pending)

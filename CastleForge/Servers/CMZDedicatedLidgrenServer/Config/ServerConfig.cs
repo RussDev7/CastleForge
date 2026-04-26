@@ -51,6 +51,11 @@ namespace CMZDedicatedLidgrenServer
         public string ServerName { get; private set; } = "CMZ Server";
 
         /// <summary>
+        /// Player-facing server message shown in session/server info.
+        /// </summary>
+        public string ServerMessage { get; private set; } = "Welcome to this CastleForge dedicated server.";
+
+        /// <summary>
         /// Network game name expected by compatible clients.
         /// </summary>
         public string GameName { get; private set; } = "CastleMinerZSteam";
@@ -233,6 +238,9 @@ namespace CMZDedicatedLidgrenServer
 
             if (map.TryGetValue("server-name", out var serverName) && !string.IsNullOrWhiteSpace(serverName))
                 cfg.ServerName = serverName;
+
+            if (map.TryGetValue("server-message", out var serverMessage) && !string.IsNullOrWhiteSpace(serverMessage))
+                cfg.ServerMessage = serverMessage;
 
             if (map.TryGetValue("game-name", out var gameName) && !string.IsNullOrWhiteSpace(gameName))
                 cfg.GameName = gameName;

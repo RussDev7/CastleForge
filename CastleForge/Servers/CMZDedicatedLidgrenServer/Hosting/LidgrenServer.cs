@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedLidgrenServer.Plugins.Announcements;
 using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
@@ -90,22 +91,27 @@ namespace CMZDedicatedLidgrenServer
         /// <summary>
         /// Human-readable server name advertised to clients.
         /// </summary>
-        private readonly string _serverName;
+        private string _serverName;
+
+        /// <summary>
+        /// Configured server message template shown in server/session info.
+        /// </summary>
+        private string _serverMessage;
 
         /// <summary>
         /// Game mode value sent in discovery / server-info responses.
         /// </summary>
-        private readonly int _gameMode;
+        private int _gameMode;
 
         /// <summary>
         /// PVP state sent in discovery / server-info responses.
         /// </summary>
-        private readonly int _pvpState;
+        private int _pvpState;
 
         /// <summary>
         /// Difficulty value sent in discovery / server-info responses.
         /// </summary>
-        private readonly int _difficulty;
+        private int _difficulty;
 
         /// <summary>
         /// Logging callback used throughout server lifecycle.
@@ -285,6 +291,7 @@ namespace CMZDedicatedLidgrenServer
             IPAddress bindAddress = null,
             int viewRadiusChunks = 8,
             string serverName = null,
+            string serverMessage = null,
             int gameMode = 1,
             int pvpState = 0,
             int difficulty = 1,
@@ -298,6 +305,9 @@ namespace CMZDedicatedLidgrenServer
             _bindAddress = bindAddress ?? IPAddress.Any;
             _maxPlayers = maxPlayers;
             _serverName = string.IsNullOrWhiteSpace(serverName) ? "CMZ Server" : serverName;
+            _serverMessage = string.IsNullOrWhiteSpace(serverMessage)
+                ? "Welcome to this CastleForge dedicated server."
+                : serverMessage;
             _gameMode = gameMode;
             _pvpState = pvpState < 0 ? 0 : (pvpState > 2 ? 2 : pvpState);
             _difficulty = difficulty < 0 ? 0 : (difficulty > 3 ? 3 : difficulty);
@@ -322,6 +332,7 @@ namespace CMZDedicatedLidgrenServer
             {
                 _plugins = new ServerPluginManager(_log);
                 _plugins.Register(new ServerRegionProtectPlugin());
+                _plugins.Register(new ServerAnnouncementsPlugin());
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {
@@ -446,6 +457,8 @@ namespace CMZDedicatedLidgrenServer
                     throw new InvalidOperationException("_commonAsm is null.");
 
                 _worldHandler?.Init(_gameAsm, _commonAsm);
+                _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: true);
+
                 _codec = new CmzMessageCodec(_gameAsm, _commonAsm, _log);
             }
 
@@ -472,6 +485,89 @@ namespace CMZDedicatedLidgrenServer
 
                 _netPeer = null;
             }
+        }
+
+        /// <summary>
+        /// Reloads server plugin files without restarting the dedicated server.
+        /// </summary>
+        /// <remarks>
+        /// This reloads file-backed plugin state such as RegionProtect regions/config
+        /// and Announcements config. It does not reload external plugin assemblies.
+        /// </remarks>
+        public void ReloadPlugins()
+        {
+            if (_plugins == null)
+            {
+                _log("[Plugins] Reload skipped: plugin manager is not initialized.");
+                return;
+            }
+
+            _plugins.ReloadAll();
+        }
+
+        /// <summary>
+        /// Reloads server.properties runtime-safe values and plugin-backed files.
+        /// 
+        /// Notes:
+        /// - This does not restart the socket.
+        /// - Network/bootstrap values such as port, bind IP, game path, world GUID,
+        ///   save owner, game name, and network version still require a restart.
+        /// </summary>
+        public void Reload()
+        {
+            ReloadServerProperties();
+            ReloadPlugins();
+        }
+
+        /// <summary>
+        /// Reloads runtime-safe values from server.properties.
+        /// </summary>
+        public void ReloadServerProperties()
+        {
+            if (string.IsNullOrWhiteSpace(_saveRoot))
+            {
+                _log("[Config] Reload skipped: save root/base directory is not available.");
+                return;
+            }
+
+            ServerConfig config;
+
+            try
+            {
+                config = ServerConfig.Load(_saveRoot);
+            }
+            catch (Exception ex)
+            {
+                _log("[Config] Reload failed: " + ex.Message);
+                return;
+            }
+
+            _serverName = string.IsNullOrWhiteSpace(config.ServerName)
+                ? "CMZ Server"
+                : config.ServerName;
+
+            _serverMessage = string.IsNullOrWhiteSpace(config.ServerMessage)
+                ? "Welcome to this CastleForge dedicated server."
+                : config.ServerMessage;
+
+            // These affect newly advertised/session-info values.
+            _gameMode = config.GameMode;
+            _pvpState = config.PvpState < 0 ? 0 : (config.PvpState > 2 ? 2 : config.PvpState);
+            _difficulty = config.Difficulty < 0 ? 0 : (config.Difficulty > 3 ? 3 : config.Difficulty);
+
+            // Do not hot-apply _maxPlayers to Lidgren's already-created NetPeer.
+            // The socket was created with the old MaximumConnections value.
+            _log("[Config] Reloaded runtime properties from server.properties.");
+            _log("[Config] Note: port/ip/game-path/world/save-owner/max-players require restart.");
+
+            string configPath = Path.Combine(_saveRoot, "server.properties");
+            string resolvedMessage = BuildServerDisplayMessage();
+
+            _log($"[Config] Reloaded from: {configPath}");
+            _log($"[Config] server-message raw: '{_serverMessage}'");
+            _log($"[Config] server-message resolved: '{resolvedMessage}'");
+
+            _worldHandler?.ApplyServerMessage(resolvedMessage, saveToDisk: true);
         }
 
         /// <summary>
@@ -600,6 +696,84 @@ namespace CMZDedicatedLidgrenServer
                     }
                 }
             }
+
+            // Run optional tick-based plugins, such as Announcements.
+            UpdateServerPlugins();
+        }
+        #endregion
+
+        #region Server Plugin Events
+
+        /// <summary>
+        /// Updates optional tick-based server plugins such as Announcements.
+        /// </summary>
+        private void UpdateServerPlugins()
+        {
+            if (_plugins == null)
+                return;
+
+            _plugins.UpdateAll(new ServerPluginTickContext
+            {
+                UtcNow = DateTime.UtcNow,
+                ConnectedPlayers = _allGamers.Count,
+                MaxPlayers = _maxPlayers,
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Notifies optional player-event plugins that a player joined.
+        /// </summary>
+        private void NotifyPluginsPlayerJoined(object senderConn, byte playerId, object remoteGamer)
+        {
+            if (_plugins == null)
+                return;
+
+            string playerName = "Player" + playerId;
+
+            try
+            {
+                object name = remoteGamer?.GetType()
+                    .GetProperty("Gamertag", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(remoteGamer, null);
+
+                if (name != null && !string.IsNullOrWhiteSpace(Convert.ToString(name)))
+                    playerName = Convert.ToString(name);
+            }
+            catch
+            {
+            }
+
+            _plugins.NotifyPlayerJoined(new ServerPlayerEventContext
+            {
+                PlayerId = playerId,
+                PlayerName = playerName,
+                ConnectedPlayers = _allGamers.Count,
+                MaxPlayers = _maxPlayers,
+                SendPrivateMessage = message => SendPrivateServerText(senderConn, playerId, message),
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Notifies optional player-event plugins that a player left.
+        /// </summary>
+        private void NotifyPluginsPlayerLeft(byte playerId)
+        {
+            if (_plugins == null)
+                return;
+
+            _plugins.NotifyPlayerLeft(new ServerPlayerEventContext
+            {
+                PlayerId = playerId,
+                PlayerName = "Player" + playerId,
+                ConnectedPlayers = _allGamers.Count,
+                MaxPlayers = _maxPlayers,
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
         }
         #endregion
 
@@ -679,8 +853,9 @@ namespace CMZDedicatedLidgrenServer
 
                 var requestId = (int)(request.GetType().GetField("RequestID", BindingFlags.Public | BindingFlags.Instance)?.GetValue(request) ?? 0);
                 string displayName = BuildServerDisplayName();
+                string displayMessage = BuildServerDisplayMessage();
 
-                _log("Discovery request from " + senderEndPoint + " RequestID=" + requestId + ", sending response (server name='" + displayName + "')");
+                _log("Discovery request from " + senderEndPoint + " RequestID=" + requestId + ", sending response (server name='" + displayName + "', message='" + displayMessage + "')");
 
                 var resultCodeType = _commonAsm.GetType("DNA.Net.GamerServices.NetworkSession+ResultCode");
                 var succeeded = Enum.ToObject(resultCodeType, 0); // Succeeded = 0
@@ -705,7 +880,7 @@ namespace CMZDedicatedLidgrenServer
                 responseType.GetField("SessionID", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, 1);
                 responseType.GetField("CurrentPlayers", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _allGamers.Count);
                 responseType.GetField("MaxPlayers", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _maxPlayers);
-                responseType.GetField("Message", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, displayName);
+                responseType.GetField("Message", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, displayMessage);
                 responseType.GetField("HostUsername", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, displayName);
                 responseType.GetField("PasswordProtected", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, false);
                 responseType.GetField("SessionProperties", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, sessionProps);
@@ -941,6 +1116,7 @@ namespace CMZDedicatedLidgrenServer
                     _playerExistsPayloadById.Remove(disconnectedId);
 
                     _worldHandler?.OnClientDisconnected(disconnectedId);
+                    NotifyPluginsPlayerLeft(disconnectedId);
 
                     _log($"Player disconnected: id={disconnectedId}, {_allGamers.Count} remaining.");
 
@@ -1111,6 +1287,7 @@ namespace CMZDedicatedLidgrenServer
             // Now add joiner and set Tag - same order as game host after send.
             _allGamers.Add(remoteGamer);
             _connectionToGamer[senderConn] = remoteGamer;
+            NotifyPluginsPlayerJoined(senderConn, _nextPlayerGid, remoteGamer);
 
             // Send current time of day so joiner sees correct time immediately.
             try
@@ -1672,6 +1849,36 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
+        /// Resolves the configured server-message template into the current display message.
+        /// </summary>
+        /// <remarks>
+        /// Supported tokens:
+        /// {day}        = player-facing day number
+        /// {day00}      = day number padded to two digits
+        /// {players}    = current connected player count
+        /// {maxplayers} = configured max players
+        /// </remarks>
+        private string BuildServerDisplayMessage()
+        {
+            int day = GetDisplayDay();
+
+            string message = string.IsNullOrWhiteSpace(_serverMessage)
+                ? "Welcome to this CastleForge dedicated server."
+                : _serverMessage;
+
+            message = message.Replace("{day}", day.ToString());
+            message = message.Replace("{day00}", day.ToString("00"));
+            message = message.Replace("{players}", _allGamers.Count.ToString());
+            message = message.Replace("{maxplayers}", _maxPlayers.ToString());
+
+            // Keep it safe for old UI/session display.
+            if (message.Length > 128)
+                message = message.Substring(0, 128);
+
+            return message;
+        }
+
+        /// <summary>
         /// Logs when the resolved server display name changes.
         /// Lidgren does not need active lobby metadata refreshing; discovery responses
         /// and join-time server-info packets resolve the name when sent.
@@ -1767,6 +1974,10 @@ namespace CMZDedicatedLidgrenServer
 
         #region Broadcast Relays
 
+        /// <summary>
+        /// Sends a server-originated broadcast text message to all connected clients.
+        /// </summary>
+        /// <param name="text">Message text to display to connected players.</param>
         private void SendBroadcastText(string text)
         {
             byte[] payload = _codec.BuildPayload(
@@ -1777,6 +1988,48 @@ namespace CMZDedicatedLidgrenServer
                 });
 
             // SenderId = 0 because the dedicated server is acting as host.
+            BroadcastChannel0Payload(0, payload);
+        }
+
+        /// <summary>
+        /// Builds a server-originated BroadcastTextMessage payload.
+        /// </summary>
+        private byte[] BuildServerTextPayload(string text)
+        {
+            if (_codec == null)
+                return null;
+
+            return _codec.BuildPayload(
+                "DNA.CastleMinerZ.Net.BroadcastTextMessage",
+                msg =>
+                {
+                    _codec.SetMember(msg, "Message", text ?? string.Empty);
+                });
+        }
+
+        /// <summary>
+        /// Sends a private server text message to one connected Lidgren client.
+        /// </summary>
+        private void SendPrivateServerText(object conn, byte recipientId, string text)
+        {
+            byte[] payload = BuildServerTextPayload(text);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            SendChannel0PayloadToConnection(conn, recipientId, 0, payload);
+        }
+
+        /// <summary>
+        /// Broadcasts a server text message to all connected Lidgren clients.
+        /// </summary>
+        private void BroadcastServerText(string text)
+        {
+            byte[] payload = BuildServerTextPayload(text);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
             BroadcastChannel0Payload(0, payload);
         }
         #endregion

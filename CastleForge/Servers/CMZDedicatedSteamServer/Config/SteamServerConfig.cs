@@ -35,6 +35,7 @@ namespace CMZDedicatedSteamServer.Config
         #region Core Identity
 
         public string ServerName { get; private set; } = "CMZ Steam Server";
+        public string ServerMessage { get; private set; } = "Welcome to this CastleForge dedicated server.";
         public string GameName { get; private set; } = "CastleMinerZSteam";
         public int NetworkVersion { get; private set; } = 4;
         public string GamePath { get; private set; } = string.Empty;
@@ -104,6 +105,9 @@ namespace CMZDedicatedSteamServer.Config
 
             if (map.TryGetValue("server-name", out string serverName) && !string.IsNullOrWhiteSpace(serverName))
                 cfg.ServerName = serverName;
+
+            if (map.TryGetValue("server-message", out var serverMessage) && !string.IsNullOrWhiteSpace(serverMessage))
+                cfg.ServerMessage = serverMessage;
 
             if (map.TryGetValue("game-name", out string gameName) && !string.IsNullOrWhiteSpace(gameName))
                 cfg.GameName = gameName;

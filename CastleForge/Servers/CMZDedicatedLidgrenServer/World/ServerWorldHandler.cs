@@ -184,6 +184,56 @@ namespace CMZDedicatedLidgrenServer
         }
         #endregion
 
+        #region Dragon Spawn State
+
+        /// <summary>
+        /// Protects active dragon state shared between host message handling and join bootstrap.
+        /// </summary>
+        private readonly object _dragonStateLock = new();
+
+        /// <summary>
+        /// True while the dedicated server believes a dragon is active in the session.
+        /// The actual dragon AI is controlled by one client, matching vanilla host behavior.
+        /// </summary>
+        private bool _dragonActive;
+
+        /// <summary>
+        /// Player id currently assigned to control the active dragon.
+        /// The client with this id creates the local DragonEntity from SpawnDragonMessage.
+        /// </summary>
+        private byte _dragonControllerId;
+
+        /// <summary>
+        /// Current active dragon type.
+        /// Vanilla values:
+        /// 0 = Fire,
+        /// 1 = Forest,
+        /// 2 = Lizard,
+        /// 3 = Ice,
+        /// 4 = Skeleton,
+        /// 5 = Count/invalid sentinel.
+        /// </summary>
+        private byte _activeDragonType;
+
+        /// <summary>
+        /// Whether the active dragon was spawned by biome/distance progression.
+        /// </summary>
+        private bool _activeDragonForBiome;
+
+        /// <summary>
+        /// Last known dragon health. The dedicated server usually does not know this,
+        /// so -1 means let the receiving client use the dragon type default.
+        /// </summary>
+        private float _activeDragonHealth = -1f;
+
+        /// <summary>
+        /// Small cooldown after a dragon is removed/killed so clients do not immediately
+        /// request another one in the same packet burst.
+        /// </summary>
+        private DateTime _nextDragonAllowedUtc = DateTime.MinValue;
+
+        #endregion
+
         #endregion
 
         #region Initialization
@@ -787,6 +837,24 @@ namespace CMZDedicatedLidgrenServer
                 return true;
             }
 
+            if (typeName == "DNA.CastleMinerZ.Net.RequestDragonMessage")
+            {
+                HandleRequestDragonMessage(senderId, data, connections, connectionToGamer, sendToClient);
+                return true;
+            }
+
+            if (typeName == "DNA.CastleMinerZ.Net.KillDragonMessage")
+            {
+                ClearActiveDragon($"KillDragonMessage from player {senderId}");
+                return false; // still relay so clients play death/pickup behavior
+            }
+
+            if (typeName == "DNA.CastleMinerZ.Net.RemoveDragonMessage")
+            {
+                ClearActiveDragon($"RemoveDragonMessage from player {senderId}");
+                return false; // still relay so clients remove it too
+            }
+
             return false;
         }
 
@@ -796,6 +864,17 @@ namespace CMZDedicatedLidgrenServer
         public void OnClientDisconnected(byte playerId)
         {
             _chunkRequestLoggedForPlayer.Remove(playerId);
+
+            lock (_dragonStateLock)
+            {
+                if (_dragonActive && _dragonControllerId == playerId)
+                {
+                    _log($"[Dragon] Controller player {playerId} disconnected. Clearing active dragon state.");
+                    _dragonActive = false;
+                    _activeDragonHealth = -1f;
+                    _nextDragonAllowedUtc = DateTime.UtcNow.AddSeconds(8);
+                }
+            }
         }
         #endregion
 
@@ -867,6 +946,8 @@ namespace CMZDedicatedLidgrenServer
                 }
 
                 sendToClient(senderConn, payload, senderId);
+
+                SendExistingDragonToJoiner(senderId, senderConn, sendToClient);
 
                 _log(
                     $"ServerWorld: Sent WorldInfo to player {senderId}. " +
@@ -2003,6 +2084,83 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
+        /// Applies a runtime server-message value to the loaded WorldInfo.
+        /// 
+        /// Vanilla clients display the in-game "Server Message:" from the WorldInfo
+        /// they receive when joining. Updating only server.properties is not enough;
+        /// the dedicated server must update WorldInfo.ServerMessage and save world.info.
+        /// </summary>
+        public void ApplyServerMessage(string serverMessage, bool saveToDisk)
+        {
+            if (_worldInfo == null)
+            {
+                _log("ServerWorld: ApplyServerMessage skipped because WorldInfo is not loaded.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(serverMessage))
+                serverMessage = "Welcome to this CastleForge dedicated server.";
+
+            serverMessage = serverMessage.Trim();
+
+            bool changed = false;
+            string previousMessage = null;
+
+            lock (_worldInfoLock)
+            {
+                Type worldInfoType = _worldInfo.GetType();
+
+                FieldInfo field = worldInfoType.GetField(
+                    "ServerMessage",
+                    BindingFlags.Public | BindingFlags.Instance);
+
+                if (field != null && field.FieldType == typeof(string))
+                {
+                    previousMessage = field.GetValue(_worldInfo) as string;
+
+                    if (!string.Equals(previousMessage, serverMessage, StringComparison.Ordinal))
+                    {
+                        field.SetValue(_worldInfo, serverMessage);
+                        changed = true;
+                    }
+                }
+                else
+                {
+                    PropertyInfo property = worldInfoType.GetProperty(
+                        "ServerMessage",
+                        BindingFlags.Public | BindingFlags.Instance);
+
+                    if (property == null || !property.CanWrite || property.PropertyType != typeof(string))
+                    {
+                        _log("ServerWorld: WorldInfo.ServerMessage was not found.");
+                        return;
+                    }
+
+                    previousMessage = property.GetValue(_worldInfo, null) as string;
+
+                    if (!string.Equals(previousMessage, serverMessage, StringComparison.Ordinal))
+                    {
+                        property.SetValue(_worldInfo, serverMessage, null);
+                        changed = true;
+                    }
+                }
+            }
+
+            if (!changed)
+            {
+                _log($"ServerWorld: Server message already matches configured value: '{serverMessage}'");
+                return;
+            }
+
+            _log(
+                "ServerWorld: Applied configured server message to world.info. " +
+                $"Old='{previousMessage ?? "(null)"}', New='{serverMessage}'");
+
+            if (saveToDisk)
+                SaveWorldInfo();
+        }
+
+        /// <summary>
         /// Reconstructs a reflected game message instance from raw packet bytes.
         ///
         /// Notes:
@@ -2841,6 +2999,347 @@ namespace CMZDedicatedLidgrenServer
             {
                 return item.GetType().FullName;
             }
+        }
+        #endregion
+
+        #region Dragon Spawn Helpers
+
+        /// <summary>
+        /// Handles vanilla client-driven dragon requests.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla behavior:
+        /// - Clients periodically decide that a dragon should spawn.
+        /// - Non-host clients send RequestDragonMessage to the host.
+        /// - The host responds with SpawnDragonMessage.
+        /// - The player id stored in SpawnDragonMessage.SpawnerID becomes the dragon AI controller.
+        /// 
+        /// Dedicated behavior:
+        /// - The server does not simulate DragonEntity AI.
+        /// - The requesting client is assigned as the controller.
+        /// - All connected clients receive the same SpawnDragonMessage from sender id 0.
+        /// </remarks>
+        private void HandleRequestDragonMessage(
+            byte senderId,
+            byte[] data,
+            object connections,
+            Dictionary<object, object> connectionToGamer,
+            Action<object, byte[], byte> sendToClient)
+        {
+            try
+            {
+                if (!TryParseRequestDragonMessage(data, out byte dragonType, out bool forBiome, out string reason))
+                {
+                    _log($"[Dragon] Rejected RequestDragonMessage from player {senderId}: {reason}");
+                    return;
+                }
+
+                if (!IsValidDragonType(dragonType))
+                {
+                    _log($"[Dragon] Rejected RequestDragonMessage from player {senderId}: invalid dragon type {dragonType}.");
+                    return;
+                }
+
+                byte controllerId = senderId;
+                byte[] spawnPayload;
+
+                lock (_dragonStateLock)
+                {
+                    if (DateTime.UtcNow < _nextDragonAllowedUtc)
+                    {
+                        _log($"[Dragon] Ignored RequestDragonMessage from player {senderId}: dragon cooldown is active.");
+                        return;
+                    }
+
+                    if (_dragonActive)
+                    {
+                        _log(
+                            $"[Dragon] Ignored RequestDragonMessage from player {senderId}: " +
+                            $"dragon already active. Type={GetDragonTypeName(_activeDragonType)}, Controller={_dragonControllerId}.");
+                        return;
+                    }
+
+                    _dragonActive = true;
+                    _dragonControllerId = controllerId;
+                    _activeDragonType = dragonType;
+                    _activeDragonForBiome = forBiome;
+                    _activeDragonHealth = -1f;
+
+                    spawnPayload = BuildSpawnDragonMessagePayload(
+                        spawnerId: controllerId,
+                        dragonType: dragonType,
+                        forBiome: forBiome,
+                        health: -1f);
+                }
+
+                int sent = BroadcastServerPayloadToConnections(
+                    spawnPayload,
+                    connections,
+                    connectionToGamer,
+                    sendToClient);
+
+                _log(
+                    $"[Dragon] Spawned {GetDragonTypeName(dragonType)} dragon. " +
+                    $"Controller={controllerId}, ForBiome={forBiome}, Recipients={sent}.");
+            }
+            catch (Exception ex)
+            {
+                _log("ServerWorld HandleRequestDragonMessage: " + ex.GetType().FullName + ": " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Sends ExistingDragonMessage to a newly joined player when a dragon is already active.
+        /// </summary>
+        private void SendExistingDragonToJoiner(
+            byte joinerId,
+            object senderConn,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (senderConn == null || sendToClient == null)
+                return;
+
+            try
+            {
+                byte dragonType;
+                bool forBiome;
+                float health;
+
+                lock (_dragonStateLock)
+                {
+                    if (!_dragonActive)
+                        return;
+
+                    dragonType = _activeDragonType;
+                    forBiome = _activeDragonForBiome;
+                    health = _activeDragonHealth;
+                }
+
+                byte[] payload = BuildExistingDragonMessagePayload(
+                    newClientId: joinerId,
+                    dragonType: dragonType,
+                    forBiome: forBiome,
+                    currentHealth: health);
+
+                sendToClient(senderConn, payload, joinerId);
+
+                _log(
+                    $"[Dragon] Sent ExistingDragonMessage to player {joinerId}. " +
+                    $"Type={GetDragonTypeName(dragonType)}, ForBiome={forBiome}, Health={health}.");
+            }
+            catch (Exception ex)
+            {
+                _log("ServerWorld SendExistingDragonToJoiner: " + ex.GetType().FullName + ": " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Clears active dragon state after a kill, remove, or controller disconnect.
+        /// </summary>
+        private void ClearActiveDragon(string reason)
+        {
+            lock (_dragonStateLock)
+            {
+                if (!_dragonActive)
+                    return;
+
+                _log(
+                    $"[Dragon] Cleared active dragon. " +
+                    $"Type={GetDragonTypeName(_activeDragonType)}, Controller={_dragonControllerId}, Reason={reason}");
+
+                _dragonActive = false;
+                _dragonControllerId = 0;
+                _activeDragonType = 0;
+                _activeDragonForBiome = false;
+                _activeDragonHealth = -1f;
+                _nextDragonAllowedUtc = DateTime.UtcNow.AddSeconds(8);
+            }
+        }
+
+        /// <summary>
+        /// Parses RequestDragonMessage:
+        /// [msgId:1][EnemyTypeID:byte][ForBiome:bool][checksum:1]
+        /// </summary>
+        private bool TryParseRequestDragonMessage(byte[] data, out byte dragonType, out bool forBiome, out string reason)
+        {
+            dragonType = 0;
+            forBiome = false;
+            reason = null;
+
+            if (data == null || data.Length < 4)
+            {
+                reason = "packet was null or too small.";
+                return false;
+            }
+
+            if (!TryValidatePacketChecksum(data, out string checksumReason))
+            {
+                reason = checksumReason;
+                return false;
+            }
+
+            dragonType = data[1];
+            forBiome = data[2] != 0;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Builds vanilla SpawnDragonMessage:
+        /// [msgId][EnemyTypeID:byte][SpawnerID:byte][ForBiome:bool][Health:float][checksum]
+        /// </summary>
+        private byte[] BuildSpawnDragonMessagePayload(byte spawnerId, byte dragonType, bool forBiome, float health)
+        {
+            const string fullTypeName = "DNA.CastleMinerZ.Net.SpawnDragonMessage";
+
+            if (!_typeToMessageId.TryGetValue(fullTypeName, out byte msgId))
+            {
+                _log("ServerWorld: SpawnDragonMessage ID not found.");
+                return null;
+            }
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+
+            writer.Write(msgId);
+            writer.Write(dragonType);
+            writer.Write(spawnerId);
+            writer.Write(forBiome);
+            writer.Write(health);
+
+            writer.Flush();
+
+            int len = (int)ms.Position;
+            writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+            writer.Flush();
+
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Builds vanilla ExistingDragonMessage:
+        /// [msgId][EnemyTypeID:byte][NewClientID:byte][ForBiome:bool][CurrentHealth:float][checksum]
+        /// </summary>
+        private byte[] BuildExistingDragonMessagePayload(byte newClientId, byte dragonType, bool forBiome, float currentHealth)
+        {
+            const string fullTypeName = "DNA.CastleMinerZ.Net.ExistingDragonMessage";
+
+            if (!_typeToMessageId.TryGetValue(fullTypeName, out byte msgId))
+            {
+                _log("ServerWorld: ExistingDragonMessage ID not found.");
+                return null;
+            }
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+
+            writer.Write(msgId);
+            writer.Write(dragonType);
+            writer.Write(newClientId);
+            writer.Write(forBiome);
+            writer.Write(currentHealth);
+
+            writer.Flush();
+
+            int len = (int)ms.Position;
+            writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+            writer.Flush();
+
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Broadcasts a server-originated channel-0 payload to all live connections.
+        /// sendToClient wraps this as sender id 0 in both Steam and Lidgren server hosts.
+        /// </summary>
+        private int BroadcastServerPayloadToConnections(
+            byte[] payload,
+            object connections,
+            Dictionary<object, object> connectionToGamer,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (payload == null || payload.Length == 0)
+                return 0;
+
+            if (connections is not System.Collections.IEnumerable enumerable)
+                return 0;
+
+            if (connectionToGamer == null || sendToClient == null)
+                return 0;
+
+            int sent = 0;
+
+            foreach (object conn in enumerable)
+            {
+                if (!TryGetGamerIdForConnection(conn, connectionToGamer, out byte recipientId))
+                    continue;
+
+                sendToClient(conn, payload, recipientId);
+                sent++;
+            }
+
+            return sent;
+        }
+
+        /// <summary>
+        /// Resolves a connected client's CastleMiner Z gamer id from the server connection map.
+        /// Works for both Steam's ulong connection keys and Lidgren's reflected connection objects.
+        /// </summary>
+        private bool TryGetGamerIdForConnection(
+            object conn,
+            Dictionary<object, object> connectionToGamer,
+            out byte gamerId)
+        {
+            gamerId = 0;
+
+            if (conn == null || connectionToGamer == null)
+                return false;
+
+            if (!connectionToGamer.TryGetValue(conn, out object gamer) || gamer == null)
+                return false;
+
+            try
+            {
+                object value =
+                    gamer.GetType().GetProperty("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(gamer, null) ??
+                    gamer.GetType().GetField("_id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(gamer);
+
+                if (value == null)
+                    return false;
+
+                gamerId = Convert.ToByte(value);
+                return gamerId != 0;
+            }
+            catch
+            {
+                gamerId = 0;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Returns true for real DragonTypeEnum values, excluding COUNT.
+        /// </summary>
+        private static bool IsValidDragonType(byte dragonType)
+        {
+            return dragonType <= 4;
+        }
+
+        /// <summary>
+        /// Human-readable dragon type name for logs.
+        /// </summary>
+        private static string GetDragonTypeName(byte dragonType)
+        {
+            return dragonType switch
+            {
+                0 => "Fire",
+                1 => "Forest",
+                2 => "Lizard",
+                3 => "Ice",
+                4 => "Skeleton",
+                5 => "Count",
+                _ => "Unknown(" + dragonType + ")"
+            };
         }
         #endregion
 

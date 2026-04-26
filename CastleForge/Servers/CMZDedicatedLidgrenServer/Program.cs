@@ -49,6 +49,7 @@ namespace CMZDedicatedLidgrenServer
 
                 // Root folder for the current executable.
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                Log($"Config file       : {Path.Combine(baseDir, "server.properties")}");
                 ServerConfig config = ServerConfig.Load(baseDir);
 
                 // Expected sub-folder containing CastleMinerZ.exe and companion assemblies.
@@ -161,18 +162,19 @@ namespace CMZDedicatedLidgrenServer
 
                 Console.WriteLine("CMZ Dedicated Lidgren Server");
                 Console.WriteLine("----------------------------");
-                Console.WriteLine($"GameName         : {config.GameName}");
-                Console.WriteLine($"NetworkVersion   : {config.NetworkVersion}");
-                Console.WriteLine($"Bind             : {config.BindAddress}:{config.Port}");
-                Console.WriteLine($"ServerName       : {config.ServerName}");
-                Console.WriteLine($"ServerName Tokens: {{day}}, {{day00}}, {{players}}, {{maxplayers}}");
-                Console.WriteLine($"MaxPlayers       : {config.MaxPlayers}");
-                Console.WriteLine($"SaveOwnerSteamId : {config.SaveOwnerSteamId}");
-                Console.WriteLine($"WorldGuid        : {config.WorldGuid}");
-                Console.WriteLine($"WorldFolder      : {config.WorldFolder}");
-                Console.WriteLine($"WorldPath        : {config.WorldPath}");
-                Console.WriteLine($"WorldInfo file   : {Path.Combine(config.WorldPath, "world.info")}");
-                Console.WriteLine($"World loaded     : {File.Exists(Path.Combine(config.WorldPath, "world.info"))}");
+                Console.WriteLine($"GameName          : {config.GameName}");
+                Console.WriteLine($"NetworkVersion    : {config.NetworkVersion}");
+                Console.WriteLine($"Bind              : {config.BindAddress}:{config.Port}");
+                Console.WriteLine($"ServerName        : {config.ServerName}");
+                Console.WriteLine($"ServerMessage     : {config.ServerMessage}");
+                Console.WriteLine($"ServerName Tokens : {{day}}, {{day00}}, {{players}}, {{maxplayers}}");
+                Console.WriteLine($"MaxPlayers        : {config.MaxPlayers}");
+                Console.WriteLine($"SaveOwnerSteamId  : {config.SaveOwnerSteamId}");
+                Console.WriteLine($"WorldGuid         : {config.WorldGuid}");
+                Console.WriteLine($"WorldFolder       : {config.WorldFolder}");
+                Console.WriteLine($"WorldPath         : {config.WorldPath}");
+                Console.WriteLine($"WorldInfo file    : {Path.Combine(config.WorldPath, "world.info")}");
+                Console.WriteLine($"World loaded      : {File.Exists(Path.Combine(config.WorldPath, "world.info"))}");
                 Console.WriteLine();
 
                 #endregion
@@ -199,6 +201,7 @@ namespace CMZDedicatedLidgrenServer
                     bindAddress: config.BindAddress,
                     viewRadiusChunks: config.ViewDistanceChunks,
                     serverName: config.ServerName,
+                    serverMessage: config.ServerMessage,
                     gameMode: config.GameMode,
                     pvpState: config.PvpState,
                     difficulty: config.Difficulty,
@@ -212,6 +215,8 @@ namespace CMZDedicatedLidgrenServer
                 #region Start Server
 
                 server.Start();
+
+                StartConsoleCommandThread(server, Console.WriteLine);
 
                 Console.WriteLine();
                 Console.WriteLine("Server started.");
@@ -263,7 +268,7 @@ namespace CMZDedicatedLidgrenServer
                 /// - Thread.Sleep cadence is preserved exactly.
                 /// - Any update exception is logged and the loop continues.
                 /// </summary>
-                while (running)
+                while (running && server.IsRunning)
                 {
                     try
                     {
@@ -300,6 +305,107 @@ namespace CMZDedicatedLidgrenServer
 
                 #endregion
             }
+        }
+        #endregion
+
+        #region Console Commands
+
+        /// <summary>
+        /// Starts a background console command reader for runtime server commands.
+        /// </summary>
+        private static Thread StartConsoleCommandThread(LidgrenServer server, Action<string> log)
+        {
+            Thread thread = new(() =>
+            {
+                while (server.IsRunning)
+                {
+                    string line;
+
+                    try
+                    {
+                        line = Console.ReadLine();
+                    }
+                    catch
+                    {
+                        break;
+                    }
+
+                    if (line == null)
+                        break;
+
+                    HandleConsoleCommand(server, line, log);
+                }
+            })
+            {
+                IsBackground = true,
+                Name = "ConsoleCommandThread"
+            };
+            thread.Start();
+
+            return thread;
+        }
+
+        /// <summary>
+        /// Handles a single console command.
+        /// </summary>
+        private static void HandleConsoleCommand(LidgrenServer server, string line, Action<string> log)
+        {
+            string command = (line ?? string.Empty).Trim();
+
+            if (command.Length == 0)
+                return;
+
+            switch (command.ToLowerInvariant())
+            {
+                case "help":
+                case "?":
+                    log("Console commands:");
+                    log("  reload            Reload server.properties and plugin files");
+                    log("  reload properties Reload runtime-safe server.properties values");
+                    log("  reload plugins    Reload plugin config/region/announcement files");
+                    log("  stop              Stop the server");
+                    log("  help              Show this command list");
+                    break;
+
+                case "reload":
+                    server.Reload();
+                    break;
+
+                case "reload properties":
+                case "properties reload":
+                case "reload config":
+                case "config reload":
+                    server.ReloadServerProperties();
+                    break;
+
+                case "reload plugins":
+                case "plugins reload":
+                    server.ReloadPlugins();
+                    break;
+
+                case "stop":
+                case "exit":
+                case "quit":
+                    log("Console stop command received. Shutting down...");
+                    server.Stop();
+                    break;
+
+                default:
+                    log("Unknown command. Type 'help' for console commands.");
+                    break;
+            }
+        }
+        #endregion
+
+        #region Logging
+
+        /// <summary>
+        /// Writes a timestamped server message to the console.
+        /// </summary>
+        /// <param name="message">Message to write.</param>
+        private static void Log(string message)
+        {
+            Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}");
         }
         #endregion
     }

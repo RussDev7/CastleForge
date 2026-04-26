@@ -43,6 +43,75 @@ namespace CMZDedicatedSteamServer.Plugins
     }
     #endregion
 
+    #region Optional Plugin Events
+
+    /// <summary>
+    /// Optional plugin interface for player join/leave notifications.
+    /// </summary>
+    internal interface IServerPlayerEventPlugin
+    {
+        /// <summary>
+        /// Called after a player has joined and the server can send messages to them.
+        /// </summary>
+        void OnPlayerJoined(ServerPlayerEventContext context);
+
+        /// <summary>
+        /// Called after a player has disconnected.
+        /// </summary>
+        void OnPlayerLeft(ServerPlayerEventContext context);
+    }
+
+    /// <summary>
+    /// Optional plugin interface for periodic server updates.
+    /// </summary>
+    internal interface IServerTickPlugin
+    {
+        /// <summary>
+        /// Called once per server update loop.
+        /// </summary>
+        void Update(ServerPluginTickContext context);
+    }
+    #endregion
+
+    #region Player / Tick Contexts
+
+    /// <summary>
+    /// Context supplied to plugins when a player joins or leaves.
+    /// </summary>
+    internal sealed class ServerPlayerEventContext
+    {
+        public byte PlayerId { get; set; }
+
+        public string PlayerName { get; set; }
+
+        public int ConnectedPlayers { get; set; }
+
+        public int MaxPlayers { get; set; }
+
+        public Action<string> SendPrivateMessage { get; set; }
+
+        public Action<string> BroadcastMessage { get; set; }
+
+        public Action<string> Log { get; set; }
+    }
+
+    /// <summary>
+    /// Context supplied to plugins during the server update loop.
+    /// </summary>
+    internal sealed class ServerPluginTickContext
+    {
+        public DateTime UtcNow { get; set; }
+
+        public int ConnectedPlayers { get; set; }
+
+        public int MaxPlayers { get; set; }
+
+        public Action<string> BroadcastMessage { get; set; }
+
+        public Action<string> Log { get; set; }
+    }
+    #endregion
+
     #region Plugin Initialization Context
 
     /// <summary>

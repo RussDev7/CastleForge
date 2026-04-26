@@ -108,6 +108,11 @@ namespace CastleWallsMk2
             // Wire the UI controls.
             WireUi();
 
+            // Apply startup-only remembered toggles before any lobby/world join.
+            // Ghost Mode must be active before StartGame / PlayerExists runs.
+            try { IGMainUI.ApplyStartupOnlyRememberedTogglesOnce(); }
+            catch (Exception ex) { Log($"Startup-only remembered toggle restore failed: {ex.Message}."); }
+
             // Initialize host-side chat command registry defaults.
             ServerCommandRegistry.EnsureInitialized();
 
@@ -2612,7 +2617,7 @@ namespace CastleWallsMk2
                         // Change name.
                         string name = new string('\n', GenerateRandomNumberInclusive(40, 120));
                         try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
-                        try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag = name;    } catch (Exception) { }
+                        try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag    = name; } catch (Exception) { }
                     }
                 }
                 if (!enabled && Gamer.SignedInGamers[PlayerIndex.One]?.Gamertag != _ghostModeNameBackup)
@@ -2644,17 +2649,25 @@ namespace CastleWallsMk2
             {
                 _ghostModeHideNameEnabled = enabled;
 
-                // Change name.
-                string name = new string('\n', GenerateRandomNumberInclusive(40, 120));
-                try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
-                try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag    = name; } catch (Exception) { }
-
-                if (!enabled && Gamer.SignedInGamers[PlayerIndex.One]?.Gamertag != _ghostModeNameBackup)
+                // Hide-name is only allowed to mutate the gamertag while Ghost Mode is active.
+                // Otherwise the checkbox should only store the preference for the next Ghost Mode startup/apply.
+                if (!_ghostModeEnabled)
                 {
-                    // Restore name.
-                    name = _ghostModeNameBackup;
+                    SendLog($"Ghost Mode - Hide Name: {enabled}");
+                    return;
+                }
+
+                if (enabled)
+                {
+                    string name = new string('\n', GenerateRandomNumberInclusive(40, 120));
                     try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
-                    try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag    = name; } catch (Exception) { }
+                    try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag = name; } catch (Exception) { }
+                }
+                else if (Gamer.SignedInGamers[PlayerIndex.One]?.Gamertag != _ghostModeNameBackup)
+                {
+                    string name = _ghostModeNameBackup;
+                    try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
+                    try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag = name; } catch (Exception) { }
                 }
 
                 SendLog($"Ghost Mode - Hide Name: {enabled}");

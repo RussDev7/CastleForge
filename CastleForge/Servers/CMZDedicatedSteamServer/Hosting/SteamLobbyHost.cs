@@ -36,7 +36,7 @@ namespace CMZDedicatedSteamServer.Hosting
         public bool IsLobbyReady { get; private set; }
         public object HostSessionInfo { get; private set; }
 
-        public void BeginCreateLobby(string displayName)
+        public void BeginCreateLobby(string displayName, string displayMessage)
         {
             Type createSessionInfoType = ReflectEx.GetRequiredType(_commonAssembly, "DNA.Net.MatchMaking.CreateSessionInfo");
             Type joinPolicyType = ReflectEx.GetRequiredType(_commonAssembly, "DNA.Net.GamerServices.JoinGamePolicy");
@@ -44,6 +44,7 @@ namespace CMZDedicatedSteamServer.Hosting
 
             object createSessionInfo = Activator.CreateInstance(createSessionInfoType);
             ReflectEx.SetRequiredMemberValue(createSessionInfo, "Name", displayName);
+            TrySetMemberValue(createSessionInfo, "Message", displayMessage);
             ReflectEx.SetRequiredMemberValue(createSessionInfo, "PasswordProtected", !string.IsNullOrWhiteSpace(_config.Password));
             ReflectEx.SetRequiredMemberValue(createSessionInfo, "IsPublic", _config.SteamLobbyVisible);
             ReflectEx.SetRequiredMemberValue(
@@ -98,6 +99,20 @@ namespace CMZDedicatedSteamServer.Hosting
         }
 
         /// <summary>
+        /// Updates the reflected host session message before publishing lobby metadata.
+        /// </summary>
+        public void SetLobbyMessage(string displayMessage)
+        {
+            if (HostSessionInfo == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(displayMessage))
+                displayMessage = "Welcome to this CastleForge dedicated server.";
+
+            TrySetMemberValue(HostSessionInfo, "Message", displayMessage);
+        }
+
+        /// <summary>
         /// Publishes the current reflected host session metadata to the Steam lobby.
         /// </summary>
         public void RefreshLobbyMetadata()
@@ -147,5 +162,41 @@ namespace CMZDedicatedSteamServer.Hosting
             PropertyInfo indexer = sessionProperties.GetType().GetProperty("Item");
             indexer.SetValue(sessionProperties, value, [index]);
         }
+
+        #region Reflection Helpers
+
+        /// <summary>
+        /// Reflected member setter for optional session fields.
+        /// </summary>
+        private static bool TrySetMemberValue(object target, string memberName, object value)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(memberName))
+                return false;
+
+            Type type = target.GetType();
+
+            FieldInfo field = type.GetField(
+                memberName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (field != null)
+            {
+                field.SetValue(target, value);
+                return true;
+            }
+
+            PropertyInfo property = type.GetProperty(
+                memberName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(target, value, null);
+                return true;
+            }
+
+            return false;
+        }
+        #endregion
     }
 }

@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedSteamServer.Plugins.Announcements;
 using CMZDedicatedSteamServer.Plugins.RegionProtect;
 using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
@@ -47,7 +48,14 @@ namespace CMZDedicatedSteamServer.Hosting
         /// <summary>
         /// Loaded Steam dedicated server configuration.
         /// </summary>
-        private readonly SteamServerConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+        private SteamServerConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+
+        /// <summary>
+        /// Configured in-game server message/template shown in Steam session info or sent privately on join.
+        /// </summary>
+        private string _serverMessage = string.IsNullOrWhiteSpace(config?.ServerMessage)
+            ? "Welcome to this CastleForge dedicated server."
+            : config.ServerMessage;
 
         /// <summary>
         /// Logging callback supplied by the host process.
@@ -195,6 +203,7 @@ namespace CMZDedicatedSteamServer.Hosting
             _log($"NetworkVersion : {_config.NetworkVersion}");
             _log($"GamePath       : {gamePath}");
             _log($"ServerName     : {_config.ServerName}");
+            _log($"ServerMessage  : {_config.ServerMessage}");
             _log($"MaxPlayers     : {_config.MaxPlayers}");
             _log($"WorldGuid      : {_config.WorldGuid}");
             _log($"SteamAppId     : {_config.SteamAppId}");
@@ -218,7 +227,7 @@ namespace CMZDedicatedSteamServer.Hosting
                 _steam.SteamWorksInstance,
                 _log);
 
-            _lobbyHost.BeginCreateLobby(BuildServerDisplayName());
+            _lobbyHost.BeginCreateLobby(BuildServerDisplayName(), BuildServerDisplayMessage());
             _lastPublishedLobbyName = BuildServerDisplayName();
             _lastPublishedLobbyDay = GetDisplayDay();
 
@@ -227,6 +236,7 @@ namespace CMZDedicatedSteamServer.Hosting
             {
                 _plugins = new ServerPluginManager(_log);
                 _plugins.Register(new ServerRegionProtectPlugin());
+                _plugins.Register(new ServerAnnouncementsPlugin());
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {
@@ -246,6 +256,8 @@ namespace CMZDedicatedSteamServer.Hosting
                     _config.LogHostMessages);
 
                 _worldHandler.Init(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly);
+                _worldHandler.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: true);
+
                 _codec = new CmzMessageCodec(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly, _log);
                 _log($"[World] World handler initialized. WorldFolder={_config.WorldFolder}, SaveOwner={effectiveSaveOwnerSteamId}");
             }
@@ -266,6 +278,98 @@ namespace CMZDedicatedSteamServer.Hosting
         }
 
         /// <summary>
+        /// Reloads server plugin files without restarting the dedicated server.
+        /// </summary>
+        /// <remarks>
+        /// This reloads file-backed plugin state such as RegionProtect regions/config
+        /// and Announcements config. It does not reload external plugin assemblies.
+        /// </remarks>
+        public void ReloadPlugins()
+        {
+            if (_plugins == null)
+            {
+                _log("[Plugins] Reload skipped: plugin manager is not initialized.");
+                return;
+            }
+
+            _plugins.ReloadAll();
+        }
+
+        /// <summary>
+        /// Reloads server.properties runtime-safe values and plugin-backed files.
+        /// </summary>
+        public void Reload()
+        {
+            ReloadServerProperties();
+            ReloadPlugins();
+        }
+
+        /// <summary>
+        /// Reloads runtime-safe values from server.properties.
+        /// 
+        /// Notes:
+        /// - This does not recreate the Steam lobby, Steam bootstrap, loaded assemblies, or world handler.
+        /// - Startup/bootstrap values still require a restart.
+        /// </summary>
+        public void ReloadServerProperties()
+        {
+            SteamServerConfig newConfig;
+
+            try
+            {
+                newConfig = SteamServerConfig.Load(_baseDir);
+            }
+            catch (Exception ex)
+            {
+                _log("[Config] Reload failed: " + ex.Message);
+                return;
+            }
+
+            _config = newConfig;
+
+            _serverMessage = string.IsNullOrWhiteSpace(newConfig.ServerMessage)
+                ? "Welcome to this CastleForge dedicated server."
+                : newConfig.ServerMessage;
+
+            _approval?.ReloadConfig(newConfig);
+
+            string configPath = Path.Combine(_baseDir, "server.properties");
+            string resolvedMessage = BuildServerDisplayMessage();
+
+            _log($"[Config] Reloaded from: {configPath}");
+            _log($"[Config] server-message raw: '{_serverMessage}'");
+            _log($"[Config] server-message resolved: '{resolvedMessage}'");
+
+            _worldHandler?.ApplyServerMessage(resolvedMessage, saveToDisk: true);
+
+            PublishCurrentLobbyMetadata();
+
+            _log("[Config] Reloaded runtime properties from server.properties.");
+            _log("[Config] Note: Steam app id/game path/world/save-owner/port require restart.");
+        }
+
+        /// <summary>
+        /// Immediately republishes the current lobby name/message after a config reload.
+        /// </summary>
+        private void PublishCurrentLobbyMetadata()
+        {
+            if (_lobbyHost == null || !_lobbyHost.IsLobbyReady)
+                return;
+
+            string currentName = BuildServerDisplayName();
+            string currentMessage = BuildServerDisplayMessage();
+
+            _lobbyHost.SetLobbyName(currentName);
+            _lobbyHost.SetLobbyMessage(currentMessage);
+            _lobbyHost.RefreshLobbyMetadata();
+
+            _lastPublishedLobbyDay = GetDisplayDay();
+            _lastPublishedLobbyName = currentName;
+
+            _log($"[SteamLobby] Republished lobby metadata: {currentName}");
+        }
+
+        /// <summary>
         /// Pumps the server runtime once: advances time, broadcasts time updates, polls Steam, and processes packets.
         /// </summary>
         public void Update()
@@ -276,6 +380,9 @@ namespace CMZDedicatedSteamServer.Hosting
             AdvanceTimeOfDay();
             BroadcastTimeOfDayIfNeeded();
             RefreshLobbyNameIfNeeded();
+
+            // Run optional tick-based plugins, such as Announcements.
+            UpdateServerPlugins();
 
             bool anyPackets = _steam.Update();
             if (!anyPackets)
@@ -293,6 +400,66 @@ namespace CMZDedicatedSteamServer.Hosting
                     _steam.FreePacket(packet);
                 }
             }
+        }
+        #endregion
+
+        #region Server Plugin Events
+
+        /// <summary>
+        /// Updates optional tick-based server plugins such as Announcements.
+        /// </summary>
+        private void UpdateServerPlugins()
+        {
+            if (_plugins == null)
+                return;
+
+            _plugins.UpdateAll(new ServerPluginTickContext
+            {
+                UtcNow = DateTime.UtcNow,
+                ConnectedPlayers = _peers.GetConnectedPeersSnapshot().Count,
+                MaxPlayers = _config.MaxPlayers,
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Notifies optional player-event plugins that a Steam player joined.
+        /// </summary>
+        private void NotifyPluginsPlayerJoined(ulong steamId, byte playerId, string playerName)
+        {
+            if (_plugins == null)
+                return;
+
+            _plugins.NotifyPlayerJoined(new ServerPlayerEventContext
+            {
+                PlayerId = playerId,
+                PlayerName = string.IsNullOrWhiteSpace(playerName) ? "Player" + playerId : playerName,
+                ConnectedPlayers = _peers.GetConnectedPeersSnapshot().Count,
+                MaxPlayers = _config.MaxPlayers,
+                SendPrivateMessage = message => SendPrivateServerTextToSteam(steamId, playerId, message),
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Notifies optional player-event plugins that a Steam player left.
+        /// </summary>
+        private void NotifyPluginsPlayerLeft(byte playerId, string playerName)
+        {
+            if (_plugins == null)
+                return;
+
+            _plugins.NotifyPlayerLeft(new ServerPlayerEventContext
+            {
+                PlayerId = playerId,
+                PlayerName = string.IsNullOrWhiteSpace(playerName) ? "Player" + playerId : playerName,
+                ConnectedPlayers = _peers.GetConnectedPeersSnapshot().Count,
+                MaxPlayers = _config.MaxPlayers,
+                BroadcastMessage = BroadcastServerText,
+                Log = _log
+            });
         }
         #endregion
 
@@ -373,6 +540,7 @@ namespace CMZDedicatedSteamServer.Hosting
                     _approval.MarkConnected(senderSteamId, pending.Gamertag, remoteGamer);
                     BroadcastNewPeerToOthers(newPeer);
                     SendInitialTimeOfDayToJoiner(senderSteamId, gid);
+                    NotifyPluginsPlayerJoined(senderSteamId, gid, pending.Gamertag);
 
                     _log($"[StatusChanged] Peer connected. SteamID={senderSteamId}, GID={gid}");
                     _log($"[Handshake] ResponseToConnection sent to {pending.Gamertag} ({senderSteamId}) with GID {gid}.");
@@ -387,6 +555,7 @@ namespace CMZDedicatedSteamServer.Hosting
                         _connectionToGamer.Remove(senderSteamId);
                         _playerExistsPayloadById.Remove(peer.Gid);
                         _worldHandler?.OnClientDisconnected(peer.Gid);
+                        NotifyPluginsPlayerLeft(peer.Gid, peer.Gamertag);
                         BroadcastDropPeerToOthers(peer);
                         _log($"[StatusChanged] Peer disconnected. SteamID={senderSteamId}, GID={peer.Gid}");
                         return;
@@ -728,6 +897,54 @@ namespace CMZDedicatedSteamServer.Hosting
         }
         #endregion
 
+        #region Broadcast Relays
+
+        /// <summary>
+        /// Builds a server-originated BroadcastTextMessage payload.
+        /// </summary>
+        private byte[] BuildServerTextPayload(string text)
+        {
+            if (_codec == null)
+                return null;
+
+            return _codec.BuildPayload(
+                "DNA.CastleMinerZ.Net.BroadcastTextMessage",
+                msg =>
+                {
+                    _codec.SetMember(msg, "Message", text ?? string.Empty);
+                });
+        }
+
+        /// <summary>
+        /// Sends a private server text message to one Steam client.
+        /// </summary>
+        private void SendPrivateServerTextToSteam(ulong steamId, byte recipientId, string text)
+        {
+            byte[] payload = BuildServerTextPayload(text);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            SendChannel0PayloadToSteam(steamId, recipientId, 0, payload, GetReliableOrderedDeliveryMethod());
+        }
+
+        /// <summary>
+        /// Broadcasts a server text message to every connected Steam client.
+        /// </summary>
+        private void BroadcastServerText(string text)
+        {
+            byte[] payload = BuildServerTextPayload(text);
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            object delivery = GetReliableOrderedDeliveryMethod();
+
+            foreach (ConnectedSteamPeer peer in _peers.GetConnectedPeersSnapshot())
+                SendChannel0PayloadToSteam(peer.SteamId, peer.Gid, 0, payload, delivery);
+        }
+        #endregion
+
         #region PlayerExists Replay Helpers
 
         /// <summary>
@@ -929,6 +1146,29 @@ namespace CMZDedicatedSteamServer.Hosting
                 name = name.Substring(0, 64);
 
             return name;
+        }
+
+        /// <summary>
+        /// Resolves the configured server-message template into the current Steam session message.
+        /// </summary>
+        private string BuildServerDisplayMessage()
+        {
+            int day = GetDisplayDay();
+            int players = _peers?.GetConnectedPeersSnapshot().Count ?? 0;
+
+            string message = string.IsNullOrWhiteSpace(_serverMessage)
+                ? "Welcome to this CastleForge dedicated server."
+                : _serverMessage;
+
+            message = message.Replace("{day}", day.ToString());
+            message = message.Replace("{day00}", day.ToString("00"));
+            message = message.Replace("{players}", players.ToString());
+            message = message.Replace("{maxplayers}", _config.MaxPlayers.ToString());
+
+            if (message.Length > 128)
+                message = message.Substring(0, 128);
+
+            return message;
         }
 
         /// <summary>

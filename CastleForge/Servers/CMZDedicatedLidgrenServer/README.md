@@ -280,6 +280,10 @@ The server reads configuration from `server.properties` in the server root.
 ```properties
 # Server identity / compatibility
 server-name=CMZ Server
+
+# In-game/session message shown to players. This is separate from server-name.
+server-message=Welcome to this CastleForge dedicated server.
+
 game-name=CastleMinerZSteam
 network-version=4
 
@@ -366,25 +370,53 @@ DirectConnect/session display:
 Test Server | Day 12 | dsc.gg/cforge
 ```
 
+### Server message
+
+The `server-message` value controls the player-facing in-game/session message.
+
+Example:
+
+```properties
+server-message=Welcome to the CastleForge 24/7 server! Discord: dsc.gg/cforge
+```
+
+The message can also use the same runtime tokens as `server-name`:
+
+```properties
+server-message=Welcome! Current day: {day}. Players online: {players}/{maxplayers}. Discord: dsc.gg/cforge
+```
+
+Supported tokens:
+
+| Token          | Description                             | Example |
+|----------------|-----------------------------------------|---------|
+| `{day}`        | Current player-facing world day.        | `12`    |
+| `{day00}`      | Current world day padded to two digits. | `07`    |
+| `{players}`    | Current connected player count.         | `3`     |
+| `{maxplayers}` | Configured maximum player count.        | `32`    |
+
+For **CMZDedicatedLidgrenServer**, the resolved message is sent through discovery/session info so compatible clients can show it separately from the server name.
+
 ### Config fields
 
 | Key | Purpose |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| `server-name`            | Display name shown to players in discovery/session info. Supports dynamic tokens such as `{day}`, `{day00}`, `{players}`, and `{maxplayers}`.  |
-| `game-name`              | Expected CastleMiner Z network game name.                                                                                                      |
-| `network-version`        | Expected protocol/network version.                                                                                                             |
-| `game-path`              | Optional path to the CastleMiner Z binaries folder. Can be absolute or relative.                                                               |
-| `server-ip`              | Bind address. `0.0.0.0` and `any` both bind all interfaces.                                                                                    |
-| `server-port`            | Port clients connect to.                                                                                                                       |
-| `max-players`            | Maximum number of connected players.                                                                                                           |
-| `save-owner-steam-id`    | Steam ID used for save-device key derivation and storage access.                                                                               |
-| `world-guid`             | GUID of the world folder to load under `Worlds\{guid}`.                                                                                        |
-| `view-distance-chunks`   | Host-side chunk view radius used for chunk-related behavior.                                                                                   |
-| `tick-rate-hz`           | Main update loop rate in Hz.                                                                                                                   |
-| `game-mode`              | Session game mode numeric value.                                                                                                               |
-| `pvp-state`              | Session PVP numeric value.                                                                                                                     |
-| `difficulty`             | Session difficulty numeric value.                                                                                                              |
-| `allow-client-time-sync` | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior. |
+|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `server-name`            | Display name shown to players in discovery/session info. Supports dynamic tokens such as `{day}`, `{day00}`, `{players}`, and `{maxplayers}`.            |
+| `server-message` | Player-facing in-game/session message shown through discovery/session info. Supports dynamic tokens such as `{day}`, `{day00}`, `{players}`, and `{maxplayers}`. |
+| `game-name`              | Expected CastleMiner Z network game name.                                                                                                                |
+| `network-version`        | Expected protocol/network version.                                                                                                                       |
+| `game-path`              | Optional path to the CastleMiner Z binaries folder. Can be absolute or relative.                                                                         |
+| `server-ip`              | Bind address. `0.0.0.0` and `any` both bind all interfaces.                                                                                              |
+| `server-port`            | Port clients connect to.                                                                                                                                 |
+| `max-players`            | Maximum number of connected players.                                                                                                                     |
+| `save-owner-steam-id`    | Steam ID used for save-device key derivation and storage access.                                                                                         |
+| `world-guid`             | GUID of the world folder to load under `Worlds\{guid}`.                                                                                                  |
+| `view-distance-chunks`   | Host-side chunk view radius used for chunk-related behavior.                                                                                             |
+| `tick-rate-hz`           | Main update loop rate in Hz.                                                                                                                             |
+| `game-mode`              | Session game mode numeric value.                                                                                                                         |
+| `pvp-state`              | Session PVP numeric value.                                                                                                                               |
+| `difficulty`             | Session difficulty numeric value.                                                                                                                        |
+| `allow-client-time-sync` | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior.           |
 
 ---
 
@@ -478,6 +510,7 @@ Plugins run inside the dedicated server process and can inspect selected host/wo
 
 Current built-in plugin support includes:
 
+- **Announcements** private join messages and timed global messages
 - **RegionProtect** server enforcement
 - block mining / placing protection
 - explosion protection
@@ -486,6 +519,76 @@ Current built-in plugin support includes:
 - per-world plugin configuration
 
 > Server plugins are currently compiled into the dedicated server build. External plugin DLL loading may be added later.
+
+## Announcements Server Plugin
+
+The dedicated servers include a built-in **Announcements** plugin for simple server messages.
+
+Announcements can:
+
+- send a private welcome message to each joining player
+- send a timed global message to all connected players
+- wait a configurable amount of time before the first global message
+- require a minimum number of online players before global messages are sent
+- reload its config from disk using the server console `reload` command, if enabled by the host
+
+### Config location
+
+The Announcements config is stored beside each dedicated server executable:
+
+```text
+CMZDedicatedSteamServer/
+└─ Plugins/
+   └─ Announcements/
+      └─ Announcements.Config.ini
+```
+
+For the Lidgren dedicated server:
+
+```text
+CMZDedicatedLidgrenServer/
+└─ Plugins/
+   └─ Announcements/
+      └─ Announcements.Config.ini
+```
+
+### Example config
+
+```ini
+[General]
+Enabled = true
+
+[Join]
+PrivateJoinMessageEnabled = true
+PrivateJoinMessage = Welcome {player}! This is a CastleForge dedicated server. Join us: dsc.gg/cforge
+
+[Global]
+TimedGlobalMessageEnabled = true
+GlobalMessage = Need help, updates, or mods? Join the CastleForge Discord: dsc.gg/cforge
+InitialGlobalDelaySeconds = 120
+GlobalMessageIntervalMinutes = 15
+MinimumPlayersForGlobalMessage = 1
+```
+
+### Message tokens
+
+Announcement messages support simple runtime tokens:
+
+| Token          | Description                      | Example      |
+|----------------|----------------------------------|--------------|
+| `{player}`     | Joining player's display name.   | `RussDev7`   |
+| `{players}`    | Current connected player count.  | `3`          |
+| `{maxplayers}` | Configured maximum player count. | `32`         |
+| `{time}`       | Current local server time.       | `8:30 PM`    |
+| `{date}`       | Current local server date.       | `2026-04-26` |
+
+### Behavior
+
+The private join message is sent only to the joining player.
+
+The timed global message is broadcast to all connected players after `InitialGlobalDelaySeconds`, then repeats every `GlobalMessageIntervalMinutes`.
+
+Set `MinimumPlayersForGlobalMessage = 0` to allow global messages even when the server is empty, or set it to `1` or higher to only announce when players are online.
 
 ## RegionProtect Server Plugin
 
