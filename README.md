@@ -270,7 +270,7 @@ The catalog below is organized so the root README stays friendly to browse while
     <td valign="top"><a href="CastleForge/Mods/CastleWallsMk2/README.md">README</a></td>
   </tr>
   <tr>
-    <td align="center" valign="top"><a href="CastleForge/Mods/ChatTranslator/README.md"><img src="CastleForge/Mods/ChatTranslator/_Images/TranslatedLines.png" alt="ChatTranslator preview" width="280"></a><br><b>ChatTranslator</b></td>
+    <td align="center" valign="top"><a href="CastleForge/Mods/ChatTranslator/README.md"><img src="CastleForge/Mods/ChatTranslator/_Images/AutoTranslate.gif" alt="ChatTranslator preview" width="280"></a><br><b>ChatTranslator</b></td>
     <td valign="top">Live in-game chat translation for multilingual sessions. Read incoming messages in your language, translate replies before sending, and switch between manual and auto-detect workflows without leaving CastleMiner Z.</td>
     <td valign="top"><a href="CastleForge/Mods/ChatTranslator/README.md">README</a></td>
   </tr>

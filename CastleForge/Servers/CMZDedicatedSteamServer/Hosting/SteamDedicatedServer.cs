@@ -151,6 +151,18 @@ namespace CMZDedicatedSteamServer.Hosting
         /// </summary>
         private const float SecondsPerFullDay = 960f;
 
+        /// <summary>
+        /// Last player-facing day number published into the Steam lobby name.
+        /// Used so the lobby name only refreshes when the displayed day changes.
+        /// </summary>
+        private int _lastPublishedLobbyDay = -1;
+
+        /// <summary>
+        /// Last resolved Steam lobby display name.
+        /// Used to avoid spamming Steam lobby metadata updates.
+        /// </summary>
+        private string _lastPublishedLobbyName = string.Empty;
+
         #endregion
 
         #endregion
@@ -206,7 +218,9 @@ namespace CMZDedicatedSteamServer.Hosting
                 _steam.SteamWorksInstance,
                 _log);
 
-            _lobbyHost.BeginCreateLobby();
+            _lobbyHost.BeginCreateLobby(BuildServerDisplayName());
+            _lastPublishedLobbyName = BuildServerDisplayName();
+            _lastPublishedLobbyDay = GetDisplayDay();
 
             ulong effectiveSaveOwnerSteamId = _config.SaveOwnerSteamId != 0UL ? _config.SaveOwnerSteamId : _steam.SteamPlayerId;
             if (!string.IsNullOrWhiteSpace(_config.WorldFolder) && effectiveSaveOwnerSteamId != 0UL)
@@ -261,6 +275,7 @@ namespace CMZDedicatedSteamServer.Hosting
 
             AdvanceTimeOfDay();
             BroadcastTimeOfDayIfNeeded();
+            RefreshLobbyNameIfNeeded();
 
             bool anyPackets = _steam.Update();
             if (!anyPackets)
@@ -873,6 +888,73 @@ namespace CMZDedicatedSteamServer.Hosting
                 return;
 
             SendChannel0PayloadToSteam(joinerSteamId, joinerGid, 0, todPayload, GetReliableOrderedDeliveryMethod());
+        }
+
+        /// <summary>
+        /// Returns the player-facing day number used in the server name template.
+        /// </summary>
+        /// <remarks>
+        /// The server's internal _timeOfDay starts near 0.41 on the first day, so the
+        /// player-facing day should normally be floor(value) + 1.
+        /// </remarks>
+        private int GetDisplayDay()
+        {
+            return Math.Max(1, (int)Math.Floor(_timeOfDay) + 1);
+        }
+
+        /// <summary>
+        /// Resolves the configured server-name template into the current lobby display name.
+        /// </summary>
+        /// <remarks>
+        /// Supported tokens:
+        /// {day}        = player-facing day number
+        /// {day00}      = day number padded to two digits
+        /// {players}    = connected player count
+        /// {maxplayers} = configured max players
+        /// </remarks>
+        private string BuildServerDisplayName()
+        {
+            int day = GetDisplayDay();
+            int players = _peers?.GetConnectedPeersSnapshot().Count ?? 0;
+
+            string name = _config.ServerName ?? "CMZ Steam Server";
+
+            name = name.Replace("{day}", day.ToString());
+            name = name.Replace("{day00}", day.ToString("00"));
+            name = name.Replace("{players}", players.ToString());
+            name = name.Replace("{maxplayers}", _config.MaxPlayers.ToString());
+
+            // Keep the lobby name reasonably safe for Steam/browser display.
+            if (name.Length > 64)
+                name = name.Substring(0, 64);
+
+            return name;
+        }
+
+        /// <summary>
+        /// Refreshes Steam lobby metadata when the resolved server display name changes.
+        /// </summary>
+        private void RefreshLobbyNameIfNeeded()
+        {
+            if (_lobbyHost == null || !_lobbyHost.IsLobbyReady)
+                return;
+
+            int currentDay = GetDisplayDay();
+            string currentName = BuildServerDisplayName();
+
+            if (currentDay == _lastPublishedLobbyDay &&
+                string.Equals(currentName, _lastPublishedLobbyName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lobbyHost.SetLobbyName(currentName);
+            _lobbyHost.RefreshLobbyMetadata();
+
+            _lastPublishedLobbyDay = currentDay;
+            _lastPublishedLobbyName = currentName;
+
+            _log($"[SteamLobby] Updated lobby name: {currentName}");
         }
         #endregion
 

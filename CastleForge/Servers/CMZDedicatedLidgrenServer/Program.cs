@@ -165,6 +165,7 @@ namespace CMZDedicatedLidgrenServer
                 Console.WriteLine($"NetworkVersion   : {config.NetworkVersion}");
                 Console.WriteLine($"Bind             : {config.BindAddress}:{config.Port}");
                 Console.WriteLine($"ServerName       : {config.ServerName}");
+                Console.WriteLine($"ServerName Tokens: {{day}}, {{day00}}, {{players}}, {{maxplayers}}");
                 Console.WriteLine($"MaxPlayers       : {config.MaxPlayers}");
                 Console.WriteLine($"SaveOwnerSteamId : {config.SaveOwnerSteamId}");
                 Console.WriteLine($"WorldGuid        : {config.WorldGuid}");

@@ -224,6 +224,17 @@ namespace CMZDedicatedLidgrenServer
         // 0..1 is a full day.
         private const float SecondsPerFullDay = 960f; // match GameScreen.LengthOfDay = 16 minutes
 
+        /// <summary>
+        /// Last resolved display name logged by the server.
+        /// Used only to avoid repeated log spam when the day has not changed.
+        /// </summary>
+        private string _lastResolvedServerName = string.Empty;
+
+        /// <summary>
+        /// Last player-facing day number logged by the server.
+        /// </summary>
+        private int _lastResolvedServerNameDay = -1;
+
         #endregion
 
         #region Feilds: Gameplay sync settings
@@ -556,6 +567,10 @@ namespace CMZDedicatedLidgrenServer
 
                 _timeOfDay += deltaSeconds / SecondsPerFullDay;
 
+                // This is mainly for logs. Actual Lidgren discovery/server-info packets
+                // resolve the name at the moment they are sent.
+                LogServerDisplayNameIfNeeded();
+
                 if ((now - _lastTimeOfDaySend).TotalSeconds >= 5.0)
                 {
                     _lastTimeOfDaySend = now;
@@ -663,7 +678,9 @@ namespace CMZDedicatedLidgrenServer
                 }
 
                 var requestId = (int)(request.GetType().GetField("RequestID", BindingFlags.Public | BindingFlags.Instance)?.GetValue(request) ?? 0);
-                _log("Discovery request from " + senderEndPoint + " RequestID=" + requestId + ", sending response (server name='" + _serverName + "')");
+                string displayName = BuildServerDisplayName();
+
+                _log("Discovery request from " + senderEndPoint + " RequestID=" + requestId + ", sending response (server name='" + displayName + "')");
 
                 var resultCodeType = _commonAsm.GetType("DNA.Net.GamerServices.NetworkSession+ResultCode");
                 var succeeded = Enum.ToObject(resultCodeType, 0); // Succeeded = 0
@@ -688,8 +705,8 @@ namespace CMZDedicatedLidgrenServer
                 responseType.GetField("SessionID", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, 1);
                 responseType.GetField("CurrentPlayers", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _allGamers.Count);
                 responseType.GetField("MaxPlayers", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _maxPlayers);
-                responseType.GetField("Message", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _serverName);
-                responseType.GetField("HostUsername", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, _serverName);
+                responseType.GetField("Message", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, displayName);
+                responseType.GetField("HostUsername", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, displayName);
                 responseType.GetField("PasswordProtected", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, false);
                 responseType.GetField("SessionProperties", BindingFlags.Public | BindingFlags.Instance)?.SetValue(response, sessionProps);
 
@@ -1073,15 +1090,18 @@ namespace CMZDedicatedLidgrenServer
             // Channel-1 type 255 = CMZ server info.
             try
             {
+                string displayName = BuildServerDisplayName();
+
                 var serverInfoMsg = peerType.GetMethod("CreateMessage", Type.EmptyTypes).Invoke(_netPeer, null);
                 var siType = serverInfoMsg.GetType();
                 siType.GetMethod("Write", [typeof(byte)]).Invoke(serverInfoMsg, [(byte)255]);
-                siType.GetMethod("Write", [typeof(string)]).Invoke(serverInfoMsg, [_serverName ?? ""]);
+                siType.GetMethod("Write", [typeof(string)]).Invoke(serverInfoMsg, [displayName]);
                 siType.GetMethod("Write", [typeof(int)]).Invoke(serverInfoMsg, [_maxPlayers]);
                 siType.GetMethod("Write", [typeof(int)]).Invoke(serverInfoMsg, [_gameMode]);
                 siType.GetMethod("Write", [typeof(int)]).Invoke(serverInfoMsg, [_difficulty]);
                 sendMsgMethod?.Invoke(senderConn, [serverInfoMsg, reliableOrdered, 1]);
-                _log("Sent server info to client: name='" + _serverName + "' max=" + _maxPlayers + " gameMode=" + _gameMode + " difficulty=" + _difficulty);
+
+                _log("Sent server info to client: name='" + displayName + "' max=" + _maxPlayers + " gameMode=" + _gameMode + " difficulty=" + _difficulty);
             }
             catch (Exception ex)
             {
@@ -1607,6 +1627,70 @@ namespace CMZDedicatedLidgrenServer
                 _log("TryApplyIncomingTimeOfDay failed: " + ex.GetType().FullName + ": " + ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Returns the player-facing day number used in the server-name template.
+        /// </summary>
+        /// <remarks>
+        /// The internal time value starts around 0.41 on the first day.
+        /// floor(_timeOfDay) + 1 makes that display as Day 1.
+        /// </remarks>
+        private int GetDisplayDay()
+        {
+            return Math.Max(1, (int)Math.Floor(_timeOfDay) + 1);
+        }
+
+        /// <summary>
+        /// Resolves the configured server-name template into the current display name.
+        /// </summary>
+        /// <remarks>
+        /// Supported tokens:
+        /// {day}        = player-facing day number
+        /// {day00}      = day number padded to two digits
+        /// {players}    = current connected player count
+        /// {maxplayers} = configured max players
+        /// </remarks>
+        private string BuildServerDisplayName()
+        {
+            int day = GetDisplayDay();
+
+            string name = string.IsNullOrWhiteSpace(_serverName)
+                ? "CMZ Server"
+                : _serverName;
+
+            name = name.Replace("{day}", day.ToString());
+            name = name.Replace("{day00}", day.ToString("00"));
+            name = name.Replace("{players}", _allGamers.Count.ToString());
+            name = name.Replace("{maxplayers}", _maxPlayers.ToString());
+
+            // Keep it safe for old UI/session list display.
+            if (name.Length > 64)
+                name = name.Substring(0, 64);
+
+            return name;
+        }
+
+        /// <summary>
+        /// Logs when the resolved server display name changes.
+        /// Lidgren does not need active lobby metadata refreshing; discovery responses
+        /// and join-time server-info packets resolve the name when sent.
+        /// </summary>
+        private void LogServerDisplayNameIfNeeded()
+        {
+            int day = GetDisplayDay();
+            string name = BuildServerDisplayName();
+
+            if (day == _lastResolvedServerNameDay &&
+                string.Equals(name, _lastResolvedServerName, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastResolvedServerNameDay = day;
+            _lastResolvedServerName = name;
+
+            _log("[Server] Display name resolved to: " + name);
         }
         #endregion
 

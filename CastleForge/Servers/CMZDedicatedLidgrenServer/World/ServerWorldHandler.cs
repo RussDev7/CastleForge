@@ -94,6 +94,11 @@ namespace CMZDedicatedLidgrenServer
         /// <summary>Reflected FileSystemSaveDevice instance.</summary>
         private object _saveDevice;
 
+        /// <summary>
+        /// Protects WorldInfo mutation, save, and send serialization.
+        /// </summary>
+        private readonly object _worldInfoLock = new();
+
         #endregion
 
         #region Message registry
@@ -466,7 +471,35 @@ namespace CMZDedicatedLidgrenServer
 
                 if (!ok || worldInfo == null)
                 {
-                    _log("ServerWorld: FAILED to load world.info via SaveDevice.");
+                    _log("ServerWorld: FAILED to load world.info via SaveDevice. Trying world.info.bak...");
+
+                    string backupPath = Path.Combine(_worldFolder, "world.info.bak");
+
+                    object backupWorldInfo = null;
+                    bool backupOk = InvokeSaveDeviceLoad(backupPath, stream =>
+                    {
+                        using var reader = new BinaryReader(stream);
+
+                        var ctor = worldInfoType.GetConstructor(
+                            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                            null,
+                            [typeof(BinaryReader)],
+                            null);
+
+                        if (ctor == null)
+                            throw new InvalidOperationException("WorldInfo(BinaryReader) constructor not found.");
+
+                        backupWorldInfo = ctor.Invoke([reader]);
+                    });
+
+                    if (!backupOk || backupWorldInfo == null)
+                    {
+                        _log("ServerWorld: FAILED to load world.info.bak.");
+                        return;
+                    }
+
+                    _worldInfo = backupWorldInfo;
+                    _log("ServerWorld: Recovered WorldInfo from world.info.bak.");
                     return;
                 }
 
@@ -800,6 +833,13 @@ namespace CMZDedicatedLidgrenServer
                     writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
 
                     sendToClient(senderConn, ms.ToArray(), senderId);
+
+                    _log(
+                        $"ServerWorld: Sent WorldInfo to player {senderId}. " +
+                        $"Bytes={ms.Length}, " +
+                        $"Crates={GetWorldInfoDictionaryCount("Crates")}, " +
+                        $"Doors={GetWorldInfoDictionaryCount("Doors")}, " +
+                        $"Spawners={GetWorldInfoDictionaryCount("Spawners")}");
                 }
 
                 _log("ServerWorld: Sent WorldInfo to player " + senderId);
@@ -823,7 +863,7 @@ namespace CMZDedicatedLidgrenServer
                 if (!_typeToMessageId.TryGetValue("DNA.CastleMinerZ.Net.ProvideDeltaListMessage", out byte msgId))
                     return;
 
-                int[] chunkIds = BuildChunkIdListAroundSpawn();
+                int[] chunkIds = BuildChunkIdListFromSavedFiles();
 
                 using (var ms = new MemoryStream())
                 using (var writer = new BinaryWriter(ms))
@@ -1408,8 +1448,14 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
-        /// Applies an ItemCrateMessage directly against the reflected WorldInfo instance.
+        /// Applies a crate inventory update to WorldInfo without allowing bogus/null crate
+        /// messages to create permanent empty crate entries in world.info.
         /// </summary>
+        /// <remarks>
+        /// Vanilla ItemCrateMessage.Apply(WorldInfo) calls GetCrate(location, true), which means
+        /// even a null-item update can create a new Crate entry. On a public dedicated server,
+        /// that can bloat or poison world.info until new clients fail during WorldInfoMessage load.
+        /// </remarks>
         private void HandleItemCrateMessage(byte senderId, byte[] data)
         {
             try
@@ -1418,28 +1464,89 @@ namespace CMZDedicatedLidgrenServer
                     return;
 
                 object msg = DeserializeGameMessage("DNA.CastleMinerZ.Net.ItemCrateMessage", data);
+                object location = GetMemberValue(msg, "Location");
+                object item = GetMemberValue(msg, "Item");
+                object crates = GetMemberValue(_worldInfo, "Crates");
 
-                MethodInfo applyMethod = msg.GetType().GetMethod(
-                    "Apply",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    [_worldInfo.GetType()],
-                    null);
+                if (location == null || crates == null)
+                    return;
 
-                if (applyMethod == null)
+                int index;
+                try
                 {
-                    _log("ServerWorld: ItemCrateMessage.Apply(WorldInfo) not found.");
+                    index = Convert.ToInt32(GetMemberValue(msg, "Index") ?? -1);
+                }
+                catch
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: invalid index value.");
                     return;
                 }
 
-                applyMethod.Invoke(msg, [_worldInfo]);
+                if (index < 0 || index >= 32)
+                {
+                    _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: index {index} is outside 0-31.");
+                    return;
+                }
 
-                // Important:
-                // ItemCrateMessage.Apply(...) only mutates the in-memory WorldInfo.Crates dictionary.
-                // SaveWorldInfo() is required so the updated crate inventory is written back to world.info.
-                SaveWorldInfo();
+                lock (_worldInfoLock)
+                {
+                    bool existed = TryDictionaryTryGetValue(crates, location, out object crate) && crate != null;
 
-                _log($"[HostMsg] ItemCrateMessage from player {senderId} applied and saved to world.");
+                    // Do not let a null-item packet create a brand-new empty crate entry.
+                    if (!existed && item == null)
+                    {
+                        _log($"[HostMsg] Ignored null ItemCrateMessage from player {senderId} for non-existing crate at {FormatIntVector3(location)}.");
+                        return;
+                    }
+
+                    // If this is a brand-new crate entry, make sure the location is actually a saved crate/container block.
+                    // This prevents clients from creating fake crate records anywhere in world.info.
+                    if (!existed && !IsSavedCrateBlockLocation(location))
+                    {
+                        _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: no saved crate block at {FormatIntVector3(location)}.");
+                        return;
+                    }
+
+                    if (!existed)
+                    {
+                        MethodInfo getCrateMethod = _worldInfo.GetType().GetMethod(
+                            "GetCrate",
+                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                            null,
+                            [location.GetType(), typeof(bool)],
+                            null);
+
+                        if (getCrateMethod == null)
+                        {
+                            _log("ServerWorld: WorldInfo.GetCrate(IntVector3, bool) not found.");
+                            return;
+                        }
+
+                        crate = getCrateMethod.Invoke(_worldInfo, [location, true]);
+                    }
+
+                    if (crate == null)
+                        return;
+
+                    if (GetMemberValue(crate, "Inventory") is not Array inventory || index >= inventory.Length)
+                    {
+                        _log($"[HostMsg] Rejected ItemCrateMessage from player {senderId}: crate inventory was invalid.");
+                        return;
+                    }
+
+                    inventory.SetValue(item, index);
+
+                    // If the crate has no stored items left, remove it from world.info.
+                    // The actual crate block is stored in chunk delta files, not in this crate inventory dictionary.
+                    if (IsCrateEmpty(crate))
+                        DictionaryRemove(crates, location);
+
+                    int pruned = PruneEmptyCrates();
+
+                    SaveWorldInfo();
+
+                    _log($"[HostMsg] ItemCrateMessage from player {senderId} saved. Location={FormatIntVector3(location)}, Index={index}, PrunedEmptyCrates={pruned}");
+                }
             }
             catch (Exception ex)
             {
@@ -1465,17 +1572,20 @@ namespace CMZDedicatedLidgrenServer
                 if (crates == null || location == null)
                     return;
 
-                if (TryDictionaryTryGetValue(crates, location, out object crate) && crate != null)
+                lock (_worldInfoLock)
                 {
-                    TrySetMemberValue(crate, "Destroyed", true);
-                    TrySetMemberValue(crate, "_destroyed", true);
-                    DictionaryRemove(crates, location);
+                    if (TryDictionaryTryGetValue(crates, location, out object crate) && crate != null)
+                    {
+                        TrySetMemberValue(crate, "Destroyed", true);
+                        TrySetMemberValue(crate, "_destroyed", true);
+                        DictionaryRemove(crates, location);
 
-                    // Important:
-                    // Destroying a crate mutates WorldInfo.Crates, so save world.info immediately.
-                    SaveWorldInfo();
+                        // Important:
+                        // Destroying a crate mutates WorldInfo.Crates, so save world.info immediately.
+                        SaveWorldInfo();
 
-                    _log($"[HostMsg] DestroyCrateMessage from player {senderId} at {FormatIntVector3(location)} saved to world.");
+                        _log($"[HostMsg] DestroyCrateMessage from player {senderId} at {FormatIntVector3(location)} saved to world.");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1736,13 +1846,9 @@ namespace CMZDedicatedLidgrenServer
         }
 
         /// <summary>
-        /// Persists the current reflected WorldInfo directly to the active world.info file.
+        /// Persists the current reflected WorldInfo using a temp file + validation + backup replacement.
+        /// This prevents a crash/interruption from leaving the live world.info half-written.
         /// </summary>
-        /// <remarks>
-        /// Do not call WorldInfo.SaveToStorage(...) here because vanilla SaveToStorage depends on
-        /// WorldInfo.SavePath, and SavePath can return null when OwnerGamerTag is null. It also
-        /// swallows exceptions, which makes dedicated-server save failures hard to diagnose.
-        /// </remarks>
         private void SaveWorldInfo()
         {
             if (_worldInfo == null || _saveDevice == null)
@@ -1751,47 +1857,63 @@ namespace CMZDedicatedLidgrenServer
                 return;
             }
 
-            try
+            lock (_worldInfoLock)
             {
-                MethodInfo saveMethod = _worldInfo.GetType().GetMethod(
-                    "Save",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    null,
-                    [typeof(BinaryWriter)],
-                    null);
-
-                if (saveMethod == null)
+                try
                 {
-                    _log("ServerWorld: WorldInfo.Save(BinaryWriter) not found.");
-                    return;
+                    MethodInfo saveMethod = _worldInfo.GetType().GetMethod(
+                        "Save",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        null,
+                        [typeof(BinaryWriter)],
+                        null);
+
+                    if (saveMethod == null)
+                    {
+                        _log("ServerWorld: WorldInfo.Save(BinaryWriter) not found.");
+                        return;
+                    }
+
+                    // Remove empty crate inventory entries before saving.
+                    int pruned = PruneEmptyCrates();
+
+                    string liveRelativePath = Path.Combine(_worldFolder, "world.info");
+                    string tempRelativePath = Path.Combine(_worldFolder, "world.info.tmp");
+                    string backupRelativePath = Path.Combine(_worldFolder, "world.info.bak");
+
+                    bool ok = InvokeSaveDeviceSave(tempRelativePath, stream =>
+                    {
+                        using var writer = new BinaryWriter(stream);
+                        saveMethod.Invoke(_worldInfo, [writer]);
+                        writer.Flush();
+                    });
+
+                    if (!ok)
+                    {
+                        _log("ServerWorld: FAILED to save temporary world.info.");
+                        return;
+                    }
+
+                    if (!TryValidateWorldInfoFile(tempRelativePath))
+                    {
+                        _log("ServerWorld: Temporary world.info failed validation. Live world.info was not replaced.");
+                        TryDeletePhysicalSaveFile(tempRelativePath);
+                        return;
+                    }
+
+                    ReplacePhysicalSaveFile(tempRelativePath, liveRelativePath, backupRelativePath);
+
+                    _log($"ServerWorld: world.info saved atomically. PrunedEmptyCrates={pruned}");
                 }
-
-                string relativePath = Path.Combine(_worldFolder, "world.info");
-
-                bool ok = InvokeSaveDeviceSave(relativePath, stream =>
+                catch (Exception ex)
                 {
-                    using var writer = new BinaryWriter(stream);
-                    saveMethod.Invoke(_worldInfo, [writer]);
-                    writer.Flush();
-                });
+                    Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
+                        ? tie.InnerException
+                        : ex;
 
-                if (ok)
-                {
-                    _log("ServerWorld: world.info saved.");
+                    _log("ServerWorld SaveWorldInfo: " + inner.GetType().FullName + ": " + inner.Message);
+                    _log(inner.StackTrace ?? "(no stack trace)");
                 }
-                else
-                {
-                    _log("ServerWorld: FAILED to save world.info.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Exception inner = ex is TargetInvocationException tie && tie.InnerException != null
-                    ? tie.InnerException
-                    : ex;
-
-                _log("ServerWorld SaveWorldInfo: " + inner.GetType().FullName + ": " + inner.Message);
-                _log(inner.StackTrace ?? "(no stack trace)");
             }
         }
 
@@ -1852,6 +1974,30 @@ namespace CMZDedicatedLidgrenServer
                 return fi.GetValue(instance);
 
             return null;
+        }
+
+        /// <summary>
+        /// Returns the Count value from a reflected WorldInfo dictionary-like member.
+        /// Used for logging WorldInfo size/debug details before sending it to clients.
+        /// </summary>
+        private int GetWorldInfoDictionaryCount(string memberName)
+        {
+            try
+            {
+                if (_worldInfo == null)
+                    return -1;
+
+                object dictionary = GetMemberValue(_worldInfo, memberName);
+                if (dictionary == null)
+                    return -1;
+
+                object count = GetMemberValue(dictionary, "Count");
+                return Convert.ToInt32(count);
+            }
+            catch
+            {
+                return -1;
+            }
         }
 
         /// <summary>
@@ -2223,6 +2369,193 @@ namespace CMZDedicatedLidgrenServer
         }
         #endregion
 
+        #region WorldInfo / Crate Helpers
+
+        /// <summary>
+        /// Validates that a saved world.info file can be loaded back through the same SaveDevice path.
+        /// </summary>
+        private bool TryValidateWorldInfoFile(string relativePath)
+        {
+            try
+            {
+                Type worldInfoType = _gameAsm?.GetType("DNA.CastleMinerZ.WorldInfo");
+                if (worldInfoType == null)
+                    return false;
+
+                object testWorldInfo = null;
+
+                bool ok = InvokeSaveDeviceLoad(relativePath, stream =>
+                {
+                    using var reader = new BinaryReader(stream);
+
+                    ConstructorInfo ctor = worldInfoType.GetConstructor(
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                        null,
+                        [typeof(BinaryReader)],
+                        null) ?? throw new InvalidOperationException("WorldInfo(BinaryReader) constructor not found.");
+                    testWorldInfo = ctor.Invoke([reader]);
+                });
+
+                return ok && testWorldInfo != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Atomically replaces the live save file with a validated temporary save file.
+        /// </summary>
+        private void ReplacePhysicalSaveFile(string tempRelativePath, string liveRelativePath, string backupRelativePath)
+        {
+            string tempPath = Path.GetFullPath(Path.Combine(_saveRoot, tempRelativePath));
+            string livePath = Path.GetFullPath(Path.Combine(_saveRoot, liveRelativePath));
+            string backupPath = Path.GetFullPath(Path.Combine(_saveRoot, backupRelativePath));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(livePath));
+
+            if (!File.Exists(tempPath))
+                throw new FileNotFoundException("Temporary world.info save was missing.", tempPath);
+
+            if (File.Exists(livePath))
+            {
+                if (File.Exists(backupPath))
+                    File.Delete(backupPath);
+
+                File.Replace(tempPath, livePath, backupPath, true);
+            }
+            else
+            {
+                File.Move(tempPath, livePath);
+            }
+        }
+
+        /// <summary>
+        /// Best-effort cleanup for failed temporary save files.
+        /// </summary>
+        private void TryDeletePhysicalSaveFile(string relativePath)
+        {
+            try
+            {
+                string path = Path.GetFullPath(Path.Combine(_saveRoot, relativePath));
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+            }
+        }
+        #endregion
+
+        #region WorldInfo Crate Helpers
+
+        /// <summary>
+        /// Returns true when the reflected crate has no stored inventory items.
+        /// </summary>
+        private bool IsCrateEmpty(object crate)
+        {
+            if (crate == null)
+                return true;
+
+            if (GetMemberValue(crate, "Inventory") is not Array inventory)
+                return false;
+
+            for (int i = 0; i < inventory.Length; i++)
+            {
+                if (inventory.GetValue(i) != null)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Removes empty crate inventory records from WorldInfo.Crates.
+        /// The crate block itself is stored in terrain chunk deltas, so empty inventory records do not need to persist.
+        /// </summary>
+        private int PruneEmptyCrates()
+        {
+            if (_worldInfo == null)
+                return 0;
+
+            object crates = GetMemberValue(_worldInfo, "Crates");
+            if (crates is not System.Collections.IEnumerable enumerable)
+                return 0;
+
+            List<object> removeKeys = [];
+
+            foreach (object entry in enumerable)
+            {
+                object key = GetMemberValue(entry, "Key");
+                object crate = GetMemberValue(entry, "Value");
+
+                if (key != null && IsCrateEmpty(crate))
+                    removeKeys.Add(key);
+            }
+
+            for (int i = 0; i < removeKeys.Count; i++)
+                DictionaryRemove(crates, removeKeys[i]);
+
+            return removeKeys.Count;
+        }
+
+        /// <summary>
+        /// Returns true if a crate inventory record is being created for a location that is actually saved as a crate/container block.
+        /// </summary>
+        private bool IsSavedCrateBlockLocation(object location)
+        {
+            if (!TryGetIntVector3(location, out int x, out int y, out int z))
+                return false;
+
+            if (!TryGetSavedBlockType(x, y, z, out int blockTypeValue))
+                return false;
+
+            return IsCrateLikeBlockType(blockTypeValue);
+        }
+
+        /// <summary>
+        /// Vanilla BlockTypeEnum values:
+        /// Crate = 33,
+        /// CrateStone = 49,
+        /// CrateCopper = 50,
+        /// CrateIron = 51,
+        /// CrateGold = 52,
+        /// CrateDiamond = 53,
+        /// CrateBloodstone = 54,
+        /// CrateSafe = 55.
+        /// </summary>
+        private static bool IsCrateLikeBlockType(int blockTypeValue)
+        {
+            return blockTypeValue == 33 || (blockTypeValue >= 49 && blockTypeValue <= 55);
+        }
+
+        /// <summary>
+        /// Reads X/Y/Z from a reflected DNA.IntVector3 value.
+        /// </summary>
+        private bool TryGetIntVector3(object value, out int x, out int y, out int z)
+        {
+            x = 0;
+            y = 0;
+            z = 0;
+
+            if (value == null)
+                return false;
+
+            try
+            {
+                x = Convert.ToInt32(GetMemberValue(value, "X"));
+                y = Convert.ToInt32(GetMemberValue(value, "Y"));
+                z = Convert.ToInt32(GetMemberValue(value, "Z"));
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        #endregion
+
         #endregion
 
         #region Pending pickups
@@ -2251,6 +2584,86 @@ namespace CMZDedicatedLidgrenServer
         #endregion
 
         #region Chunk List / Chunk Load
+
+        /// <summary>
+        /// Builds the remote chunk-id list from every saved chunk delta file in the active world folder.
+        /// This mirrors vanilla ChunkCache.LoadChunkList() behavior better than using a spawn-centered radius.
+        /// </summary>
+        /// <remarks>
+        /// The client uses this list to decide which chunks should be requested from the host.
+        /// If a saved chunk is not in this list, the client may fall back to procedural world-gen when traveling there.
+        /// </remarks>
+        private int[] BuildChunkIdListFromSavedFiles()
+        {
+            var chunkIds = new HashSet<int>();
+
+            try
+            {
+                string absoluteWorldDir = Path.Combine(_saveRoot, _worldFolder);
+
+                if (!Directory.Exists(absoluteWorldDir))
+                {
+                    _log("ServerWorld: World directory not found while building chunk list: " + absoluteWorldDir);
+                    return [];
+                }
+
+                foreach (string file in Directory.GetFiles(absoluteWorldDir, "X*Y*Z*.dat", SearchOption.TopDirectoryOnly))
+                {
+                    string name = Path.GetFileNameWithoutExtension(file);
+
+                    if (!TryParseChunkFileName(name, out int chunkX, out int chunkY, out int chunkZ))
+                        continue;
+
+                    // CastleMiner Z terrain chunk files should normally be Y -64.
+                    // Keep this guard so inventory/other future .dat files do not get advertised as terrain.
+                    if (chunkY != TerrainChunkMinY)
+                        continue;
+
+                    int chunkXIndex = chunkX / 16;
+                    int chunkZIndex = chunkZ / 16;
+
+                    chunkIds.Add(PackChunkId2D(chunkXIndex, chunkZIndex));
+                }
+
+                _log("ServerWorld: Built saved chunk list from disk. Count=" + chunkIds.Count);
+            }
+            catch (Exception ex)
+            {
+                _log("ServerWorld BuildChunkIdListFromSavedFiles: " + ex.GetType().FullName + ": " + ex.Message);
+            }
+
+            return [.. chunkIds];
+        }
+
+        /// <summary>
+        /// Parses vanilla CastleMiner Z terrain chunk filenames:
+        /// X{chunkX}Y{chunkY}Z{chunkZ}.dat
+        /// Example: X800Y-64Z0.dat
+        /// </summary>
+        private static bool TryParseChunkFileName(string fileNameWithoutExtension, out int chunkX, out int chunkY, out int chunkZ)
+        {
+            chunkX = 0;
+            chunkY = 0;
+            chunkZ = 0;
+
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+                return false;
+
+            int xIndex = fileNameWithoutExtension.IndexOf('X');
+            int yIndex = fileNameWithoutExtension.IndexOf('Y');
+            int zIndex = fileNameWithoutExtension.IndexOf('Z');
+
+            if (xIndex != 0 || yIndex <= xIndex || zIndex <= yIndex)
+                return false;
+
+            string xText = fileNameWithoutExtension.Substring(xIndex + 1, yIndex - xIndex - 1);
+            string yText = fileNameWithoutExtension.Substring(yIndex + 1, zIndex - yIndex - 1);
+            string zText = fileNameWithoutExtension.Substring(zIndex + 1);
+
+            return int.TryParse(xText, out chunkX)
+                && int.TryParse(yText, out chunkY)
+                && int.TryParse(zText, out chunkZ);
+        }
 
         /// <summary>
         /// Builds a 2D list of chunk ids around the spawn hint using a ring-based order.

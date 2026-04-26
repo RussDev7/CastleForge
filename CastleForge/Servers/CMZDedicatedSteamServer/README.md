@@ -207,11 +207,68 @@ infinite-resource-mode=false
 allow-client-time-sync=false
 ```
 
+### Dynamic server-name tokens
+
+The `server-name` value supports simple runtime tokens. These tokens are replaced by the dedicated server before the name is shown to players.
+
+Example:
+
+```properties
+server-name=Test Server | Day {day}
+````
+
+This may appear in the server browser or join/session info as:
+
+```text
+Test Server | Day 12
+```
+
+Supported tokens:
+
+| Token          | Description                             | Example |
+| -------------- | --------------------------------------- | ------- |
+| `{day}`        | Current player-facing world day.        | `12`    |
+| `{day00}`      | Current world day padded to two digits. | `07`    |
+| `{players}`    | Current connected player count.         | `3`     |
+| `{maxplayers}` | Configured maximum player count.        | `32`    |
+
+Example with player count:
+
+```properties
+server-name=Test Server | Day {day00} | {players}/{maxplayers}
+```
+
+Example output:
+
+```text
+Test Server | Day 07 | 3/32
+```
+
+Notes:
+
+* Tokens are optional. A normal static name such as `server-name=CMZ Server` still works.
+* The day value is controlled by the dedicated server's authoritative time progression.
+* Very long names may be shortened before being published to the server/session browser.
+
+For **CMZDedicatedSteamServer**, the resolved name is published through the Steam-hosted lobby/session metadata. The raw template remains in `server.properties`, but players see the resolved display name.
+
+Example:
+
+```properties
+server-name=Test Server | Day {day}
+```
+
+Steam browser/session display:
+
+```text
+Test Server | Day 12
+```
+
 ### Config fields
 
 | Key | Purpose |
 |-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `server-name`                 | Display name shown in Steam-hosted session/server info.                                                                                          |
+| `server-name`                 | Display name shown in Steam-hosted session/server info. Supports dynamic tokens such as `{day}`, `{day00}`, `{players}`, and `{maxplayers}`.     |
 | `game-name`                   | Expected CastleMiner Z network game name.                                                                                                        |
 | `network-version`             | Expected protocol/network version.                                                                                                               |
 | `server-ip`                   | Local IP used by the host process.                                                                                                               |

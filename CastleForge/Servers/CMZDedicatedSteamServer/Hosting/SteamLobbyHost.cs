@@ -36,14 +36,14 @@ namespace CMZDedicatedSteamServer.Hosting
         public bool IsLobbyReady { get; private set; }
         public object HostSessionInfo { get; private set; }
 
-        public void BeginCreateLobby()
+        public void BeginCreateLobby(string displayName)
         {
             Type createSessionInfoType = ReflectEx.GetRequiredType(_commonAssembly, "DNA.Net.MatchMaking.CreateSessionInfo");
             Type joinPolicyType = ReflectEx.GetRequiredType(_commonAssembly, "DNA.Net.GamerServices.JoinGamePolicy");
             Type lobbyCreatedDelegateType = ReflectEx.GetRequiredType(_steamAssembly, "DNA.Distribution.Steam.LobbyCreatedDelegate");
 
             object createSessionInfo = Activator.CreateInstance(createSessionInfoType);
-            ReflectEx.SetRequiredMemberValue(createSessionInfo, "Name", _config.ServerName);
+            ReflectEx.SetRequiredMemberValue(createSessionInfo, "Name", displayName);
             ReflectEx.SetRequiredMemberValue(createSessionInfo, "PasswordProtected", !string.IsNullOrWhiteSpace(_config.Password));
             ReflectEx.SetRequiredMemberValue(createSessionInfo, "IsPublic", _config.SteamLobbyVisible);
             ReflectEx.SetRequiredMemberValue(
@@ -83,6 +83,23 @@ namespace CMZDedicatedSteamServer.Hosting
             _log("[SteamLobby] Lobby creation requested.");
         }
 
+        /// <summary>
+        /// Updates the reflected host session name before publishing lobby metadata.
+        /// </summary>
+        public void SetLobbyName(string displayName)
+        {
+            if (HostSessionInfo == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(displayName))
+                displayName = _config.ServerName;
+
+            ReflectEx.SetRequiredMemberValue(HostSessionInfo, "Name", displayName);
+        }
+
+        /// <summary>
+        /// Publishes the current reflected host session metadata to the Steam lobby.
+        /// </summary>
         public void RefreshLobbyMetadata()
         {
             if (HostSessionInfo == null)
@@ -91,7 +108,6 @@ namespace CMZDedicatedSteamServer.Hosting
             MethodInfo updateLobby = ReflectEx.GetRequiredMethod(_steamWorks.GetType(), "UpdateHostLobbyData", 1);
             updateLobby.Invoke(_steamWorks, [HostSessionInfo]);
         }
-
 
         private Delegate BuildLobbyCreatedCallback(Type lobbyCreatedDelegateType)
         {
