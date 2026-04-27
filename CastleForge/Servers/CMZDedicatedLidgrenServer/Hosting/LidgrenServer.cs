@@ -378,7 +378,9 @@ namespace CMZDedicatedLidgrenServer
                     _log,
                     _viewRadiusChunks,
                     _plugins,
-                    _logHostMessages);
+                    _logHostMessages,
+                    _gameMode,
+                    () => _timeOfDay);
             }
         }
         #endregion

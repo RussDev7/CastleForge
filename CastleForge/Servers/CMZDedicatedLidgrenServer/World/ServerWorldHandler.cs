@@ -45,7 +45,9 @@ namespace CMZDedicatedLidgrenServer
         Action<string> log,
         int viewRadiusChunks = 8,
         ServerPluginManager plugins = null,
-        bool logHostMessages = false)
+        bool logHostMessages = false,
+        int gameMode = 1,
+        Func<float> getTimeOfDay = null)
     {
         #region Fields
 
@@ -231,6 +233,42 @@ namespace CMZDedicatedLidgrenServer
         /// request another one in the same packet burst.
         /// </summary>
         private DateTime _nextDragonAllowedUtc = DateTime.MinValue;
+
+        #endregion
+
+        #region Endurance Auto Restart State
+
+        /// <summary>
+        /// Vanilla game mode id for Endurance.
+        /// </summary>
+        private const int EnduranceGameMode = 0;
+
+        /// <summary>
+        /// Configured server game mode.
+        /// Endurance is 0 in vanilla GameModeTypes.
+        /// </summary>
+        private readonly int _gameMode = gameMode;
+
+        /// <summary>
+        /// Reads the server's authoritative day/time value so auto-restart can restore time after RestartLevelMessage.
+        /// </summary>
+        private readonly Func<float> _getTimeOfDay = getTimeOfDay;
+
+        /// <summary>
+        /// Tracks the last known dead/alive state for real connected players by gamer id.
+        /// Player id 0 is the synthetic dedicated-server host and should not count.
+        /// </summary>
+        private readonly Dictionary<byte, bool> _enduranceDeadByPlayerId = [];
+
+        /// <summary>
+        /// Prevents repeatedly sending RestartLevelMessage while clients are still reporting dead before the respawn applies.
+        /// </summary>
+        private bool _enduranceRestartSentForCurrentWipe;
+
+        /// <summary>
+        /// Small cooldown guard for repeated dead packets or packet bursts.
+        /// </summary>
+        private DateTime _nextAllowedEnduranceAutoRestartUtc = DateTime.MinValue;
 
         #endregion
 
@@ -751,6 +789,15 @@ namespace CMZDedicatedLidgrenServer
                 return false;
             }
 
+            if (typeName == "DNA.CastleMinerZ.Net.PlayerUpdateMessage")
+            {
+                HandleEndurancePlayerUpdateMessage(senderId, data, connections, connectionToGamer, sendToClient);
+
+                // Do not consume this packet.
+                // It still needs to relay normally so other clients see movement/death state.
+                return false;
+            }
+
             if (typeName == "DNA.CastleMinerZ.Net.AlterBlockMessage")
             {
                 // Give server plugins first chance to consume protected block edits.
@@ -864,6 +911,9 @@ namespace CMZDedicatedLidgrenServer
         public void OnClientDisconnected(byte playerId)
         {
             _chunkRequestLoggedForPlayer.Remove(playerId);
+
+            _enduranceDeadByPlayerId.Remove(playerId);
+            _enduranceRestartSentForCurrentWipe = false;
 
             lock (_dragonStateLock)
             {
@@ -3340,6 +3390,240 @@ namespace CMZDedicatedLidgrenServer
                 5 => "Count",
                 _ => "Unknown(" + dragonType + ")"
             };
+        }
+        #endregion
+
+        #region Endurance Auto Restart
+
+        /// <summary>
+        /// Tracks player dead/alive state in Endurance and automatically restarts/respawns
+        /// when every real connected player is dead.
+        /// </summary>
+        /// <remarks>
+        /// Dedicated servers do not have a real local HUD player to click "Restart",
+        /// so dead clients can otherwise remain stuck on "Waiting for host to restart".
+        ///
+        /// This intentionally ignores player id 0 because that is the synthetic server host.
+        /// </remarks>
+        private void HandleEndurancePlayerUpdateMessage(
+            byte senderId,
+            byte[] data,
+            object connections,
+            Dictionary<object, object> connectionToGamer,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (_gameMode != EnduranceGameMode)
+                return;
+
+            if (senderId == 0)
+                return;
+
+            if (!TryReadPlayerUpdateDeadFlag(data, out bool isDead))
+                return;
+
+            _enduranceDeadByPlayerId[senderId] = isDead;
+
+            // Once any real player reports alive again, arm the next possible wipe restart.
+            if (!isDead)
+            {
+                _enduranceRestartSentForCurrentWipe = false;
+                return;
+            }
+
+            TryAutoRestartEnduranceIfAllPlayersDead(connections, connectionToGamer, sendToClient);
+        }
+
+        /// <summary>
+        /// Reads the Dead bit from a vanilla PlayerUpdateMessage payload.
+        /// Packet layout:
+        /// [messageId][Vector3 position: 12 bytes][torso byte][rotation byte][flags byte]...
+        /// Dead is bit 2 in the flags byte.
+        /// </summary>
+        private static bool TryReadPlayerUpdateDeadFlag(byte[] data, out bool isDead)
+        {
+            isDead = false;
+
+            if (data == null || data.Length <= 15)
+                return false;
+
+            byte flags = data[15];
+            isDead = (flags & 2) != 0;
+            return true;
+        }
+
+        /// <summary>
+        /// Sends a server-originated RestartLevelMessage once all real connected players are dead.
+        /// Then sends the current authoritative server time so clients do not stay reset to day 1.
+        /// </summary>
+        private void TryAutoRestartEnduranceIfAllPlayersDead(
+            object connections,
+            Dictionary<object, object> connectionToGamer,
+            Action<object, byte[], byte> sendToClient)
+        {
+            if (_enduranceRestartSentForCurrentWipe)
+                return;
+
+            DateTime now = DateTime.UtcNow;
+            if (now < _nextAllowedEnduranceAutoRestartUtc)
+                return;
+
+            if (!AreAllRealConnectedPlayersDead(connectionToGamer, out int connectedPlayers))
+                return;
+
+            byte[] restartPayload = BuildRestartLevelPayload();
+            if (restartPayload == null || restartPayload.Length < 2)
+            {
+                _log("[Endurance] Auto restart skipped: failed to build RestartLevelMessage payload.");
+                return;
+            }
+
+            int restartSent = BroadcastServerPayloadToConnections(
+                restartPayload,
+                connections,
+                connectionToGamer,
+                sendToClient);
+
+            if (restartSent <= 0)
+            {
+                _log("[Endurance] Auto restart skipped: no connected players were sent RestartLevelMessage.");
+                return;
+            }
+
+            // RestartLevelMessage resets clients to Day=0.4 locally.
+            // Send authoritative server time immediately after so the dedicated server does not lose day progress.
+            if (_getTimeOfDay != null)
+            {
+                float currentTime = _getTimeOfDay();
+
+                if (!float.IsNaN(currentTime) && !float.IsInfinity(currentTime) && currentTime >= 0f)
+                {
+                    byte[] timePayload = BuildTimeOfDayPayload(currentTime);
+
+                    if (timePayload != null && timePayload.Length >= 2)
+                    {
+                        BroadcastServerPayloadToConnections(
+                            timePayload,
+                            connections,
+                            connectionToGamer,
+                            sendToClient);
+                    }
+                }
+            }
+
+            _enduranceRestartSentForCurrentWipe = true;
+            _nextAllowedEnduranceAutoRestartUtc = now.AddSeconds(5);
+
+            _log($"[Endurance] All {connectedPlayers} connected player(s) are dead. Sent automatic RestartLevelMessage.");
+        }
+
+        /// <summary>
+        /// Returns true only when every real connected player has reported Dead=true.
+        /// Player id 0 is ignored because it is the synthetic dedicated-server host.
+        /// </summary>
+        private bool AreAllRealConnectedPlayersDead(
+            Dictionary<object, object> connectionToGamer,
+            out int connectedPlayers)
+        {
+            connectedPlayers = 0;
+
+            if (connectionToGamer == null || connectionToGamer.Count == 0)
+                return false;
+
+            var connectedIds = new HashSet<byte>();
+
+            foreach (object gamer in connectionToGamer.Values)
+            {
+                if (!TryGetGamerId(gamer, out byte gamerId))
+                    continue;
+
+                if (gamerId == 0)
+                    continue;
+
+                connectedIds.Add(gamerId);
+            }
+
+            // Remove stale entries for players who disconnected.
+            var staleIds = new List<byte>();
+            foreach (byte trackedId in _enduranceDeadByPlayerId.Keys)
+            {
+                if (!connectedIds.Contains(trackedId))
+                    staleIds.Add(trackedId);
+            }
+
+            foreach (byte staleId in staleIds)
+                _enduranceDeadByPlayerId.Remove(staleId);
+
+            connectedPlayers = connectedIds.Count;
+
+            if (connectedPlayers <= 0)
+                return false;
+
+            foreach (byte gamerId in connectedIds)
+            {
+                if (!_enduranceDeadByPlayerId.TryGetValue(gamerId, out bool isDead))
+                    return false;
+
+                if (!isDead)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Reads a reflected NetworkGamer/RemoteGamer id.
+        /// </summary>
+        private static bool TryGetGamerId(object gamer, out byte gamerId)
+        {
+            gamerId = 0;
+
+            if (gamer == null)
+                return false;
+
+            try
+            {
+                object value =
+                    gamer.GetType().GetProperty("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(gamer, null) ??
+                    gamer.GetType().GetField("_id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(gamer);
+
+                if (value == null)
+                    return false;
+
+                gamerId = Convert.ToByte(value);
+                return true;
+            }
+            catch
+            {
+                gamerId = 0;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Builds an empty vanilla RestartLevelMessage payload:
+        /// [message id][checksum].
+        /// </summary>
+        private byte[] BuildRestartLevelPayload()
+        {
+            const string fullTypeName = "DNA.CastleMinerZ.Net.RestartLevelMessage";
+
+            if (_typeToMessageId == null)
+                return null;
+
+            if (!_typeToMessageId.TryGetValue(fullTypeName, out byte msgId))
+                return null;
+
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+
+            writer.Write(msgId);
+            writer.Flush();
+
+            int len = (int)ms.Position;
+            writer.Write(XorChecksum(ms.GetBuffer(), 0, len));
+            writer.Flush();
+
+            return ms.ToArray();
         }
         #endregion
 

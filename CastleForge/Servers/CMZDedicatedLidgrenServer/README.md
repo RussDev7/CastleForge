@@ -32,7 +32,9 @@ That gives you a cleaner setup for:
 - Loads **`world.info`**, chunk delta files, and saved player inventories.
 - Handles **chunk requests, inventory retrieval/storage, terrain edits, and pickup flow**.
 - Keeps **authoritative day/time progression** on the host.
+- Automatically respawns all players in Endurance mode when every real connected player is dead, preventing dedicated servers from getting stuck on "Waiting for host to restart"
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
+- Automatically clears Endurance-mode death wipes by sending a server-side restart/respawn when all real connected players are dead.
 - Includes a packaged **server layout** with sample config, sample world data, and a default inventory template.
 
 ---
@@ -197,6 +199,29 @@ When left disabled, the server remains authoritative for time progression.
 </details>
 
 <details>
+<summary><strong>Endurance Auto-Respawn</strong></summary>
+
+When the server is running with:
+
+```properties
+game-mode=0
+```
+
+the dedicated host automatically handles full-party death wipes.
+
+In vanilla Endurance, dead players wait for the original host to restart the level. Since a dedicated server does not have a real local host player pressing restart, this could leave clients stuck on:
+
+```text
+Waiting for host to restart
+```
+
+CMZDedicatedLidgrenServer avoids that by tracking real connected player death state and sending the vanilla restart/respawn message once every real connected player is dead.
+
+This is a server-side recovery behavior, not a full server restart. The process stays running, world data stays loaded, and authoritative time/day progression continues from the server.
+
+</details>
+
+<details>
 <summary><strong>Player Presence Recovery</strong></summary>
 
 The host caches `PlayerExistsMessage` payloads and can replay them to newly joined clients.
@@ -323,7 +348,7 @@ Example:
 
 ```properties
 server-name=Test Server | Day {day}
-````
+```
 
 This may appear in the server browser or join/session info as:
 
@@ -416,7 +441,7 @@ For **CMZDedicatedLidgrenServer**, the resolved message is sent through discover
 | `world-guid`             | GUID of the world folder to load under `Worlds\{guid}`.                                                                                                  |
 | `view-distance-chunks`   | Host-side chunk view radius used for chunk-related behavior.                                                                                             |
 | `tick-rate-hz`           | Main update loop rate in Hz.                                                                                                                             |
-| `game-mode`              | Session game mode numeric value.                                                                                                                         |
+| `game-mode`              | Session game mode value. `0` is Endurance; when all real connected players are dead, the dedicated server automatically sends a respawn/restart message. |
 | `pvp-state`              | Session PVP numeric value.                                                                                                                               |
 | `difficulty`             | Session difficulty numeric value.                                                                                                                        |
 | `allow-client-time-sync` | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior.           |
@@ -625,7 +650,7 @@ CMZDedicatedLidgrenServer/
       └─ Worlds/
          └─ <world-guid>/
             └─ RegionProtect.Regions.ini
-````
+```
 
 For the Steam dedicated server:
 

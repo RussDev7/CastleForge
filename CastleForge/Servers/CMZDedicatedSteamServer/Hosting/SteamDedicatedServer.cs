@@ -282,7 +282,9 @@ namespace CMZDedicatedSteamServer.Hosting
                     _log,
                     _config.ViewDistanceChunks,
                     _plugins,
-                    _config.LogHostMessages);
+                    _config.LogHostMessages,
+                    _config.GameMode,
+                    () => _timeOfDay);
 
                 _worldHandler.Init(_assemblyLoader.GameAssembly, _assemblyLoader.CommonAssembly);
                 _worldHandler.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);

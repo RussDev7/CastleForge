@@ -32,6 +32,7 @@ That gives you a cleaner setup for:
 - Loads Harmony from a local **`Libs`** folder.
 - Uses packaged **server.properties**, world, and inventory layout similar to the Lidgren server package.
 - Does **not** open the playable CastleMiner Z game window.
+- Automatically respawns all players in Endurance mode when every real connected player is dead, preventing dedicated servers from getting stuck on "Waiting for host to restart"
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
 - Can be launched from **DirectConnect** using **Launch Dedicated (Steam)**.
 
@@ -72,6 +73,20 @@ The runtime package is designed to feel familiar if you already use the Lidgren 
 
 ### 6) Pairs well with DirectConnect
 While Steam clients can use the online browser flow, **DirectConnect** also provides a convenient **Launch Dedicated (Steam)** button that closes the game first and then starts the Steam dedicated server from the frontend.
+
+### 7) Endurance auto-respawn
+
+When the Steam dedicated server is running with:
+
+```properties
+game-mode=0
+```
+
+it automatically handles Endurance death wipes.
+
+Vanilla CastleMiner Z expects the original host player to restart the level after all players die. On a dedicated server, there is no real playable host pressing restart, so dead clients could remain stuck waiting for the host.
+
+CMZDedicatedSteamServer tracks real connected player death state and sends the vanilla restart/respawn message when every real connected player is dead. The dedicated server process does not restart, and the server continues using its authoritative world time.
 
 ---
 
@@ -220,7 +235,7 @@ Example:
 
 ```properties
 server-name=Test Server | Day {day}
-````
+```
 
 This may appear in the server browser or join/session info as:
 
@@ -322,7 +337,7 @@ For **CMZDedicatedSteamServer**, the resolved message is published through the S
 | `world-guid`                  | GUID of the world folder to load under `Worlds\{guid}`.                                                                                                             |
 | `view-distance-chunks`        | Host-side chunk view radius used for chunk-related behavior.                                                                                                        |
 | `tick-rate-hz`                | Main update loop rate in Hz.                                                                                                                                        |
-| `game-mode`                   | Session game mode numeric value.                                                                                                                                    |
+| `game-mode`                   | Session game mode value. `0` is Endurance; when all real connected players are dead, the dedicated server automatically sends a respawn/restart message.            |
 | `pvp-state`                   | Session PVP numeric value.                                                                                                                                          |
 | `difficulty`                  | Session difficulty numeric value.                                                                                                                                   |
 | `infinite-resource-mode`      | Enables/disables infinite-resource session metadata.                                                                                                                |
@@ -504,7 +519,7 @@ CMZDedicatedLidgrenServer/
       └─ Worlds/
          └─ <world-guid>/
             └─ RegionProtect.Regions.ini
-````
+```
 
 For the Steam dedicated server:
 
@@ -688,6 +703,24 @@ DNA.Common.dll
 DNA.Steam.dll
 steam_api.dll
 ```
+
+</details>
+
+<details>
+<summary><strong>Players are stuck on "Waiting for host to restart" in Endurance</strong></summary>
+
+Make sure the server build includes Endurance auto-respawn support.
+
+This situation can happen in `game-mode=0` because vanilla CastleMiner Z expects the original playable host to press restart after everyone dies. Dedicated servers do not have a real host player on that screen.
+
+With Endurance auto-respawn support, the server tracks real connected players and automatically sends the restart/respawn message when all real players are dead.
+
+If players still remain stuck, check that:
+
+- the server is actually running `game-mode=0`
+- players are fully connected and sending normal player update packets
+- the server log shows the Endurance auto-restart message
+- the client and server are using compatible builds
 
 </details>
 
