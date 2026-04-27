@@ -252,5 +252,27 @@ namespace CMZDedicatedLidgrenServer.Plugins
             }
         }
         #endregion
+
+        #region Shutdown Events
+
+        /// <summary>
+        /// Notifies optional shutdown-aware plugins that the server is stopping.
+        /// </summary>
+        public void NotifyServerStopping(ServerPluginShutdownContext context)
+        {
+            foreach (IServerWorldPlugin plugin in _plugins)
+            {
+                try
+                {
+                    if (plugin is IServerShutdownPlugin shutdownPlugin)
+                        shutdownPlugin.OnServerStopping(context);
+                }
+                catch (Exception ex)
+                {
+                    _log($"[Plugins] {plugin.Name} failed during server shutdown: {ex.Message}.");
+                }
+            }
+        }
+        #endregion
     }
 }

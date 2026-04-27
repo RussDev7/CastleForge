@@ -6,6 +6,7 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using CMZDedicatedLidgrenServer.Plugins.Announcements;
 using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
+using CMZDedicatedLidgrenServer.Plugins.RememberTime;
 using CMZDedicatedLidgrenServer.Plugins.FloodGuard;
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
@@ -335,6 +336,7 @@ namespace CMZDedicatedLidgrenServer
                 _plugins.Register(new ServerFloodGuardPlugin());
                 _plugins.Register(new ServerRegionProtectPlugin());
                 _plugins.Register(new ServerAnnouncementsPlugin());
+                _plugins.Register(new ServerRememberTimePlugin());
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {
@@ -346,7 +348,26 @@ namespace CMZDedicatedLidgrenServer
                     // Use only the final world folder name/GUID instead of "Worlds\GUID".
                     WorldGuid = GetWorldKey(_worldFolder),
 
-                    Log = _log
+                    Log = _log,
+
+                    GetTimeOfDay = () => _timeOfDay,
+
+                    SetTimeOfDay = value =>
+                    {
+                        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
+                            return;
+
+                        _timeOfDay = value;
+
+                        // Prevent the next tick from adding a large elapsed-time jump after restore.
+                        _lastTimeOfDayAdvance = DateTime.UtcNow;
+
+                        // Force clients to receive the restored time quickly.
+                        _lastTimeOfDaySend = DateTime.MinValue;
+
+                        // Force name/day logging to refresh.
+                        _lastResolvedServerNameDay = -1;
+                    },
                 });
 
                 _worldHandler = new ServerWorldHandler(
@@ -474,6 +495,13 @@ namespace CMZDedicatedLidgrenServer
         /// </summary>
         public void Stop()
         {
+            _plugins?.NotifyServerStopping(new ServerPluginShutdownContext
+            {
+                UtcNow = DateTime.UtcNow,
+                TimeOfDay = _timeOfDay,
+                Log = _log
+            });
+
             _running = false;
             if (_netPeer != null)
             {
@@ -719,6 +747,7 @@ namespace CMZDedicatedLidgrenServer
                 UtcNow = DateTime.UtcNow,
                 ConnectedPlayers = _allGamers.Count,
                 MaxPlayers = _maxPlayers,
+                TimeOfDay = _timeOfDay,
                 BroadcastMessage = BroadcastServerText,
                 Log = _log
             });

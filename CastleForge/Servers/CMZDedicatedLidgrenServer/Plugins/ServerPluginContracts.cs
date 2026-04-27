@@ -87,6 +87,17 @@ namespace CMZDedicatedLidgrenServer.Plugins
         /// <returns>True to consume/drop the packet; otherwise false.</returns>
         bool BeforeInboundPacket(ServerInboundPacketContext context);
     }
+
+    /// <summary>
+    /// Optional plugin interface for final save/cleanup when the server is stopping.
+    /// </summary>
+    internal interface IServerShutdownPlugin
+    {
+        /// <summary>
+        /// Called when the server is stopping so file-backed plugins can flush final state.
+        /// </summary>
+        void OnServerStopping(ServerPluginShutdownContext context);
+    }
     #endregion
 
     #region Player / Tick Contexts
@@ -123,6 +134,24 @@ namespace CMZDedicatedLidgrenServer.Plugins
         public int MaxPlayers { get; set; }
 
         public Action<string> BroadcastMessage { get; set; }
+
+        public Action<string> Log { get; set; }
+
+        /// <summary>
+        /// Current authoritative server day/time value.
+        /// The integer part controls day progression; the fractional part controls visual time-of-day.
+        /// </summary>
+        public float TimeOfDay { get; set; }
+    }
+
+    /// <summary>
+    /// Context supplied to plugins when the server is stopping.
+    /// </summary>
+    internal sealed class ServerPluginShutdownContext
+    {
+        public DateTime UtcNow { get; set; }
+
+        public float TimeOfDay { get; set; }
 
         public Action<string> Log { get; set; }
     }
@@ -220,6 +249,18 @@ namespace CMZDedicatedLidgrenServer.Plugins
         /// Server log callback.
         /// </summary>
         public Action<string> Log { get; set; }
+
+        /// <summary>
+        /// Reads the server's current authoritative day/time value.
+        /// The integer part controls the visible day number; the fractional part controls visual time-of-day.
+        /// </summary>
+        public Func<float> GetTimeOfDay { get; set; }
+
+        /// <summary>
+        /// Sets the server's authoritative day/time value.
+        /// Used by plugins that restore persisted world time on startup.
+        /// </summary>
+        public Action<float> SetTimeOfDay { get; set; }
     }
     #endregion
 

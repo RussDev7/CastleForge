@@ -6,6 +6,7 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using CMZDedicatedSteamServer.Plugins.Announcements;
 using CMZDedicatedSteamServer.Plugins.RegionProtect;
+using CMZDedicatedSteamServer.Plugins.RememberTime;
 using CMZDedicatedSteamServer.Plugins.FloodGuard;
 using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
@@ -246,12 +247,31 @@ namespace CMZDedicatedSteamServer.Hosting
                 _plugins.Register(new ServerFloodGuardPlugin());
                 _plugins.Register(new ServerRegionProtectPlugin());
                 _plugins.Register(new ServerAnnouncementsPlugin());
+                _plugins.Register(new ServerRememberTimePlugin());
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {
                     BaseDir = _baseDir,
                     WorldGuid = _config.WorldGuid,
-                    Log = _log
+                    Log = _log,
+                    GetTimeOfDay = () => _timeOfDay,
+
+                    SetTimeOfDay = value =>
+                    {
+                        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
+                            return;
+
+                        _timeOfDay = value;
+
+                        // Prevent the next tick from adding a large elapsed-time jump after restore.
+                        _lastTimeOfDayAdvance = DateTime.UtcNow;
+
+                        // Force connected clients to receive restored time quickly.
+                        _lastTimeOfDaySend = DateTime.MinValue;
+
+                        // Force lobby metadata to refresh with the restored day.
+                        _lastPublishedLobbyDay = -1;
+                    },
                 });
 
                 _worldHandler = new ServerWorldHandler(
@@ -283,6 +303,13 @@ namespace CMZDedicatedSteamServer.Hosting
         /// </summary>
         public void Stop()
         {
+            _plugins?.NotifyServerStopping(new ServerPluginShutdownContext
+            {
+                UtcNow = DateTime.UtcNow,
+                TimeOfDay = _timeOfDay,
+                Log = _log
+            });
+
             _running = false;
         }
 
@@ -428,6 +455,7 @@ namespace CMZDedicatedSteamServer.Hosting
                 UtcNow = DateTime.UtcNow,
                 ConnectedPlayers = _peers.GetConnectedPeersSnapshot().Count,
                 MaxPlayers = _config.MaxPlayers,
+                TimeOfDay = _timeOfDay,
                 BroadcastMessage = BroadcastServerText,
                 Log = _log
             });
