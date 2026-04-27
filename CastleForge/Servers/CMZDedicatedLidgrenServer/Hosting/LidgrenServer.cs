@@ -6,6 +6,7 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using CMZDedicatedLidgrenServer.Plugins.Announcements;
 using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
+using CMZDedicatedLidgrenServer.Plugins.FloodGuard;
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
@@ -331,6 +332,7 @@ namespace CMZDedicatedLidgrenServer
                 _saveOwnerSteamId != 0UL)
             {
                 _plugins = new ServerPluginManager(_log);
+                _plugins.Register(new ServerFloodGuardPlugin());
                 _plugins.Register(new ServerRegionProtectPlugin());
                 _plugins.Register(new ServerAnnouncementsPlugin());
 
@@ -1573,6 +1575,10 @@ namespace CMZDedicatedLidgrenServer
                     if (payloadBytes == null)
                         return;
 
+                    object senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+                    if (ShouldDropInboundPacket(senderId, recipientId, 1, 3, payloadBytes, senderConn, 0UL))
+                        return;
+
                     var recipientConn = FindConnectionByPlayerId(recipientId);
                     if (recipientConn == null)
                         return;
@@ -1599,6 +1605,10 @@ namespace CMZDedicatedLidgrenServer
                     if (payloadBytes == null || payloadBytes.Length < 1)
                         return;
 
+                    var senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+                    if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderConn, 0UL))
+                        return;
+
                     if (_logNetworkPackets)
                     {
                         _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
@@ -1611,7 +1621,6 @@ namespace CMZDedicatedLidgrenServer
                         _lastTimeOfDaySend = DateTime.MinValue;
                     }
 
-                    var senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
                     if (senderConn == null)
                         return;
 
@@ -1700,6 +1709,10 @@ namespace CMZDedicatedLidgrenServer
             if (data == null || data.Length < 1)
                 return;
 
+            object senderConn0 = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+            if (ShouldDropInboundPacket(senderId0, recipientId, 0, 0, data, senderConn0, 0UL))
+                return;
+
             if (_logNetworkPackets)
             {
                 _log($"CH0 recv: recipient={recipientId}, sender={senderId0}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
@@ -1711,8 +1724,7 @@ namespace CMZDedicatedLidgrenServer
             // give authoritative handlers a chance BEFORE relay.
             if (recipientId == 0)
             {
-                var senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
-                if (senderConn != null)
+                if (senderConn0 != null)
                 {
                     void SendToClient(object conn, byte[] payload, byte recipient)
                     {
@@ -1720,7 +1732,7 @@ namespace CMZDedicatedLidgrenServer
                     }
 
                     if (_worldHandler != null &&
-                        _worldHandler.TryHandleHostMessage(recipientId, senderId0, data, senderConn, liveConnections, _connectionToGamer, SendToClient))
+                        _worldHandler.TryHandleHostMessage(recipientId, senderId0, data, senderConn0, liveConnections, _connectionToGamer, SendToClient))
                     {
                         return;
                     }
@@ -1749,6 +1761,64 @@ namespace CMZDedicatedLidgrenServer
                 SendChannel0PayloadToClient(conn, gamerId, senderId0, data, reliableOrdered);
             }
             #endregion
+        }
+
+        /// <summary>
+        /// Runs packet-level guard plugins before normal host handling or relay.
+        /// </summary>
+        private bool ShouldDropInboundPacket(
+            byte senderId,
+            byte recipientId,
+            int channel,
+            int wrappedOpcode,
+            byte[] payload,
+            object senderConn,
+            ulong remoteId)
+        {
+            if (_plugins == null)
+                return false;
+
+            string senderName = ResolvePacketSenderName(senderId, senderConn);
+
+            return _plugins.BeforeInboundPacket(new ServerInboundPacketContext
+            {
+                SenderId = senderId,
+                SenderName = senderName,
+                RemoteId = remoteId,
+                RecipientId = recipientId,
+                Channel = channel,
+                WrappedOpcode = wrappedOpcode,
+                Payload = payload,
+                PayloadLength = payload == null ? 0 : payload.Length,
+                UtcNow = DateTime.UtcNow,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Resolves the best known gamertag for a packet sender.
+        /// </summary>
+        private string ResolvePacketSenderName(byte senderId, object senderConn)
+        {
+            try
+            {
+                if (senderConn != null &&
+                    _connectionToGamer.TryGetValue(senderConn, out object gamer) &&
+                    gamer != null)
+                {
+                    object name = gamer.GetType()
+                        .GetProperty("Gamertag", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        ?.GetValue(gamer, null);
+
+                    if (name != null && !string.IsNullOrWhiteSpace(Convert.ToString(name)))
+                        return Convert.ToString(name);
+                }
+            }
+            catch
+            {
+            }
+
+            return "Player" + senderId;
         }
 
         private string DescribeInnerPayload(byte[] payload)

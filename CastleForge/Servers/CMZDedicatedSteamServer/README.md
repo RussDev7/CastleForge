@@ -392,6 +392,7 @@ Plugins run inside the dedicated server process and can inspect selected host/wo
 Current built-in plugin support includes:
 
 - **Announcements** private join messages and timed global messages
+- **FloodGuard** malicious packet spam protection
 - **RegionProtect** server enforcement
 - block mining / placing protection
 - explosion protection
@@ -565,6 +566,36 @@ In some cases, the client may briefly show a block as broken or changed. The ser
 * Commands such as `/regionpos` and `/regioncreate` are not currently part of the dedicated server plugin.
 * Regions are currently edited manually through the `.ini` files.
 * Explosion restoration can visually desync on the attacking client, but protected explosion damage is not saved to the server.
+
+## FloodGuard plugin
+
+FloodGuard is a lightweight packet-rate guard for the dedicated server. It watches inbound gameplay packets before normal host/world handling or peer relay. When a sender exceeds the configured rate, the server temporarily blackholes that sender's packets instead of relaying or applying them.
+
+Config is created on first run at:
+
+```text
+Plugins\FloodGuard\FloodGuard.Config.ini
+```
+
+Default config:
+
+```ini
+[General]
+Enabled = true
+PerSenderMaxPacketsPerSec = 120
+BlackholeMs = 3000
+
+[AllowedPlayers]
+# Comma-separated allow list. Entries may be player names, Player1-style fallback names,
+# numeric GIDs, or SteamIDs on the Steam server.
+AllowedPlayers =
+```
+
+Notes:
+- `PerSenderMaxPacketsPerSec` is counted per sender/GID over a one-second window.
+- `BlackholeMs` is how long to silently drop packets after the sender exceeds the limit.
+- `AllowedPlayers` bypasses FloodGuard for trusted players or test accounts.
+
 
 ---
 

@@ -163,6 +163,33 @@ namespace CMZDedicatedSteamServer.Plugins
         }
         #endregion
 
+        #region Inbound Packet Dispatch
+
+        /// <summary>
+        /// Gives packet-level guard plugins a chance to consume an inbound packet before host handling or relay.
+        /// </summary>
+        public bool BeforeInboundPacket(ServerInboundPacketContext context)
+        {
+            foreach (IServerWorldPlugin plugin in _plugins)
+            {
+                try
+                {
+                    if (plugin is IServerInboundPacketPlugin packetPlugin &&
+                        packetPlugin.BeforeInboundPacket(context))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log($"[Plugins] {plugin.Name} failed while inspecting inbound packet: {ex.Message}.");
+                }
+            }
+
+            return false;
+        }
+        #endregion
+
         #region Player Events
 
         /// <summary>

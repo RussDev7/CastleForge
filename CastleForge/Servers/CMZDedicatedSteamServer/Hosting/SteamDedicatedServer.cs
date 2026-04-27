@@ -6,6 +6,7 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using CMZDedicatedSteamServer.Plugins.Announcements;
 using CMZDedicatedSteamServer.Plugins.RegionProtect;
+using CMZDedicatedSteamServer.Plugins.FloodGuard;
 using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
 using CMZDedicatedSteamServer.Config;
@@ -242,6 +243,7 @@ namespace CMZDedicatedSteamServer.Hosting
             if (!string.IsNullOrWhiteSpace(_config.WorldFolder) && effectiveSaveOwnerSteamId != 0UL)
             {
                 _plugins = new ServerPluginManager(_log);
+                _plugins.Register(new ServerFloodGuardPlugin());
                 _plugins.Register(new ServerRegionProtectPlugin());
                 _plugins.Register(new ServerAnnouncementsPlugin());
 
@@ -623,6 +625,9 @@ namespace CMZDedicatedSteamServer.Hosting
                 if (payloadBytes == null)
                     return;
 
+                if (ShouldDropInboundPacket(senderId, recipientId, 1, 3, payloadBytes, senderSteamId))
+                    return;
+
                 if (!TryGetSteamIdForPlayer(recipientId, out ulong recipientSteamId))
                     return;
 
@@ -638,6 +643,9 @@ namespace CMZDedicatedSteamServer.Hosting
                 int dataSize = Convert.ToInt32(readInt32.Invoke(packet, null));
                 byte[] payloadBytes = dataSize > 0 ? (byte[])readBytes.Invoke(packet, [dataSize]) : [];
                 if (payloadBytes == null || payloadBytes.Length < 1)
+                    return;
+
+                if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderSteamId))
                     return;
 
                 if (_config.LogNetworkPackets)
@@ -698,6 +706,9 @@ namespace CMZDedicatedSteamServer.Hosting
             if (data == null || data.Length < 1)
                 return;
 
+            if (ShouldDropInboundPacket(senderId, recipientId, 0, 0, data, senderSteamId))
+                return;
+
             if (_config.LogNetworkPackets)
             {
                 _log($"CH0 recv: recipient={recipientId}, sender={senderId}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
@@ -730,6 +741,59 @@ namespace CMZDedicatedSteamServer.Hosting
 
                 SendChannel0PayloadToSteam(peer.SteamId, peer.Gid, senderId, data, reliableOrdered);
             }
+        }
+
+        /// <summary>
+        /// Runs packet-level guard plugins before normal host handling or relay.
+        /// </summary>
+        private bool ShouldDropInboundPacket(
+            byte senderId,
+            byte recipientId,
+            int channel,
+            int wrappedOpcode,
+            byte[] payload,
+            ulong senderSteamId)
+        {
+            if (_plugins == null)
+                return false;
+
+            string senderName = ResolvePacketSenderName(senderId, senderSteamId);
+
+            return _plugins.BeforeInboundPacket(new ServerInboundPacketContext
+            {
+                SenderId = senderId,
+                SenderName = senderName,
+                RemoteId = senderSteamId,
+                RecipientId = recipientId,
+                Channel = channel,
+                WrappedOpcode = wrappedOpcode,
+                Payload = payload,
+                PayloadLength = payload == null ? 0 : payload.Length,
+                UtcNow = DateTime.UtcNow,
+                Log = _log
+            });
+        }
+
+        /// <summary>
+        /// Resolves the best known gamertag for a packet sender.
+        /// </summary>
+        private string ResolvePacketSenderName(byte senderId, ulong senderSteamId)
+        {
+            try
+            {
+                if (_peers != null &&
+                    _peers.TryGetConnectedPeer(senderSteamId, out ConnectedSteamPeer peer) &&
+                    peer != null &&
+                    !string.IsNullOrWhiteSpace(peer.Gamertag))
+                {
+                    return peer.Gamertag;
+                }
+            }
+            catch
+            {
+            }
+
+            return "Player" + senderId;
         }
         #endregion
 

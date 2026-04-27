@@ -71,6 +71,22 @@ namespace CMZDedicatedLidgrenServer.Plugins
         /// </summary>
         void Update(ServerPluginTickContext context);
     }
+
+    /// Optional plugin interface for inspecting every inbound gameplay packet before host handling or relay.
+    /// </summary>
+    /// <remarks>
+    /// This hook runs above the world-message layer, so it can protect both host-directed packets
+    /// and peer-relay packets. Returning true consumes/drops the packet.
+    /// </remarks>
+    internal interface IServerInboundPacketPlugin
+    {
+        /// <summary>
+        /// Inspects an inbound packet before the server handles or relays it.
+        /// </summary>
+        /// <param name="context">Packet context supplied by the transport host.</param>
+        /// <returns>True to consume/drop the packet; otherwise false.</returns>
+        bool BeforeInboundPacket(ServerInboundPacketContext context);
+    }
     #endregion
 
     #region Player / Tick Contexts
@@ -109,6 +125,70 @@ namespace CMZDedicatedLidgrenServer.Plugins
         public Action<string> BroadcastMessage { get; set; }
 
         public Action<string> Log { get; set; }
+    }
+
+    /// <summary>
+    /// Context supplied to packet-level guard plugins before normal packet handling or relay.
+    /// </summary>
+    internal sealed class ServerInboundPacketContext
+    {
+        /// <summary>
+        /// Server-side sender/player id. GID 0 is the host.
+        /// </summary>
+        public byte SenderId { get; set; }
+
+        /// <summary>
+        /// Best known display name for the sending player.
+        /// </summary>
+        public string SenderName { get; set; }
+
+        /// <summary>
+        /// Optional transport-level remote id. Steam uses the SteamID; Lidgren leaves this as 0.
+        /// </summary>
+        public ulong RemoteId { get; set; }
+
+        /// <summary>
+        /// Target player id from the outer channel-0 packet, or 0 for host/broadcast style packets.
+        /// </summary>
+        public byte RecipientId { get; set; }
+
+        /// <summary>
+        /// CastleMiner Z packet channel. Channel 0 is normal gameplay; channel 1 is wrapper/internal traffic.
+        /// </summary>
+        public int Channel { get; set; }
+
+        /// <summary>
+        /// Channel-1 wrapper opcode when applicable. 0 means no wrapper opcode.
+        /// </summary>
+        public int WrappedOpcode { get; set; }
+
+        /// <summary>
+        /// Inner CastleMiner Z gameplay payload, including message id and checksum.
+        /// </summary>
+        public byte[] Payload { get; set; }
+
+        /// <summary>
+        /// Length of <see cref="Payload"/> in bytes.
+        /// </summary>
+        public int PayloadLength { get; set; }
+
+        /// <summary>
+        /// Current UTC time supplied by the host.
+        /// </summary>
+        public DateTime UtcNow { get; set; }
+
+        /// <summary>
+        /// Server log callback.
+        /// </summary>
+        public Action<string> Log { get; set; }
+
+        /// <summary>
+        /// Returns a short packet label for logs.
+        /// </summary>
+        public string DescribePacket()
+        {
+            return $"ch={Channel}, op={WrappedOpcode}, recipient={RecipientId}, bytes={PayloadLength}";
+        }
     }
     #endregion
 
