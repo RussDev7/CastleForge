@@ -749,12 +749,20 @@ namespace WorldGenPlus
                     _hasNetworkOverride = true;
                 }
 
-                // Overwrite the live in-memory instance (do NOT Save()).
+                // Overwrite the live in-memory instance only.
+                // Do NOT reset live terrain here.
+                //
+                // Important:
+                // Vanilla WorldInfoMessage is broadcast to every client when a new player joins.
+                // If an existing in-game client receives that packet and this method resets
+                // BlockTerrain, that client loses loaded terrain and can freeze in place.
+                //
+                // The safe place to consume this override is BlockTerrain.Init, where
+                // WorldGenPlusBuilder is selected before the terrain load begins.
                 _current.ImportFromSettings(fromHost);
 
                 _loaded = true;
             }
-            TryRefreshLiveTerrainBuilder("ApplyNetworkOverride");
         }
 
         /// <summary>

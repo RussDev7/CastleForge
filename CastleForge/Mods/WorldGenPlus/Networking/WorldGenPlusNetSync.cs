@@ -107,6 +107,40 @@ namespace WorldGenPlus
         }
         #endregion
 
+        #region Join-State Reflection Helpers
+
+        /// <summary>
+        /// Cached reflection handle for CastleMinerZGame._waitForWorldInfo.
+        /// Used to detect whether this client is currently waiting for its own join-time WorldInfoMessage.
+        /// </summary>
+        private static FieldInfo _waitForWorldInfoField;
+
+        /// <summary>
+        /// Returns true only while this client is actively waiting for its own join-time WorldInfoMessage.
+        /// This prevents WorldGenPlus from re-applying host sync when vanilla rebroadcasts WorldInfoMessage
+        /// because another player joined.
+        /// </summary>
+        private static bool IsWaitingForJoinWorldInfo()
+        {
+            try
+            {
+                var game = CastleMinerZGame.Instance;
+                if (game == null)
+                    return false;
+
+                if (_waitForWorldInfoField == null)
+                    _waitForWorldInfoField = AccessTools.Field(typeof(CastleMinerZGame), "_waitForWorldInfo");
+
+                return _waitForWorldInfoField != null &&
+                       _waitForWorldInfoField.GetValue(game) != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        #endregion
+
         #region Public Entrypoint (Manual Patch Install)
 
         /// <summary>
@@ -285,6 +319,11 @@ namespace WorldGenPlus
 
                 if (!WGConfig.Current.Multiplayer_SyncFromHost) return;
 
+                // Vanilla broadcasts WorldInfoMessage to all clients when anyone joins.
+                // Existing in-game clients are not waiting for world info, so they must not
+                // re-apply host world-gen settings or reset live terrain.
+                bool shouldApplyOverride = IsWaitingForJoinWorldInfo();
+
                 wi = GetWorldInfoFromMessage(__instance);
                 if (wi == null) return;
 
@@ -308,6 +347,11 @@ namespace WorldGenPlus
 
                 var settings = ReadCompressedPayload(comp);
                 if (settings == null) return;
+
+                // Existing clients receive this message too when another player joins.
+                // Strip the tag in finally, but do not re-apply/reset anything.
+                if (!shouldApplyOverride)
+                    return;
 
                 WGConfig.ApplyNetworkOverride(settings);
             }
