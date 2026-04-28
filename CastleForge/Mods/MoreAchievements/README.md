@@ -20,18 +20,18 @@ Give CastleMiner Z a much bigger sense of progression.
 
 ## At a glance
 
-| Category | Details |
-|---|---|
-| Mod type | Client-side gameplay/UI progression mod |
-| Dependency | `ModLoaderExtensions` |
-| Target framework | `.NET Framework 4.8.1` |
-| Custom achievements | **69 registered** |
-| Difficulty tiers | Easy, Normal, Hard, Brutal, Insane |
-| Menus patched | Front-end main menu and in-game menu |
-| Config file | `!Mods\MoreAchievements\MoreAchievements.Config.ini` |
-| Default reload hotkey | `Ctrl+Shift+R` |
-| Optional custom sound | `!Mods\MoreAchievements\CustomSounds\Award.wav` or `Award.mp3` |
-| Asset extraction | Embedded icons/resources are extracted to `!Mods\MoreAchievements` on first launch |
+| Category              | Details                                                                            |
+|-----------------------|------------------------------------------------------------------------------------|
+| Mod type              | Client-side gameplay/UI progression mod                                            |
+| Dependency            | `ModLoaderExtensions`                                                              |
+| Target framework      | `.NET Framework 4.8.1`                                                             |
+| Custom achievements   | **69 registered**                                                                  |
+| Difficulty tiers      | Easy, Normal, Hard, Brutal, Insane                                                 |
+| Menus patched         | Front-end main menu and in-game menu                                               |
+| Config file           | `!Mods\MoreAchievements\MoreAchievements.Config.ini`                               |
+| Default reload hotkey | `Ctrl+Shift+R`                                                                     |
+| Optional custom sound | `!Mods\MoreAchievements\CustomSounds\Award.wav` or `Award.mp3`                     |
+| Asset extraction      | Embedded icons/resources are extracted to `!Mods\MoreAchievements` on first launch |
 
 ## Feature overview
 
@@ -237,23 +237,23 @@ This mod also includes important behind-the-scenes work so long-term achievement
 
 ### Quick reference
 
-| Section | Key | Default | What it controls |
-|---|---|---|---|
-| Rules | `CustomUnlockGameModes` | `Endurance` | Which game modes are allowed to unlock custom achievements |
-| UI | `RowH` | `80` | Browser row height |
-| UI | `RowPad` | `4` | Vertical spacing between rows |
-| UI | `PanelPad` | `20` | Main panel padding |
-| UI | `TitleGap` | `12` | Gap between title and list |
-| UI | `ButtonsGap` | `16` | Gap between list and bottom button row |
-| UI | `IconPad` | `8` | Icon box padding |
-| UI | `IconGap` | `12` | Gap between icon and text |
-| UI | `SortAchievementsBy` | `Name` | Sort by `Name` or `Id` |
-| Sound | `PlaySounds` | `true` | Whether achievement UI sounds are used |
-| Sound | `UseCustomAwardSound` | `true` | Use `CustomSounds/Award.wav` or `.mp3` when present |
-| Announce | `AnnounceChat` | `true` | Post a chat message when an achievement pops |
-| Announce | `AnnounceAllAchievements` | `true` | Announce vanilla + custom achievements instead of only custom |
-| Popup | `ShowAchievementPopup` | `All` | `None`, `Custom`, `Steam`, or `All` |
-| Hotkeys | `ReloadConfig` | `Ctrl+Shift+R` | Reload config in-game |
+| Section  | Key                       | Default        | What it controls                                              |
+|----------|---------------------------|----------------|---------------------------------------------------------------|
+| Rules    | `CustomUnlockGameModes`   | `Endurance`    | Which game modes are allowed to unlock custom achievements    |
+| UI       | `RowH`                    | `80`           | Browser row height                                            |
+| UI       | `RowPad`                  | `4`            | Vertical spacing between rows                                 |
+| UI       | `PanelPad`                | `20`           | Main panel padding                                            |
+| UI       | `TitleGap`                | `12`           | Gap between title and list                                    |
+| UI       | `ButtonsGap`              | `16`           | Gap between list and bottom button row                        |
+| UI       | `IconPad`                 | `8`            | Icon box padding                                              |
+| UI       | `IconGap`                 | `12`           | Gap between icon and text                                     |
+| UI       | `SortAchievementsBy`      | `Name`         | Sort by `Name` or `Id`                                        |
+| Sound    | `PlaySounds`              | `true`         | Whether achievement UI sounds are used                        |
+| Sound    | `UseCustomAwardSound`     | `true`         | Use `CustomSounds/Award.wav` or `.mp3` when present           |
+| Announce | `AnnounceChat`            | `true`         | Post a chat message when an achievement pops                  |
+| Announce | `AnnounceAllAchievements` | `true`         | Announce vanilla + custom achievements instead of only custom |
+| Popup    | `ShowAchievementPopup`    | `All`          | `None`, `Custom`, `Steam`, or `All`                           |
+| Hotkeys  | `ReloadConfig`            | `Ctrl+Shift+R` | Reload config in-game                                         |
 
 ### Game mode rule values
 

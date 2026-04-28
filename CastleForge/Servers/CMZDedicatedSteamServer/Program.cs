@@ -236,16 +236,20 @@ namespace CMZDedicatedSteamServer
                 case "help":
                 case "?":
                     log("Console commands:");
-                    log("  reload                          Reload server.properties and plugin files");
-                    log("  reload properties               Reload runtime-safe server.properties values");
-                    log("  reload plugins                  Reload plugin config/region/announcement files");
-                    log("  stop                            Stop the server");
-                    log("  players                         List connected players");
-                    log("  bans                            List saved bans");
-                    log("  kick <id|steamid|name> [reason] Hard-kick a connected player");
-                    log("  ban <id|steamid|name> [reason]  Hard-ban and drop a connected player");
-                    log("  unban <steamid|ip|name>         Remove a saved ban");
-                    log("  help                            Show this command list");
+                    log("  reload                           Reload server.properties, plugin files, and command files");
+                    log("  reload properties                Reload runtime-safe server.properties values");
+                    log("  reload plugins                   Reload plugin config/region/announcement files");
+                    log("  reload commands                  Reload command permissions and player ranks");
+                    log("  stop                             Stop the server");
+                    log("  players                          List connected players");
+                    log("  bans                             List saved bans");
+                    log("  kick <id|steamid|name> [reason]  Hard-kick a connected player");
+                    log("  ban <id|steamid|name> [reason]   Hard-ban and drop a connected player");
+                    log("  unban <steamid|name>             Remove a saved ban");
+                    log("  op <player|steamid|name>         Give a player Admin command rank");
+                    log("  deop <player|steamid|name>       Remove a player's saved command rank");
+                    log("  setrank <player> <rank>          Set command rank: Default, Member, Moderator, Admin");
+                    log("  help                             Show this command list");
                     break;
 
                 case "reload":
@@ -272,6 +276,9 @@ namespace CMZDedicatedSteamServer
                     break;
 
                 default:
+                    if (server.TryExecuteServerCommandFromConsole(command))
+                        return;
+
                     log("Unknown command. Type 'help' for console commands.");
                     break;
             }

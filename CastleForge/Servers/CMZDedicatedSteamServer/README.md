@@ -35,7 +35,7 @@ That gives you a cleaner setup for:
 - Automatically respawns all players in Endurance mode when every real connected player is dead, preventing dedicated servers from getting stuck on "Waiting for host to restart"
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
 - Can be launched from **DirectConnect** using **Launch Dedicated (Steam)**.
-- Includes server-side **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops.
+- Includes **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops, command permissions, and operator ranks
 
 ---
 
@@ -386,13 +386,18 @@ These commands are handled server-side and use a hard drop / transport-level rem
 
 ### Commands
 
-| Command                             | Description                                                                                |
-|-------------------------------------|--------------------------------------------------------------------------------------------|
-| `players`                           | Lists connected players with their player ID, name, and SteamID.                           |
-| `bans`                              | Lists saved bans with ban type, last known player name, SteamID, reason, and created time. |
-| `kick <id\|steamid\|name> [reason]` | Hard-kicks a connected player.                                                             |
-| `ban <id\|steamid\|name> [reason]`  | Bans and hard-drops a connected player.                                                    |
-| `unban <steamid\|name>`             | Removes a saved ban by SteamID, exact name, or unique partial name.                        |
+| Command                                                                    | Console | In-game | Description |
+|----------------------------------------------------------------------------|----:|----:|-----------------------------------------------------------------------|
+| `players` / `!players`                                                     | Yes | Yes | Lists connected players.                                              |
+| `bans`                                                                     | Yes | No  | Lists saved bans.                                                     |
+| `kick <id\|steamid\|name> [reason]` / `!kick <id\|steamid\|name> [reason]` | Yes | Yes | Hard-kicks a non-operator connected player.                           |
+| `ban <id\|steamid\|name> [reason]` / `!ban <id\|steamid\|name> [reason]`   | Yes | Yes | Bans and hard-drops a non-operator player.                            |
+| `unban <steamid\|name>` / `!unban <steamid\|name>`                         | Yes | Yes | Removes a saved ban.                                                  |
+| `reload` / `!reload`                                                       | Yes | Yes | Reloads runtime-safe server config, plugin config, and command files. |
+| `reload commands` / `!reload commands`                                     | Yes | Yes | Reloads command permissions and player ranks.                         |
+| `op <player\|steamid\|name>` / `!op <player\|steamid\|name>`               | Yes | Yes | Gives a player Admin command rank.                                    |
+| `deop <player\|steamid\|name>` / `!deop <player\|steamid\|name>`           | Yes | Yes | Removes a player's saved command rank.                                |
+| `setrank <player> <rank>` / `!setrank <player> <rank>`                     | Yes | Yes | Sets command rank: Default, Member, Moderator, or Admin.              |
 
 ### Examples
 
@@ -498,7 +503,7 @@ Current built-in plugin support includes:
 - **FloodGuard** malicious packet spam protection
 - **RegionProtect** server enforcement
 - **RememberTime** per-world time persistence between restarts
-- **Player Enforcement** console commands with SteamID-backed persistent bans
+- **Player Enforcement** console and in-game commands with persistent bans, command permissions, operator ranks, and operator kick/ban protection
 - block mining / placing protection
 - explosion protection
 - crate item protection
@@ -765,6 +770,219 @@ Reason = interval
 
 ---
 
+## In-Game Server Commands / Permissions
+
+The dedicated server also supports permission-based in-game chat commands. These commands are typed directly into CastleMiner Z chat using the configured command prefix.
+
+Default prefix:
+
+```text
+!
+````
+
+Examples:
+
+```text
+!help
+!help 2
+!players
+!kick Jacob Being annoying
+!kick "Jacob Smith" Being annoying
+!ban Jacob Griefing protected areas
+!ban "Jacob Smith" Griefing protected areas
+!unban Jacob
+!reload
+!reload plugins
+!reload commands
+!op Jacob
+!deop Jacob
+!setrank Jacob Moderator
+```
+
+In-game commands are intercepted by the server before normal chat relay. If a message is a valid command, it is consumed by the server and is not broadcast as public chat.
+
+### Command permissions
+
+Command permissions are stored in:
+
+```text
+Commands\CommandPermissions.ini
+```
+
+Example:
+
+```ini
+[Settings]
+Enabled=true
+Prefix=!
+HelpMaxLines=5
+
+[Commands]
+help=Default
+players=Moderator
+kick=Moderator
+ban=Admin
+unban=Admin
+reload=Admin
+op=Admin
+deop=Admin
+setrank=Admin
+```
+
+Available ranks:
+
+| Rank        | Description                           |
+| ----------- | ------------------------------------- |
+| `Default`   | Normal player access.                 |
+| `Member`    | Trusted/basic member access.          |
+| `Moderator` | Staff access for moderation commands. |
+| `Admin`     | Full command access.                  |
+
+> Note: Use `Default` in config files. Older typo-compatible builds may accept `Defualt`, but the documented value should be `Default`.
+
+### Player ranks / operators
+
+Player command ranks are stored in:
+
+```text
+Commands\CommandRanks.ini
+```
+
+Steam example:
+
+```ini
+[Players]
+steam:76561198000000000=Admin
+```
+
+Lidgren example:
+
+```ini
+[Players]
+name:Jacob Smith=Admin
+ip:192.168.1.50=Moderator
+```
+
+The `!op` command gives a player `Admin` command rank. The `!deop` command removes their saved rank.
+
+```text
+!op "Jacob Smith"
+!deop "Jacob Smith"
+!setrank "Jacob Smith" Moderator
+```
+
+### First admin setup
+
+For safety, players cannot make themselves operators unless they already have permission.
+
+Before using `!op` in-game, seed at least one admin manually in:
+
+```text
+Commands\CommandRanks.ini
+```
+
+Steam server:
+
+```ini
+[Players]
+steam:YOUR_STEAM_ID_HERE=Admin
+```
+
+Lidgren server:
+
+```ini
+[Players]
+name:Your Player Name=Admin
+```
+
+After that, the seeded admin can promote other players in-game with:
+
+```text
+!op "Player Name"
+```
+
+### Console command support
+
+The same permission commands can also be typed directly into the dedicated server console without the `!` prefix:
+
+```text
+op Jacob
+deop Jacob
+setrank Jacob Moderator
+reload commands
+```
+
+Console commands run as server admin.
+
+### Help paging
+
+The in-game `!help` command uses a fixed line limit so it does not depend on the player's screen resolution.
+
+Default max lines:
+
+```ini
+HelpMaxLines=5
+```
+
+Use pages to see more commands:
+
+```text
+!help
+!help 2
+!help 3
+```
+
+### Reloading command files
+
+Command files can be reloaded without restarting the server:
+
+```text
+reload commands
+```
+
+or in-game, if the player has permission:
+
+```text
+!reload commands
+```
+
+The normal reload command also reloads command files when supported:
+
+```text
+reload
+!reload
+```
+
+### Steam command identity notes
+
+CMZDedicatedSteamServer should use SteamID-backed command ranks whenever possible:
+
+```ini
+[Players]
+steam:76561198000000000=Admin
+````
+
+Name-based entries can be useful as a fallback, but SteamID entries are stronger because players can change their Steam display name without changing their SteamID.
+
+### Operator protection
+
+Players with `Admin` command rank are treated as server operators.
+
+Operators cannot be kicked or banned through the permission-based command system. This protects trusted admins from being removed by another moderator/admin through `kick`, `ban`, `!kick`, or `!ban`.
+
+Examples of protected rank entries:
+
+```ini
+[Players]
+steam:76561198000000000=Admin
+name:Jacob Smith=Admin
+ip:192.168.1.50=Admin
+````
+
+Steam servers should prefer `steam:<steamid>` because it is stable across name changes. Lidgren servers may use `name:` or `ip:` entries, but those are weaker because names and IP addresses can change.
+
+---
+
 ## Troubleshooting
 
 <details>
@@ -775,6 +993,31 @@ Check that:
 - the dedicated server process is using the same Windows user context as Steam
 - the active Steam account has access to CastleMiner Z
 - `steam_api.dll` is available through the configured game path
+
+</details>
+
+<details>
+<summary><strong>In-game commands do not work</strong></summary>
+
+Check:
+
+- `Commands\CommandPermissions.ini` exists.
+- `[Settings] Enabled=true`.
+- The command prefix matches what you are typing, usually `!`.
+- Your player has the required rank in `Commands\CommandRanks.ini`.
+- You seeded at least one Admin before trying to use `!op`.
+- Use quotes around names with spaces:
+
+```text
+!op "Jacob Smith"
+!kick "Jacob Smith" Being annoying
+````
+
+You can reload command files without restarting:
+
+```text
+reload commands
+```
 
 </details>
 

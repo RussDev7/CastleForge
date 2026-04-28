@@ -8,6 +8,7 @@ using CMZDedicatedSteamServer.Plugins.Announcements;
 using CMZDedicatedSteamServer.Plugins.RegionProtect;
 using CMZDedicatedSteamServer.Plugins.RememberTime;
 using CMZDedicatedSteamServer.Plugins.FloodGuard;
+using CMZDedicatedSteamServer.Commands;
 using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
 using CMZDedicatedSteamServer.Config;
@@ -131,6 +132,21 @@ namespace CMZDedicatedSteamServer.Hosting
 
         #endregion
 
+        #region In-Game Commands
+
+        /// <summary>
+        /// Handles in-game chat commands such as !help, !kick, !ban, !reload, and !op.
+        /// </summary>
+        private ServerCommandManager _commands;
+
+        /// <summary>
+        /// Cached message id for DNA.CastleMinerZ.Net.BroadcastTextMessage.
+        /// Used to detect normal chat payloads before relay.
+        /// </summary>
+        private byte? _broadcastTextMessageId;
+
+        #endregion
+
         #region Peer / packet state
 
         /// <summary>
@@ -240,6 +256,16 @@ namespace CMZDedicatedSteamServer.Hosting
             _approval = new SteamConnectionApproval(_config, _assemblyLoader.CommonAssembly, _log);
             _peers = new SteamPeerRegistry();
             _banStore = new ServerBanStore(_baseDir, _log);
+            _commands = new ServerCommandManager(
+                _baseDir,
+                _log,
+                GetPlayerListText,
+                KickPlayer,
+                BanPlayer,
+                UnbanPlayer,
+                Reload,
+                ReloadPlugins,
+                ResolveCommandTarget);
             _lobbyHost = new SteamLobbyHost(
                 _config,
                 _assemblyLoader.CommonAssembly,
@@ -352,6 +378,7 @@ namespace CMZDedicatedSteamServer.Hosting
         {
             ReloadServerProperties();
             ReloadPlugins();
+            _commands?.Reload();
         }
 
         /// <summary>
@@ -776,6 +803,9 @@ namespace CMZDedicatedSteamServer.Hosting
             if (ShouldDropInboundPacket(senderId, recipientId, 0, 0, data, senderSteamId))
                 return;
 
+            if (TryHandleServerChatCommand(senderId, senderSteamId, data))
+                return;
+
             if (_config.LogNetworkPackets)
             {
                 _log($"CH0 recv: recipient={recipientId}, sender={senderId}, payload={DescribeInnerPayload(data)}, bytes={data.Length}");
@@ -861,6 +891,162 @@ namespace CMZDedicatedSteamServer.Hosting
             }
 
             return "Player" + senderId;
+        }
+
+        /// <summary>
+        /// Handles in-game server commands sent through normal chat.
+        /// Returns true when the chat packet was consumed and should not be relayed.
+        /// </summary>
+        private bool TryHandleServerChatCommand(byte senderId, ulong senderSteamId, byte[] payload)
+        {
+            if (_commands == null)
+                return false;
+
+            if (!TryReadBroadcastTextMessage(payload, out string rawChat))
+                return false;
+
+            string senderName = ResolvePacketSenderName(senderId, senderSteamId);
+            string commandText = StripChatPrefix(rawChat, senderName);
+
+            if (!_commands.IsCommand(commandText))
+                return false;
+
+            _commands.TryExecute(new ServerCommandContext
+            {
+                PlayerId = senderId,
+                PlayerName = senderName,
+                RemoteId = senderSteamId,
+
+                // SteamID is the strongest key.
+                RemoteKey = senderSteamId != 0UL
+                    ? "steam:" + senderSteamId
+                    : "name:" + senderName,
+
+                // Also allow name-based rank entries as a fallback.
+                AdditionalRemoteKeys = string.IsNullOrWhiteSpace(senderName)
+                    ? null
+                    : ["name:" + senderName],
+
+                RawText = commandText,
+                Reply = message => SendPrivateServerTextToSteam(senderSteamId, senderId, message),
+                Broadcast = BroadcastServerText,
+                Log = _log
+            });
+
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to read a BroadcastTextMessage from a raw CMZ payload.
+        /// Payload layout is [messageId][message body][checksum].
+        /// BroadcastTextMessage body is one BinaryWriter string.
+        /// </summary>
+        private bool TryReadBroadcastTextMessage(byte[] payload, out string message)
+        {
+            message = null;
+
+            if (_codec == null || payload == null || payload.Length < 3)
+                return false;
+
+            try
+            {
+                if (!_broadcastTextMessageId.HasValue)
+                    _broadcastTextMessageId = _codec.GetMessageId("DNA.CastleMinerZ.Net.BroadcastTextMessage");
+
+                if (payload[0] != _broadcastTextMessageId.Value)
+                    return false;
+
+                using (var ms = new MemoryStream(payload, 1, payload.Length - 2, false))
+                using (var reader = new BinaryReader(ms))
+                {
+                    message = reader.ReadString();
+                }
+
+                return !string.IsNullOrWhiteSpace(message);
+            }
+            catch
+            {
+                message = null;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes the vanilla "PlayerName: " prefix from normal chat text.
+        /// </summary>
+        private static string StripChatPrefix(string rawMessage, string senderName)
+        {
+            if (string.IsNullOrWhiteSpace(rawMessage))
+                return string.Empty;
+
+            rawMessage = rawMessage.Trim();
+
+            if (!string.IsNullOrWhiteSpace(senderName))
+            {
+                string expectedPrefix = senderName + ": ";
+
+                if (rawMessage.StartsWith(expectedPrefix, StringComparison.Ordinal))
+                    return rawMessage.Substring(expectedPrefix.Length).Trim();
+            }
+
+            int colon = rawMessage.IndexOf(": ", StringComparison.Ordinal);
+            if (colon >= 0 && colon + 2 < rawMessage.Length)
+                return rawMessage.Substring(colon + 2).Trim();
+
+            return rawMessage;
+        }
+
+        /// <summary>
+        /// Resolves a command target for !op, !deop, !setrank, and moderation protection checks.
+        /// Steam prefers steam:SteamID rank keys, with name: fallback keys accepted for compatibility.
+        /// </summary>
+        private ServerCommandTarget ResolveCommandTarget(string target)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+                return null;
+
+            string trimmed = target.Trim();
+
+            // Allow direct config keys:
+            // steam:...
+            // name:...
+            // ip:...
+            if (trimmed.IndexOf(':') > 0)
+            {
+                return new ServerCommandTarget
+                {
+                    IsOnline = false,
+                    PlayerName = trimmed,
+                    RemoteKey = ServerCommandPermissionStore.BuildIdentityKeyFromRawTarget(trimmed)
+                };
+            }
+
+            if (TryResolveSteamPeer(trimmed, out ConnectedSteamPeer peer) && peer != null)
+            {
+                return new ServerCommandTarget
+                {
+                    IsOnline = true,
+                    PlayerId = peer.Gid,
+                    PlayerName = peer.Gamertag,
+                    RemoteId = peer.SteamId,
+
+                    // SteamID is the strongest/stable identity for command ranks.
+                    RemoteKey = "steam:" + peer.SteamId,
+
+                    // Also check name-based entries so old/manual CommandRanks.ini entries
+                    // like "name:Jacob Smith=Admin" still protect the player.
+                    AdditionalRemoteKeys = string.IsNullOrWhiteSpace(peer.Gamertag)
+                        ? null
+                        : ["name:" + peer.Gamertag.Trim()]
+                };
+            }
+
+            return new ServerCommandTarget
+            {
+                IsOnline = false,
+                PlayerName = trimmed,
+                RemoteKey = ServerCommandPermissionStore.BuildIdentityKeyFromRawTarget(trimmed)
+            };
         }
         #endregion
 
@@ -1150,6 +1336,24 @@ namespace CMZDedicatedSteamServer.Hosting
 
             _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);
             PublishCurrentLobbyMetadata();
+        }
+        #endregion
+
+        #region Console Command Bridge
+
+        /// <summary>
+        /// Executes a command through the shared server command manager from the dedicated server console.
+        /// Console commands do not need the in-game command prefix.
+        /// </summary>
+        public bool TryExecuteServerCommandFromConsole(string commandText)
+        {
+            if (_commands == null)
+                return false;
+
+            return _commands.TryExecuteConsole(
+                commandText,
+                _log,
+                BroadcastServerText);
         }
         #endregion
 

@@ -8,6 +8,7 @@ using CMZDedicatedLidgrenServer.Plugins.Announcements;
 using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
 using CMZDedicatedLidgrenServer.Plugins.RememberTime;
 using CMZDedicatedLidgrenServer.Plugins.FloodGuard;
+using CMZDedicatedLidgrenServer.Commands;
 using CMZDedicatedLidgrenServer.Hosting;
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
@@ -140,6 +141,21 @@ namespace CMZDedicatedLidgrenServer
         /// Connections that were force-dropped and should have late packets ignored.
         /// </summary>
         private readonly HashSet<object> _forceDroppedConnections = [];
+
+        #endregion
+
+        #region Fields: In-Game Commands
+
+        /// <summary>
+        /// Handles in-game chat commands such as !help, !kick, !ban, !reload, and !op.
+        /// </summary>
+        private readonly ServerCommandManager _commands;
+
+        /// <summary>
+        /// Cached message id for DNA.CastleMinerZ.Net.BroadcastTextMessage.
+        /// Used to detect normal chat payloads before relay.
+        /// </summary>
+        private byte? _broadcastTextMessageId;
 
         #endregion
 
@@ -332,6 +348,16 @@ namespace CMZDedicatedLidgrenServer
             _banStore = new ServerBanStore(
                 string.IsNullOrWhiteSpace(_saveRoot) ? AppDomain.CurrentDomain.BaseDirectory : _saveRoot,
                 _log);
+            _commands = new ServerCommandManager(
+                string.IsNullOrWhiteSpace(_saveRoot) ? AppDomain.CurrentDomain.BaseDirectory : _saveRoot,
+                _log,
+                GetPlayerListText,
+                KickPlayer,
+                BanPlayer,
+                UnbanPlayer,
+                Reload,
+                ReloadPlugins,
+                ResolveCommandTarget);
             _saveOwnerSteamId = saveOwnerSteamId;
 
             _viewRadiusChunks = viewRadiusChunks;
@@ -563,6 +589,7 @@ namespace CMZDedicatedLidgrenServer
         {
             ReloadServerProperties();
             ReloadPlugins();
+            _commands?.Reload();
         }
 
         /// <summary>
@@ -1692,6 +1719,9 @@ namespace CMZDedicatedLidgrenServer
                     if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderConn, 0UL))
                         return;
 
+                    if (TryHandleServerChatCommand(senderId, senderConn, payloadBytes))
+                        return;
+
                     if (_logNetworkPackets)
                     {
                         _log($"CH1 OP4 recv: sender={senderId}, payload={DescribeInnerPayload(payloadBytes)}, bytes={payloadBytes.Length}");
@@ -1794,6 +1824,9 @@ namespace CMZDedicatedLidgrenServer
 
             object senderConn0 = msgType.GetProperty("SenderConnection")?.GetValue(msg);
             if (ShouldDropInboundPacket(senderId0, recipientId, 0, 0, data, senderConn0, 0UL))
+                return;
+
+            if (TryHandleServerChatCommand(senderId0, senderConn0, data))
                 return;
 
             if (_logNetworkPackets)
@@ -1908,6 +1941,178 @@ namespace CMZDedicatedLidgrenServer
             }
 
             return "Player" + senderId;
+        }
+
+        /// <summary>
+        /// Handles in-game server commands sent through normal chat.
+        /// Returns true when the chat packet was consumed and should not be relayed.
+        /// </summary>
+        private bool TryHandleServerChatCommand(byte senderId, object senderConn, byte[] payload)
+        {
+            if (_commands == null)
+                return false;
+
+            if (!TryReadBroadcastTextMessage(payload, out string rawChat))
+                return false;
+
+            string senderName = ResolvePacketSenderName(senderId, senderConn);
+            string commandText = StripChatPrefix(rawChat, senderName);
+
+            if (!_commands.IsCommand(commandText))
+                return false;
+
+            string ip = TryGetConnectionIp(senderConn);
+
+            _commands.TryExecute(new ServerCommandContext
+            {
+                PlayerId = senderId,
+                PlayerName = senderName,
+                RemoteId = 0UL,
+
+                // Lidgren has no SteamID, so use name as the main key.
+                RemoteKey = BuildNameCommandKey(senderName),
+
+                // Also allow CommandRanks.ini to match ip: entries.
+                AdditionalRemoteKeys = string.IsNullOrWhiteSpace(ip)
+                    ? null
+                    : ["ip:" + ip],
+
+                RawText = commandText,
+                Reply = message => SendPrivateServerText(senderConn, senderId, message),
+                Broadcast = BroadcastServerText,
+                Log = _log
+            });
+
+            return true;
+        }
+
+        /// <summary>
+        /// Attempts to read a BroadcastTextMessage from a raw CMZ payload.
+        /// Payload layout is [messageId][message body][checksum].
+        /// BroadcastTextMessage body is one BinaryWriter string.
+        /// </summary>
+        private bool TryReadBroadcastTextMessage(byte[] payload, out string message)
+        {
+            message = null;
+
+            if (_codec == null || payload == null || payload.Length < 3)
+                return false;
+
+            try
+            {
+                if (!_broadcastTextMessageId.HasValue)
+                    _broadcastTextMessageId = _codec.GetMessageId("DNA.CastleMinerZ.Net.BroadcastTextMessage");
+
+                if (payload[0] != _broadcastTextMessageId.Value)
+                    return false;
+
+                using (var ms = new MemoryStream(payload, 1, payload.Length - 2, false))
+                using (var reader = new BinaryReader(ms))
+                {
+                    message = reader.ReadString();
+                }
+
+                return !string.IsNullOrWhiteSpace(message);
+            }
+            catch
+            {
+                message = null;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes the vanilla "PlayerName: " prefix from normal chat text.
+        /// </summary>
+        private static string StripChatPrefix(string rawMessage, string senderName)
+        {
+            if (string.IsNullOrWhiteSpace(rawMessage))
+                return string.Empty;
+
+            rawMessage = rawMessage.Trim();
+
+            if (!string.IsNullOrWhiteSpace(senderName))
+            {
+                string expectedPrefix = senderName + ": ";
+
+                if (rawMessage.StartsWith(expectedPrefix, StringComparison.Ordinal))
+                    return rawMessage.Substring(expectedPrefix.Length).Trim();
+            }
+
+            int colon = rawMessage.IndexOf(": ", StringComparison.Ordinal);
+            if (colon >= 0 && colon + 2 < rawMessage.Length)
+                return rawMessage.Substring(colon + 2).Trim();
+
+            return rawMessage;
+        }
+
+        /// <summary>
+        /// Builds the default Lidgren command permission key for a player name.
+        /// </summary>
+        private static string BuildNameCommandKey(string playerName)
+        {
+            if (string.IsNullOrWhiteSpace(playerName))
+                return null;
+
+            return "name:" + playerName.Trim();
+        }
+
+        /// <summary>
+        /// Resolves a command target for !op, !deop, !setrank, and moderation protection checks.
+        /// Lidgren prefers name-based rank keys, with ip:/name:/steam: raw keys still accepted.
+        /// </summary>
+        private ServerCommandTarget ResolveCommandTarget(string target)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+                return null;
+
+            string trimmed = target.Trim();
+
+            // Allow direct config keys:
+            // steam:...
+            // name:...
+            // ip:...
+            if (trimmed.IndexOf(':') > 0)
+            {
+                return new ServerCommandTarget
+                {
+                    IsOnline = false,
+                    PlayerName = trimmed,
+                    RemoteKey = ServerCommandPermissionStore.BuildIdentityKeyFromRawTarget(trimmed)
+                };
+            }
+
+            if (TryResolveLidgrenPlayer(
+                trimmed,
+                out _,
+                out _,
+                out byte gid,
+                out string name,
+                out string ip))
+            {
+                return new ServerCommandTarget
+                {
+                    IsOnline = true,
+                    PlayerId = gid,
+                    PlayerName = name,
+                    RemoteId = 0UL,
+
+                    // Lidgren has no stable SteamID identity, so name is the main readable key.
+                    RemoteKey = BuildNameCommandKey(name),
+
+                    // Also check IP-based entries so "ip:..." Admin ranks protect the player too.
+                    AdditionalRemoteKeys = string.IsNullOrWhiteSpace(ip)
+                        ? null
+                        : ["ip:" + ip.Trim()]
+                };
+            }
+
+            return new ServerCommandTarget
+            {
+                IsOnline = false,
+                PlayerName = trimmed,
+                RemoteKey = ServerCommandPermissionStore.BuildIdentityKeyFromRawTarget(trimmed)
+            };
         }
 
         private string DescribeInnerPayload(byte[] payload)
@@ -2167,6 +2372,24 @@ namespace CMZDedicatedLidgrenServer
             {
                 return string.Empty;
             }
+        }
+        #endregion
+
+        #region Console Command Bridge
+
+        /// <summary>
+        /// Executes a command through the shared server command manager from the dedicated server console.
+        /// Console commands do not need the in-game command prefix.
+        /// </summary>
+        public bool TryExecuteServerCommandFromConsole(string commandText)
+        {
+            if (_commands == null)
+                return false;
+
+            return _commands.TryExecuteConsole(
+                commandText,
+                _log,
+                BroadcastServerText);
         }
         #endregion
 
