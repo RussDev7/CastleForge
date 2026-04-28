@@ -35,6 +35,7 @@ That gives you a cleaner setup for:
 - Automatically respawns all players in Endurance mode when every real connected player is dead, preventing dedicated servers from getting stuck on "Waiting for host to restart"
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
 - Can be launched from **DirectConnect** using **Launch Dedicated (Steam)**.
+- Includes server-side **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops.
 
 ---
 
@@ -377,6 +378,92 @@ SteamAppId     : 253430
 [SteamLobby] Lobby created. AltSessionID=...
 ```
 
+## Server Administration / Player Enforcement
+
+CMZDedicatedSteamServer includes built-in console commands for basic player enforcement.
+
+These commands are handled server-side and use a hard drop / transport-level removal path instead of relying only on a normal in-game kick message. This helps prevent modified clients from bypassing a kick by removing or ignoring the client-side kick-message pipeline.
+
+### Commands
+
+| Command                             | Description                                                                                |
+|-------------------------------------|--------------------------------------------------------------------------------------------|
+| `players`                           | Lists connected players with their player ID, name, and SteamID.                           |
+| `bans`                              | Lists saved bans with ban type, last known player name, SteamID, reason, and created time. |
+| `kick <id\|steamid\|name> [reason]` | Hard-kicks a connected player.                                                             |
+| `ban <id\|steamid\|name> [reason]`  | Bans and hard-drops a connected player.                                                    |
+| `unban <steamid\|name>`             | Removes a saved ban by SteamID, exact name, or unique partial name.                        |
+
+### Examples
+
+```text
+players
+bans
+
+kick 2
+kick 2 Being annoying
+kick jacob Being annoying
+kick "Jacob Smith" Being annoying
+kick 76561198000000000 Being annoying
+
+ban 2
+ban 2 Griefing protected areas
+ban jacob Griefing protected areas
+ban "Jacob Smith" Griefing protected areas
+ban 76561198000000000 Griefing protected areas
+
+unban jacob
+unban "Jacob Smith"
+unban 76561198000000000
+```
+
+### Names with spaces
+
+Player names with spaces should be wrapped in quotes:
+
+```text
+ban "Jacob Smith" Griefing protected areas
+kick "Jacob Smith" Being annoying
+```
+
+You can also use the player ID from `players`, which is usually the safest option:
+
+```text
+players
+ban 2 Griefing protected areas
+```
+
+### Optional reasons
+
+Kick and ban commands support optional reasons. The reason is saved to the ban list and passed to the transport disconnect/deny path when possible.
+
+Example:
+
+```text
+ban 2 Griefing protected areas
+```
+
+Because this uses a hard drop path, the reason should be treated as best-effort display text. A modified client may hide the visible message, but the server still removes the peer from the authoritative session.
+
+### Ban storage
+
+Steam bans are stored under:
+
+```text
+PlayerEnforcement\Bans.ini
+```
+
+Steam bans use the player's SteamID as the main ban key and also save the last known player name so the ban list remains readable.
+
+Example:
+
+```ini
+# type|value|lastName|reason|createdUtcTicks
+steam|76561198000000000|Jacob Smith|Griefing protected areas|638813123456789000
+```
+
+This means a player changing their Steam display name will not bypass the ban.
+
 ---
 
 ## Compatibility Notes
@@ -411,6 +498,7 @@ Current built-in plugin support includes:
 - **FloodGuard** malicious packet spam protection
 - **RegionProtect** server enforcement
 - **RememberTime** per-world time persistence between restarts
+- **Player Enforcement** console commands with SteamID-backed persistent bans
 - block mining / placing protection
 - explosion protection
 - crate item protection
@@ -725,6 +813,33 @@ If players still remain stuck, check that:
 </details>
 
 <details>
+<summary><strong>A kicked or banned player does not see a normal kick message</strong></summary>
+
+Player Enforcement uses a hard drop / transport-level removal path. This is intentional.
+
+Some modified clients can hide, remove, or ignore the normal in-game kick-message pipeline. The dedicated server therefore removes the peer from server-side state, broadcasts a drop-peer update to remaining clients, and stops accepting packets from the removed peer.
+
+The visible reason message is best-effort only. A normal client may show it, but a modified client may hide it.
+
+</details>
+
+<details>
+<summary><strong>A banned Steam player changed names and still cannot join</strong></summary>
+
+Steam bans are keyed by SteamID, not display name. The saved player name is only stored to make the ban list readable.
+
+Use:
+
+```text
+bans
+unban 76561198000000000
+````
+
+to remove the SteamID ban.
+
+</details>
+
+<details>
 <summary><strong>The server starts but does not appear in the browser</strong></summary>
 
 Check:
@@ -830,7 +945,7 @@ Loads and validates typed config values from `server.properties`, supplies defau
 
 ## Original standalone project
 
-This CastleForge version of **CMZDedicatedLidgrenServer** is based on and evolves the earlier standalone dedicated-server project:
+This CastleForge version of **CMZDedicatedSteamServer** is based on and evolves the earlier standalone dedicated-server project:
 
 - [CMZDedicatedServers](https://github.com/RussDev7/CMZDedicatedServers)
 

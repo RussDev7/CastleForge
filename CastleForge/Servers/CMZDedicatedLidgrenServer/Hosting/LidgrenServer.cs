@@ -8,6 +8,7 @@ using CMZDedicatedLidgrenServer.Plugins.Announcements;
 using CMZDedicatedLidgrenServer.Plugins.RegionProtect;
 using CMZDedicatedLidgrenServer.Plugins.RememberTime;
 using CMZDedicatedLidgrenServer.Plugins.FloodGuard;
+using CMZDedicatedLidgrenServer.Hosting;
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
@@ -129,6 +130,16 @@ namespace CMZDedicatedLidgrenServer
         /// Enables verbose host/world message logging, such as block edits, crate edits, doors, and pickups.
         /// </summary>
         private readonly bool _logHostMessages;
+
+        /// <summary>
+        /// Persistent IP / name ban store for server-side player enforcement.
+        /// </summary>
+        private readonly ServerBanStore _banStore;
+
+        /// <summary>
+        /// Connections that were force-dropped and should have late packets ignored.
+        /// </summary>
+        private readonly HashSet<object> _forceDroppedConnections = [];
 
         #endregion
 
@@ -318,6 +329,9 @@ namespace CMZDedicatedLidgrenServer
 
             _worldFolder = worldFolder;
             _saveRoot = saveRoot;
+            _banStore = new ServerBanStore(
+                string.IsNullOrWhiteSpace(_saveRoot) ? AppDomain.CurrentDomain.BaseDirectory : _saveRoot,
+                _log);
             _saveOwnerSteamId = saveOwnerSteamId;
 
             _viewRadiusChunks = viewRadiusChunks;
@@ -1024,16 +1038,24 @@ namespace CMZDedicatedLidgrenServer
             var displayName = gamerType.GetProperty("DisplayName")?.GetValue(gamer);
             _log($"ConnectionApproval: Gamer object received. Gamertag: {gamerTag}, DisplayName: {displayName}");
 
-            if (gamerTag as string == "unknow ghost")
-            {
-                gamerType.GetProperty("Gamertag")?.SetValue(gamer, "Player");
-                _log("ConnectionApproval: Overwrote 'unknow ghost' with 'Player'");
-            }
-
             var tagProp = connType.GetProperty("Tag", BindingFlags.Public | BindingFlags.Instance);
             if (tagProp == null)
             {
                 _log("ConnectionApproval: Tag property not found");
+                return;
+            }
+
+            string remoteIp = TryGetConnectionIp(senderConn);
+
+            if (_banStore != null &&
+                _banStore.IsBanned(0UL, remoteIp, gamerTag as string, out ServerBanRecord ban))
+            {
+                string reason = string.IsNullOrWhiteSpace(ban.Reason)
+                    ? "Banned from this server."
+                    : ban.Reason;
+
+                connType.GetMethod("Deny", [typeof(string)])?.Invoke(senderConn, [reason]);
+                _log($"[PlayerEnforcement] Denied banned Lidgren peer '{gamerTag}' from {remoteIp}. Reason={reason}");
                 return;
             }
 
@@ -1050,6 +1072,29 @@ namespace CMZDedicatedLidgrenServer
 
             var peerType = _netPeer.GetType();
             return peerType.GetProperty("Connections")?.GetValue(_netPeer) as System.Collections.IEnumerable;
+        }
+
+        /// <summary>
+        /// Reads the remote IP address from a reflected Lidgren NetConnection.
+        /// </summary>
+        private string TryGetConnectionIp(object conn)
+        {
+            try
+            {
+                object ep = conn?.GetType()
+                    .GetProperty("RemoteEndPoint", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(conn, null);
+
+                object addr = ep?.GetType()
+                    .GetProperty("Address", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(ep, null);
+
+                return Convert.ToString(addr) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
         #endregion
 
@@ -1082,67 +1127,18 @@ namespace CMZDedicatedLidgrenServer
             if (status == 7)
             {
                 var conn = msgType.GetProperty("SenderConnection").GetValue(msg);
+
+                if (conn != null)
+                    _forceDroppedConnections.Remove(conn);
+
                 if (conn != null && _connectionToGamer.TryGetValue(conn, out var disconnectedGamer))
                 {
-                    byte disconnectedId = (byte)disconnectedGamer.GetType().GetProperty("Id").GetValue(disconnectedGamer);
+                    byte disconnectedId = (byte)disconnectedGamer
+                        .GetType()
+                        .GetProperty("Id")
+                        .GetValue(disconnectedGamer);
 
-                    // Notify remaining clients to remove this peer from their session/player state.
-                    try
-                    {
-                        var dropPeerHostPeerType = _netPeer.GetType();
-                        var dropPeerDelivery = Enum.Parse(_commonAsm.GetType("DNA.Net.Lidgren.NetDeliveryMethod"), "ReliableOrdered");
-                        var dropPeerConnections = GetLiveConnections();
-
-                        var dropPeerNetBufferType = _commonAsm.GetType("DNA.Net.Lidgren.NetBuffer");
-                        var dropPeerMsgType = _commonAsm.GetType("DNA.Net.GamerServices.DropPeerMessage");
-                        var dropPeerLidgrenExt = _commonAsm.GetType("DNA.Net.GamerServices.LidgrenExtensions");
-                        var writeDropPeer = dropPeerLidgrenExt?.GetMethod(
-                            "Write",
-                            BindingFlags.Public | BindingFlags.Static,
-                            null,
-                            [dropPeerNetBufferType, dropPeerMsgType],
-                            null);
-
-                        if (dropPeerMsgType != null && writeDropPeer != null && dropPeerConnections != null)
-                        {
-                            object dropPeer = Activator.CreateInstance(dropPeerMsgType);
-                            dropPeerMsgType.GetField("PlayerGID")?.SetValue(dropPeer, disconnectedId);
-
-                            foreach (var otherConn in dropPeerConnections)
-                            {
-                                if (otherConn == null || ReferenceEquals(otherConn, conn))
-                                    continue;
-
-                                if (!_connectionToGamer.TryGetValue(otherConn, out _))
-                                    continue;
-
-                                var om = dropPeerHostPeerType.GetMethod("CreateMessage", Type.EmptyTypes).Invoke(_netPeer, null);
-                                var omType = om.GetType();
-
-                                // Internal session/system message type 2 = DropPeer
-                                omType.GetMethod("Write", [typeof(byte)]).Invoke(om, [(byte)2]);
-                                writeDropPeer.Invoke(null, [om, dropPeer]);
-
-                                otherConn.GetType()
-                                    .GetMethod("SendMessage", [om.GetType(), dropPeerDelivery.GetType(), typeof(int)])
-                                    ?.Invoke(otherConn, [om, dropPeerDelivery, 1]);
-
-                                if (_connectionToGamer.TryGetValue(otherConn, out var otherGamer))
-                                {
-                                    byte otherId = (byte)otherGamer.GetType().GetProperty("Id").GetValue(otherGamer);
-                                    _log($"Sent DropPeer for player {disconnectedId} to recipient {otherId}.");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            _log($"DropPeer broadcast skipped for player {disconnectedId} (missing reflected type/method or live connections).");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _log($"Broadcast DropPeer failed: {ex.GetType().FullName}: {ex.Message}.");
-                    }
+                    BroadcastDropPeerToOthers(conn, disconnectedId);
 
                     _connectionToGamer.Remove(conn);
                     _allGamers.Remove(disconnectedGamer);
@@ -1370,6 +1366,62 @@ namespace CMZDedicatedLidgrenServer
 
             _nextPlayerGid++;
             _log($"Player {_nextPlayerGid - 1} joined");
+        }
+
+        /// <summary>
+        /// Sends an internal DropPeer message to every connected client except the dropped connection.
+        /// </summary>
+        private void BroadcastDropPeerToOthers(object droppedConn, byte droppedPlayerId)
+        {
+            try
+            {
+                var peerType = _netPeer.GetType();
+                var delivery = Enum.Parse(_commonAsm.GetType("DNA.Net.Lidgren.NetDeliveryMethod"), "ReliableOrdered");
+                var connections = GetLiveConnections();
+
+                var netBufferType = _commonAsm.GetType("DNA.Net.Lidgren.NetBuffer");
+                var dropPeerMsgType = _commonAsm.GetType("DNA.Net.GamerServices.DropPeerMessage");
+                var lidgrenExt = _commonAsm.GetType("DNA.Net.GamerServices.LidgrenExtensions");
+                var writeDropPeer = lidgrenExt?.GetMethod(
+                    "Write",
+                    BindingFlags.Public | BindingFlags.Static,
+                    null,
+                    [netBufferType, dropPeerMsgType],
+                    null);
+
+                if (dropPeerMsgType == null || writeDropPeer == null || connections == null)
+                {
+                    _log($"DropPeer broadcast skipped for player {droppedPlayerId}.");
+                    return;
+                }
+
+                object dropPeer = Activator.CreateInstance(dropPeerMsgType);
+                dropPeerMsgType.GetField("PlayerGID")?.SetValue(dropPeer, droppedPlayerId);
+
+                foreach (var otherConn in connections)
+                {
+                    if (otherConn == null || ReferenceEquals(otherConn, droppedConn))
+                        continue;
+
+                    if (!_connectionToGamer.TryGetValue(otherConn, out _))
+                        continue;
+
+                    var om = peerType.GetMethod("CreateMessage", Type.EmptyTypes).Invoke(_netPeer, null);
+                    var omType = om.GetType();
+
+                    // InternalMessageTypes.DropPeer = 2
+                    omType.GetMethod("Write", [typeof(byte)])?.Invoke(om, [(byte)2]);
+                    writeDropPeer.Invoke(null, [om, dropPeer]);
+
+                    otherConn.GetType()
+                        .GetMethod("SendMessage", [om.GetType(), delivery.GetType(), typeof(int)])
+                        ?.Invoke(otherConn, [om, delivery, 1]);
+                }
+            }
+            catch (Exception ex)
+            {
+                _log($"Broadcast DropPeer failed: {ex.GetType().FullName}: {ex.Message}.");
+            }
         }
         #endregion
 
@@ -1806,6 +1858,12 @@ namespace CMZDedicatedLidgrenServer
             object senderConn,
             ulong remoteId)
         {
+            // Hard enforcement comes first.
+            // A force-dropped connection should not be allowed to keep sending packets
+            // even if plugins are disabled, missing, or not initialized yet.
+            if (senderConn != null && _forceDroppedConnections.Contains(senderConn))
+                return true;
+
             if (_plugins == null)
                 return false;
 
@@ -1868,6 +1926,246 @@ namespace CMZDedicatedLidgrenServer
             catch
             {
                 return "<decode failed>";
+            }
+        }
+        #endregion
+
+        #region Player Enforcement / Forced Drop
+
+        public string GetPlayerListText()
+        {
+            if (_connectionToGamer.Count == 0)
+                return "No players connected.";
+
+            string text = "Connected players:";
+
+            foreach (KeyValuePair<object, object> kvp in new List<KeyValuePair<object, object>>(_connectionToGamer))
+            {
+                object conn = kvp.Key;
+                object gamer = kvp.Value;
+
+                byte id = ReadGamerId(gamer);
+                string name = ReadGamerName(gamer);
+                string ip = TryGetConnectionIp(conn);
+
+                text += Environment.NewLine + $"  {id}: {name} ({ip})";
+            }
+
+            return text;
+        }
+
+        public bool KickPlayer(string target, string reason = null)
+        {
+            if (!TryResolveLidgrenPlayer(target, out object conn, out object gamer, out byte gid, out string name, out string ip))
+            {
+                _log($"[PlayerEnforcement] Kick failed. Could not find player: {target}");
+                return false;
+            }
+
+            return ForceDropLidgrenPlayer(conn, gamer, gid, name, ip, ban: false, reason: reason);
+        }
+
+        public bool BanPlayer(string target, string reason = null)
+        {
+            if (!TryResolveLidgrenPlayer(target, out object conn, out object gamer, out byte gid, out string name, out string ip))
+            {
+                _log($"[PlayerEnforcement] Ban failed. Could not find player: {target}");
+                return false;
+            }
+
+            return ForceDropLidgrenPlayer(conn, gamer, gid, name, ip, ban: true, reason: reason);
+        }
+
+        public bool UnbanPlayer(string target)
+        {
+            bool removed = _banStore != null && _banStore.Remove(target);
+
+            _log(removed
+                ? $"[PlayerEnforcement] Removed ban: {target}"
+                : $"[PlayerEnforcement] No ban matched: {target}");
+
+            return removed;
+        }
+
+        private bool TryResolveLidgrenPlayer(
+            string target,
+            out object conn,
+            out object gamer,
+            out byte gid,
+            out string name,
+            out string ip)
+        {
+            conn = null;
+            gamer = null;
+            gid = 0;
+            name = string.Empty;
+            ip = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(target))
+                return false;
+
+            target = target.Trim();
+
+            foreach (KeyValuePair<object, object> kvp in new List<KeyValuePair<object, object>>(_connectionToGamer))
+            {
+                byte currentId = ReadGamerId(kvp.Value);
+                string currentName = ReadGamerName(kvp.Value);
+                string currentIp = TryGetConnectionIp(kvp.Key);
+
+                if (byte.TryParse(target, out byte targetId) && currentId == targetId)
+                {
+                    conn = kvp.Key;
+                    gamer = kvp.Value;
+                    gid = currentId;
+                    name = currentName;
+                    ip = currentIp;
+                    return true;
+                }
+
+                if (string.Equals(currentIp, target, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(currentName, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    conn = kvp.Key;
+                    gamer = kvp.Value;
+                    gid = currentId;
+                    name = currentName;
+                    ip = currentIp;
+                    return true;
+                }
+            }
+
+            object partialConn = null;
+            object partialGamer = null;
+            byte partialGid = 0;
+            string partialName = string.Empty;
+            string partialIp = string.Empty;
+
+            foreach (KeyValuePair<object, object> kvp in new List<KeyValuePair<object, object>>(_connectionToGamer))
+            {
+                string currentName = ReadGamerName(kvp.Value);
+
+                if (currentName.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    if (partialGamer != null)
+                    {
+                        _log($"[PlayerEnforcement] Target '{target}' is ambiguous.");
+                        return false;
+                    }
+
+                    partialConn = kvp.Key;
+                    partialGamer = kvp.Value;
+                    partialGid = ReadGamerId(kvp.Value);
+                    partialName = currentName;
+                    partialIp = TryGetConnectionIp(kvp.Key);
+                }
+            }
+
+            if (partialGamer == null)
+                return false;
+
+            conn = partialConn;
+            gamer = partialGamer;
+            gid = partialGid;
+            name = partialName;
+            ip = partialIp;
+            return true;
+        }
+
+        private bool ForceDropLidgrenPlayer(
+            object conn,
+            object gamer,
+            byte gid,
+            string name,
+            string ip,
+            bool ban,
+            string reason)
+        {
+            if (conn == null || gamer == null)
+                return false;
+
+            reason = string.IsNullOrWhiteSpace(reason)
+                ? (ban ? "Banned from this server." : "Kicked from this server.")
+                : reason.Trim();
+
+            if (ban)
+            {
+                if (!string.IsNullOrWhiteSpace(ip))
+                    _banStore?.BanIp(ip, name, reason);
+
+                if (!string.IsNullOrWhiteSpace(name))
+                    _banStore?.BanName(name, reason);
+            }
+
+            _forceDroppedConnections.Add(conn);
+
+            // Tell other clients to remove this peer.
+            BroadcastDropPeerToOthers(conn, gid);
+
+            // Tell Lidgren to disconnect the target transport connection.
+            try
+            {
+                conn.GetType()
+                    .GetMethod("Disconnect", [typeof(string)])
+                    ?.Invoke(conn, [reason]);
+            }
+            catch (Exception ex)
+            {
+                _log($"[PlayerEnforcement] Lidgren disconnect failed for {name}: {ex.Message}");
+            }
+
+            RemoveLidgrenPlayerFromServer(conn, gamer, gid, name);
+
+            _log(ban
+                ? $"[PlayerEnforcement] Hard banned {name} ({ip})."
+                : $"[PlayerEnforcement] Hard kicked {name} ({ip}).");
+
+            return true;
+        }
+
+        private void RemoveLidgrenPlayerFromServer(object conn, object gamer, byte gid, string name)
+        {
+            _connectionToGamer.Remove(conn);
+            _allGamers.Remove(gamer);
+            _playerExistsPayloadById.Remove(gid);
+
+            _worldHandler?.OnClientDisconnected(gid);
+            NotifyPluginsPlayerLeft(gid);
+
+            ApplyCurrentServerMessageToWorldInfo(saveToDisk: false);
+
+            _log($"[PlayerEnforcement] Removed player from server state: id={gid}, name={name}, remaining={_allGamers.Count}.");
+
+            if (_allGamers.Count == 0)
+                _nextPlayerGid = 1;
+        }
+
+        private byte ReadGamerId(object gamer)
+        {
+            try
+            {
+                return Convert.ToByte(gamer?.GetType()
+                    .GetProperty("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(gamer, null));
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private string ReadGamerName(object gamer)
+        {
+            try
+            {
+                object name = gamer?.GetType()
+                    .GetProperty("Gamertag", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    ?.GetValue(gamer, null);
+
+                return Convert.ToString(name) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
         #endregion

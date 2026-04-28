@@ -182,16 +182,70 @@ namespace CMZDedicatedSteamServer
             if (command.Length == 0)
                 return;
 
+            if (command.Equals("players", StringComparison.OrdinalIgnoreCase))
+            {
+                log(server.GetPlayerListText());
+                return;
+            }
+
+            if (command.StartsWith("kick ", StringComparison.OrdinalIgnoreCase))
+            {
+                string args = command.Substring(5).Trim();
+
+                if (!TryParseTargetAndReason(args, out string target, out string reason))
+                {
+                    log("Usage: kick <id|steamid|name> [reason]");
+                    log("Example: kick 2 Being annoying");
+                    log("Example: kick \"Jacob Ladders\" Being annoying");
+                    return;
+                }
+
+                server.KickPlayer(target, reason);
+                return;
+            }
+
+            if (command.StartsWith("ban ", StringComparison.OrdinalIgnoreCase))
+            {
+                string args = command.Substring(4).Trim();
+
+                if (!TryParseTargetAndReason(args, out string target, out string reason))
+                {
+                    log("Usage: ban <id|steamid|name> [reason]");
+                    log("Example: ban 2 Griefing protected areas");
+                    log("Example: ban \"Jacob Ladders\" Griefing protected areas");
+                    return;
+                }
+
+                server.BanPlayer(target, reason);
+                return;
+            }
+
+            if (command.StartsWith("unban ", StringComparison.OrdinalIgnoreCase))
+            {
+                string target = command.Substring(6).Trim();
+
+                if (target.StartsWith("\"") && target.EndsWith("\"") && target.Length > 1)
+                    target = target.Substring(1, target.Length - 2).Trim();
+
+                server.UnbanPlayer(target);
+                return;
+            }
+
             switch (command.ToLowerInvariant())
             {
                 case "help":
                 case "?":
                     log("Console commands:");
-                    log("  reload            Reload server.properties and plugin files");
-                    log("  reload properties Reload runtime-safe server.properties values");
-                    log("  reload plugins    Reload plugin config/region/announcement files");
-                    log("  stop              Stop the server");
-                    log("  help              Show this command list");
+                    log("  reload                          Reload server.properties and plugin files");
+                    log("  reload properties               Reload runtime-safe server.properties values");
+                    log("  reload plugins                  Reload plugin config/region/announcement files");
+                    log("  stop                            Stop the server");
+                    log("  players                         List connected players");
+                    log("  bans                            List saved bans");
+                    log("  kick <id|steamid|name> [reason] Hard-kick a connected player");
+                    log("  ban <id|steamid|name> [reason]  Hard-ban and drop a connected player");
+                    log("  unban <steamid|ip|name>         Remove a saved ban");
+                    log("  help                            Show this command list");
                     break;
 
                 case "reload":
@@ -221,6 +275,65 @@ namespace CMZDedicatedSteamServer
                     log("Unknown command. Type 'help' for console commands.");
                     break;
             }
+        }
+        #endregion
+
+        #region Parsing Helpers
+
+        /// <summary>
+        /// Parses commands that use:
+        ///   command <target> [reason...]
+        ///
+        /// Supported examples:
+        ///   kick 2 Being annoying
+        ///   ban 76561198000000000 Griefing
+        ///   kick "Jacob Ladders" Being annoying
+        ///   ban "Jacob Ladders" Griefing protected areas
+        ///
+        /// Notes:
+        /// - Quoted targets allow player names with spaces.
+        /// - Numeric targets should be player IDs or SteamIDs.
+        /// - If no reason is provided, the server will use its default kick/ban reason.
+        /// </summary>
+        private static bool TryParseTargetAndReason(string args, out string target, out string reason)
+        {
+            target = string.Empty;
+            reason = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(args))
+                return false;
+
+            args = args.Trim();
+
+            // Quoted target: "Jacob Ladders" optional reason here
+            if (args.StartsWith("\""))
+            {
+                int closingQuote = args.IndexOf('"', 1);
+
+                if (closingQuote <= 1)
+                    return false;
+
+                target = args.Substring(1, closingQuote - 1).Trim();
+
+                if (closingQuote + 1 < args.Length)
+                    reason = args.Substring(closingQuote + 1).Trim();
+
+                return target.Length > 0;
+            }
+
+            // Normal target: first token is the target, everything after it is the reason.
+            int firstSpace = args.IndexOf(' ');
+
+            if (firstSpace < 0)
+            {
+                target = args;
+                return target.Length > 0;
+            }
+
+            target = args.Substring(0, firstSpace).Trim();
+            reason = args.Substring(firstSpace + 1).Trim();
+
+            return target.Length > 0;
         }
         #endregion
 

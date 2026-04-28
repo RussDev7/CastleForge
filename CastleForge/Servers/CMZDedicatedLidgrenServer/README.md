@@ -36,6 +36,7 @@ That gives you a cleaner setup for:
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
 - Automatically clears Endurance-mode death wipes by sending a server-side restart/respawn when all real connected players are dead.
 - Includes a packaged **server layout** with sample config, sample world data, and a default inventory template.
+- Includes server-side **Player Enforcement** commands with IP/name-backed bans, optional ban reasons, and transport-level hard drops.
 
 ---
 
@@ -448,6 +449,91 @@ For **CMZDedicatedLidgrenServer**, the resolved message is sent through discover
 
 ---
 
+## Server Administration / Player Enforcement
+
+CMZDedicatedLidgrenServer includes built-in console commands for basic player enforcement.
+
+These commands are handled server-side and use a hard drop / transport-level removal path instead of relying only on a normal in-game kick message. This helps prevent modified clients from bypassing a kick by removing or ignoring the client-side kick-message pipeline.
+
+### Commands
+
+| Command                             | Description                                                                                |
+|-------------------------------------|--------------------------------------------------------------------------------------------|
+| `players`                           | Lists connected players with their player ID, name, and SteamID.                           |
+| `bans`                              | Lists saved bans with ban type, last known player name, SteamID, reason, and created time. |
+| `kick <id\|steamid\|name> [reason]` | Hard-kicks a connected player.                                                             |
+| `ban <id\|steamid\|name> [reason]`  | Bans and hard-drops a connected player.                                                    |
+| `unban <steamid\|name>`             | Removes a saved ban by SteamID, exact name, or unique partial name.                        |
+
+### Examples
+
+```text
+players
+bans
+
+kick 2
+kick 2 Being annoying
+kick jacob Being annoying
+kick "Jacob Smith" Being annoying
+kick 192.168.1.50 Being annoying
+
+ban 2
+ban 2 Griefing protected areas
+ban jacob Griefing protected areas
+ban "Jacob Smith" Griefing protected areas
+ban 192.168.1.50 Griefing protected areas
+
+unban jacob
+unban "Jacob Smith"
+unban 192.168.1.50
+````
+
+### Names with spaces
+
+Player names with spaces should be wrapped in quotes:
+
+```text
+ban "Jacob Smith" Griefing protected areas
+kick "Jacob Smith" Being annoying
+```
+
+You can also use the player ID from `players`, which is usually the safest option:
+
+```text
+players
+ban 2 Griefing protected areas
+```
+
+### Optional reasons
+
+Kick and ban commands support optional reasons. The reason is saved to the ban list and passed to the transport disconnect path when possible.
+
+Because this uses a hard drop path, the reason should be treated as best-effort display text. A modified client may hide the visible message, but the server still removes the peer from the authoritative session.
+
+### Ban storage
+
+Lidgren bans are stored under:
+
+```text
+PlayerEnforcement\Bans.ini
+```
+
+Lidgren bans may use IP and/or saved player name depending on what information is available.
+
+Example:
+
+```ini
+# type|value|lastName|reason|createdUtcTicks
+ip|192.168.1.50|Jacob Smith|Griefing protected areas|638813123456789000
+name|Jacob Smith|Jacob Smith|Griefing protected areas|638813123456789000
+```
+
+### Lidgren ban limitations
+
+Lidgren bans are not as strong as SteamID bans. IP bans can be bypassed with VPNs or dynamic IP changes, and name bans can be bypassed by changing names. For stronger identity enforcement, use the Steam dedicated server when possible.
+
+---
+
 ## Building
 
 ### Visual Studio / MSBuild
@@ -542,6 +628,7 @@ Current built-in plugin support includes:
 - **FloodGuard** malicious packet spam protection
 - **RegionProtect** server enforcement
 - **RememberTime** per-world time persistence between restarts
+- **Player Enforcement** console commands with IP/name-backed persistent bans
 - block mining / placing protection
 - explosion protection
 - crate item protection
@@ -822,6 +909,17 @@ Expected core file:
 ```text
 CastleMinerZ.exe
 ```
+
+</details>
+
+<details>
+<summary><strong>A kicked or banned player does not see a normal kick message</strong></summary>
+
+Player Enforcement uses a hard drop / transport-level removal path. This is intentional.
+
+Some modified clients can hide, remove, or ignore the normal in-game kick-message pipeline. The dedicated server therefore removes the peer from server-side state, broadcasts a drop-peer update to remaining clients, and stops accepting packets from the removed peer.
+
+The visible reason message is best-effort only. A normal client may show it, but a modified client may hide it.
 
 </details>
 

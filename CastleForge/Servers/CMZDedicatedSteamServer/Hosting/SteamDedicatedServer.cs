@@ -118,6 +118,17 @@ namespace CMZDedicatedSteamServer.Hosting
         /// </summary>
         private ServerPluginManager _plugins;
 
+        /// <summary>
+        /// Persistent SteamID / name ban store for server-side player enforcement.
+        /// </summary>
+        private ServerBanStore _banStore;
+
+        /// <summary>
+        /// SteamIDs that were force-dropped and should have late packets ignored.
+        /// Cleared when a fresh connection approval is accepted.
+        /// </summary>
+        private readonly HashSet<ulong> _forceDroppedSteamIds = [];
+
         #endregion
 
         #region Peer / packet state
@@ -228,6 +239,7 @@ namespace CMZDedicatedSteamServer.Hosting
             _hostGamer = CreateHostGamer();
             _approval = new SteamConnectionApproval(_config, _assemblyLoader.CommonAssembly, _log);
             _peers = new SteamPeerRegistry();
+            _banStore = new ServerBanStore(_baseDir, _log);
             _lobbyHost = new SteamLobbyHost(
                 _config,
                 _assemblyLoader.CommonAssembly,
@@ -514,6 +526,13 @@ namespace CMZDedicatedSteamServer.Hosting
             string messageTypeName = messageType.ToString();
             ulong senderSteamId = Convert.ToUInt64(ReflectEx.GetRequiredMemberValue(packet, "SenderId"));
 
+            if (messageTypeName == "Data" && _forceDroppedSteamIds.Contains(senderSteamId))
+            {
+                // The peer was already removed from the authoritative server state.
+                // Ignore late packets so a modified client cannot keep interacting.
+                return;
+            }
+
             switch (messageTypeName)
             {
                 case "ConnectionApproval":
@@ -536,15 +555,31 @@ namespace CMZDedicatedSteamServer.Hosting
         private void HandleConnectionApproval(object packet, ulong senderSteamId)
         {
             ApprovalDecision decision = _approval.ValidateRequest(packet, senderSteamId);
-            if (decision.Allowed)
+
+            if (!decision.Allowed)
             {
-                _steam.AcceptConnection(senderSteamId);
-                _log($"[ConnectionApproval] Accepted {decision.Gamertag} ({senderSteamId}).");
+                _steam.DenyConnection(senderSteamId, decision.ResultCode);
+                _log($"[ConnectionApproval] Denied {senderSteamId} -> {decision.ResultCode}");
                 return;
             }
 
-            _steam.DenyConnection(senderSteamId, decision.ResultCode);
-            _log($"[ConnectionApproval] Denied {senderSteamId} -> {decision.ResultCode}");
+            if (_banStore != null &&
+                _banStore.IsBanned(senderSteamId, null, decision.Gamertag, out ServerBanRecord ban))
+            {
+                string reason = string.IsNullOrWhiteSpace(ban.Reason)
+                    ? "Banned from this server."
+                    : ban.Reason;
+
+                _steam.DenyConnection(senderSteamId, reason);
+                _log($"[PlayerEnforcement] Denied banned Steam peer {decision.Gamertag} ({senderSteamId}). Reason={reason}");
+                return;
+            }
+
+            // Allow a kicked player to reconnect unless they were actually banned.
+            _forceDroppedSteamIds.Remove(senderSteamId);
+
+            _steam.AcceptConnection(senderSteamId);
+            _log($"[ConnectionApproval] Accepted {decision.Gamertag} ({senderSteamId}).");
         }
 
         /// <summary>
@@ -593,6 +628,8 @@ namespace CMZDedicatedSteamServer.Hosting
                 {
                     if (_peers.RemoveBySteamId(senderSteamId, out ConnectedSteamPeer peer))
                     {
+                        // Re-add temporarily so RemoveSteamPeerFromServer can run safely if you want one shared path,
+                        // or just keep your existing block. The important part is to avoid double notifications.
                         _approval.RemovePeer(senderSteamId);
                         _connectionToGamer.Remove(senderSteamId);
                         _playerExistsPayloadById.Remove(peer.Gid);
@@ -925,6 +962,194 @@ namespace CMZDedicatedSteamServer.Hosting
                 WriteByte(packet, droppedPeer.Gid);
                 _steam.SendPacket(packet, existingPeer.SteamId, reliableOrdered, 1);
             }
+        }
+        #endregion
+
+        #region Player Enforcement / Forced Drop
+
+        /// <summary>
+        /// Returns a console-friendly connected player list.
+        /// </summary>
+        public string GetPlayerListText()
+        {
+            if (_peers == null)
+                return "No peer registry is available yet.";
+
+            IReadOnlyList<ConnectedSteamPeer> peers = _peers.GetConnectedPeersSnapshot();
+            if (peers.Count == 0)
+                return "No players connected.";
+
+            string text = "Connected players:";
+
+            foreach (ConnectedSteamPeer peer in peers)
+                text += Environment.NewLine + $"  {peer.Gid}: {peer.Gamertag} ({peer.SteamId})";
+
+            return text;
+        }
+
+        /// <summary>
+        /// Force-kicks a connected Steam peer without relying on KickMessage.
+        /// </summary>
+        public bool KickPlayer(string target, string reason = null)
+        {
+            if (!TryResolveSteamPeer(target, out ConnectedSteamPeer peer))
+            {
+                _log($"[PlayerEnforcement] Kick failed. Could not find player: {target}");
+                return false;
+            }
+
+            return ForceDropSteamPeer(peer, ban: false, reason: reason);
+        }
+
+        /// <summary>
+        /// Force-bans a connected Steam peer, persists the SteamID ban, then drops them.
+        /// </summary>
+        public bool BanPlayer(string target, string reason = null)
+        {
+            if (!TryResolveSteamPeer(target, out ConnectedSteamPeer peer))
+            {
+                _log($"[PlayerEnforcement] Ban failed. Could not find player: {target}");
+                return false;
+            }
+
+            return ForceDropSteamPeer(peer, ban: true, reason: reason);
+        }
+
+        /// <summary>
+        /// Removes a persisted SteamID / name ban.
+        /// </summary>
+        public bool UnbanPlayer(string target)
+        {
+            bool removed = _banStore != null && _banStore.Remove(target);
+
+            _log(removed
+                ? $"[PlayerEnforcement] Removed ban: {target}"
+                : $"[PlayerEnforcement] No ban matched: {target}");
+
+            return removed;
+        }
+
+        /// <summary>
+        /// Resolves a connected Steam peer by GID, SteamID, exact name, or partial name.
+        /// </summary>
+        private bool TryResolveSteamPeer(string target, out ConnectedSteamPeer peer)
+        {
+            peer = null;
+
+            if (_peers == null || string.IsNullOrWhiteSpace(target))
+                return false;
+
+            target = target.Trim();
+
+            if (ulong.TryParse(target, out ulong steamId) &&
+                _peers.TryGetConnectedPeer(steamId, out peer))
+            {
+                return true;
+            }
+
+            IReadOnlyList<ConnectedSteamPeer> peers = _peers.GetConnectedPeersSnapshot();
+
+            if (byte.TryParse(target, out byte gid))
+            {
+                foreach (ConnectedSteamPeer current in peers)
+                {
+                    if (current.Gid == gid)
+                    {
+                        peer = current;
+                        return true;
+                    }
+                }
+            }
+
+            foreach (ConnectedSteamPeer current in peers)
+            {
+                if (string.Equals(current.Gamertag, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    peer = current;
+                    return true;
+                }
+            }
+
+            ConnectedSteamPeer partial = null;
+
+            foreach (ConnectedSteamPeer current in peers)
+            {
+                if (current.Gamertag != null &&
+                    current.Gamertag.IndexOf(target, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    if (partial != null)
+                    {
+                        _log($"[PlayerEnforcement] Target '{target}' is ambiguous.");
+                        return false;
+                    }
+
+                    partial = current;
+                }
+            }
+
+            peer = partial;
+            return peer != null;
+        }
+
+        /// <summary>
+        /// Performs the actual hard kick/ban.
+        /// This is the dedicated-server equivalent of CastleWalls Mk2 hard enforcement.
+        /// </summary>
+        private bool ForceDropSteamPeer(ConnectedSteamPeer peer, bool ban, string reason)
+        {
+            if (peer == null || peer.SteamId == 0UL)
+                return false;
+
+            reason = string.IsNullOrWhiteSpace(reason)
+                ? (ban ? "Banned from this server." : "Kicked from this server.")
+                : reason.Trim();
+
+            if (ban)
+                _banStore?.BanSteam(peer.SteamId, peer.Gamertag, reason);
+
+            _forceDroppedSteamIds.Add(peer.SteamId);
+
+            // Tell the target connection to close on the Steam transport path.
+            // This does not depend on the client-side KickMessage pipeline.
+            try
+            {
+                _steam?.DenyConnection(peer.SteamId, reason);
+            }
+            catch (Exception ex)
+            {
+                _log($"[PlayerEnforcement] Steam deny failed for {peer.SteamId}: {ex.Message}");
+            }
+
+            RemoveSteamPeerFromServer(peer);
+
+            _log(ban
+                ? $"[PlayerEnforcement] Hard banned {peer.Gamertag} ({peer.SteamId})."
+                : $"[PlayerEnforcement] Hard kicked {peer.Gamertag} ({peer.SteamId}).");
+
+            return true;
+        }
+
+        /// <summary>
+        /// Removes a Steam peer from all authoritative server-side state and broadcasts DropPeer.
+        /// </summary>
+        private void RemoveSteamPeerFromServer(ConnectedSteamPeer peer)
+        {
+            if (peer == null)
+                return;
+
+            _peers?.RemoveBySteamId(peer.SteamId, out _);
+            _approval?.RemovePeer(peer.SteamId);
+            _connectionToGamer.Remove(peer.SteamId);
+            _playerExistsPayloadById.Remove(peer.Gid);
+
+            _worldHandler?.OnClientDisconnected(peer.Gid);
+            NotifyPluginsPlayerLeft(peer.Gid, peer.Gamertag);
+
+            // Important: tell every remaining client to remove this peer immediately.
+            BroadcastDropPeerToOthers(peer);
+
+            _worldHandler?.ApplyServerMessage(BuildServerDisplayMessage(), saveToDisk: false);
+            PublishCurrentLobbyMetadata();
         }
         #endregion
 
