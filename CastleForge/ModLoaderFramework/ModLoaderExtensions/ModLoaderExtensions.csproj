@@ -104,10 +104,14 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Embedded\DiscordButton.png" />
+    <EmbeddedResource Include="Embedded\MenuIcons\DiscordButton.png" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Embedded\DiscordButton_Hover.png" />
+    <EmbeddedResource Include="Embedded\MenuIcons\DiscordButton_Hover.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Embedded\MenuIcons\SupportButton.png" />
+    <EmbeddedResource Include="Embedded\MenuIcons\SupportButton_Hover.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

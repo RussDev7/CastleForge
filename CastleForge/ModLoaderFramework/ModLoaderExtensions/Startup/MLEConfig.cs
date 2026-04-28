@@ -27,7 +27,24 @@ namespace ModLoaderExt
         // [Ads].
         public static volatile bool HideMenuAd = true;
     }
+    #endregion
 
+    #region Menu Items
+
+    /// <summary>
+    /// Shared runtime knobs for main-menu icon buttons.
+    /// Written by MLEConfig.ApplyToStatics(), read by main-menu button patches.
+    /// </summary>
+    internal static class MenuItemsConfig
+    {
+        // [MenuItems].
+
+        /// <summary>Shows the bottom-left Discord button on the main menu.</summary>
+        public static volatile bool ShowDiscordButton = true;
+
+        /// <summary>Shows the bottom-left Support button on the main menu.</summary>
+        public static volatile bool ShowSupportButton = true;
+    }
     #endregion
 
     #region Network Flood Guard
@@ -151,6 +168,10 @@ namespace ModLoaderExt
         // [Ads].
         public bool HideMenuAd = true;
 
+        // [MenuItems].
+        public bool ShowDiscordButton = true;
+        public bool ShowSupportButton = true;
+
         // [FloodGuard].
         public bool FloodGuardEnabled         = true;
         public int  PerSenderMaxPacketsPerSec = 512;
@@ -209,6 +230,12 @@ namespace ModLoaderExt
                     "[Ads]",
                     "; Hide the CMZ-Resurrection menu ad on the main menu.",
                     "HideMenuAd                = true",
+                    "",
+                    "[MenuItems]",
+                    "; Main-menu bottom-left icon buttons.",
+                    "; These only control visibility/clickability, not embedded resource loading.",
+                    "ShowDiscordButton         = true",
+                    "ShowSupportButton         = true",
                     "",
                     "[FloodGuard]",
                     "; Master toggle for inbound flood protection / blackhole logic.",
@@ -272,12 +299,17 @@ namespace ModLoaderExt
                 });
             }
 
+            EnsureMenuItemsDefaults();
             var ini = SimpleIni.Load(ConfigPath);
 
             var cfg = new MLEConfig
             {
                 // [Ads].
                 HideMenuAd = ini.GetBool("Ads", "HideMenuAd", true),
+
+                // [MenuItems].
+                ShowDiscordButton = ini.GetBool("MenuItems", "ShowDiscordButton", true),
+                ShowSupportButton = ini.GetBool("MenuItems", "ShowSupportButton", true),
 
                 // [FloodGuard].
                 FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", true),
@@ -343,6 +375,10 @@ namespace ModLoaderExt
         {
             // [Ads].
             AdsConfig.HideMenuAd = HideMenuAd;
+
+            // [MenuItems].
+            MenuItemsConfig.ShowDiscordButton = ShowDiscordButton;
+            MenuItemsConfig.ShowSupportButton = ShowSupportButton;
 
             // [FloodGuard].
             FloodGuard_Settings.FloodGuardEnabled         = FloodGuardEnabled;
@@ -430,6 +466,74 @@ namespace ModLoaderExt
             var lines = new List<string>(File.ReadAllLines(ConfigPath));
             UpsertIniKey(lines, "FloodGuardAllowlist", "AllowMessageTypes", joined, 26);
             File.WriteAllLines(ConfigPath, lines.ToArray());
+        }
+
+        /// <summary>
+        /// Ensures newer [MenuItems] defaults exist in older config files without
+        /// overwriting user-customized values.
+        /// </summary>
+        private static void EnsureMenuItemsDefaults()
+        {
+            try
+            {
+                var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+                EnsureIniKeyDefault(lines, "MenuItems", "ShowDiscordButton", "true", 26);
+                EnsureIniKeyDefault(lines, "MenuItems", "ShowSupportButton", "true", 26);
+
+                File.WriteAllLines(ConfigPath, lines.ToArray());
+            }
+            catch
+            {
+                // Do not block config loading if optional default insertion fails.
+            }
+        }
+
+        /// <summary>
+        /// Inserts a default key only when it is missing.
+        /// Unlike UpsertIniKey, this does not overwrite existing user values.
+        /// </summary>
+        private static void EnsureIniKeyDefault(List<string> lines, string sectionName, string key, string value, int padWidth)
+        {
+            if (IniKeyExists(lines, sectionName, key))
+                return;
+
+            UpsertIniKey(lines, sectionName, key, value, padWidth);
+        }
+
+        /// <summary>
+        /// Returns true if a key already exists inside an INI section.
+        /// </summary>
+        private static bool IniKeyExists(List<string> lines, string sectionName, string key)
+        {
+            if (!TryFindSectionRange(lines, sectionName, out int startIndex, out int endIndex))
+                return false;
+
+            for (int i = startIndex + 1; i < endIndex; i++)
+            {
+                string raw = lines[i] ?? "";
+                string trimmed = raw.TrimStart();
+
+                if (trimmed.Length == 0)
+                    continue;
+
+                if (trimmed[0] == ';' || trimmed[0] == '#')
+                    continue;
+
+                if (trimmed[0] == '[')
+                    break;
+
+                int eq = trimmed.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+
+                string existingKey = trimmed.Substring(0, eq).Trim();
+
+                if (existingKey.Equals(key, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         // Helpers.

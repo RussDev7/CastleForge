@@ -113,16 +113,17 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 <summary><strong>Main menu, chat history, and text-input polish</strong></summary>
 
 | Area | Patch / system | Type | What it changes |
-|------------|-------------------------------------------|-------------|--------------------------------------------------------------------------------------------------|
-| Main menu  | Hide CMZ-Resurrection ad                  | Tweak       | Hides the main-menu ad visually when enabled.                                                    |
-| Main menu  | Block hidden ad interaction               | Tweak       | Prevents the hidden main-menu ad area from still receiving input/click behavior.                 |
-| Main menu  | Mods-loaded banner                        | Improvement | Draws a main-menu banner that shows how many mods are currently loaded.                          |
-| Chat input | Capture sent chat into history            | Improvement | Saves submitted chat/command lines into a reusable in-game history buffer.                       |
-| Chat input | Up / Down history browsing                | Improvement | Adds command/chat history recall inside `PlainChatInputScreen` using the arrow keys.             |
-| Chat input | Trim non-command history between sessions | Improvement | Preserves useful command history while trimming ordinary chat lines when leaving a game session. |
-| Text input | Centered caret rendering                  | Tweak       | Repositions the text caret so chat entry looks visually cleaner and more centered.               |
-| Text input | Single-step Left / Right caret movement   | Improvement | Makes cursor movement through text input feel cleaner and more predictable.                      |
-| Text input | Preserve caret position while typing      | Fix         | Stops the caret from snapping to the end while typing and keeps editing behavior stable.         |
+|------------|-------------------------------------------|-------------|-------------------------------------------------------------------------------------------------------------|
+| Main menu  | Hide CMZ-Resurrection ad                  | Tweak       | Hides the main-menu ad visually when enabled.                                                               |
+| Main menu  | Block hidden ad interaction               | Tweak       | Prevents the hidden main-menu ad area from still receiving input/click behavior.                            |
+| Main menu  | Mods-loaded banner                        | Improvement | Draws a main-menu banner that shows how many mods are currently loaded.                                     |
+| Main menu  | Discord + Support menu buttons            | Improvement | Adds embedded bottom-left main-menu buttons for joining the CastleForge Discord and supporting CastleForge. |
+| Chat input | Capture sent chat into history            | Improvement | Saves submitted chat/command lines into a reusable in-game history buffer.                                  |
+| Chat input | Up / Down history browsing                | Improvement | Adds command/chat history recall inside `PlainChatInputScreen` using the arrow keys.                        |
+| Chat input | Trim non-command history between sessions | Improvement | Preserves useful command history while trimming ordinary chat lines when leaving a game session.            |
+| Text input | Centered caret rendering                  | Tweak       | Repositions the text caret so chat entry looks visually cleaner and more centered.                          |
+| Text input | Single-step Left / Right caret movement   | Improvement | Makes cursor movement through text input feel cleaner and more predictable.                                 |
+| Text input | Preserve caret position while typing      | Fix         | Stops the caret from snapping to the end while typing and keeps editing behavior stable.                    |
 
 </details>
 
@@ -132,7 +133,7 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 
 | Preview | What it demonstrates |
 |-----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| ![Main Menu](_Images/MainMenu.gif)            | **Main menu polish** — Shows the hidden ad behavior and the mods-loaded banner on the main menu.                                       |
+| ![Main Menu](_Images/MainMenu.gif)            | **Main menu polish** — Shows the hidden ad behavior, mods-loaded banner, and bottom-left Discord / Support buttons on the main menu.   |
 | ![Chat Optimization](_Images/ChatHistory.gif) | **Chat and input improvements** — Shows chat history recall, command recall, and smoother text-entry behavior.                         |
 | ![Commands](_Images/CommandsHelp.png)         | **Shared command system** — Highlights `/help`, command paging, and the shared slash-command framework used by other CastleForge mods. |
 | ![Config File](_Images/ConfigFile.png)        | **Runtime configuration** — Shows the generated config and the main sections users can reload and tune without restarting.             |
@@ -195,6 +196,7 @@ That makes it one of the most important “always-on” core mods in the CastleF
 
 - optional hiding of the CMZ-Resurrection main menu ad
 - main menu banner showing how many mods are loaded
+- bottom-left main menu buttons for CastleForge Discord and Support links
 
 ### Network hardening
 
@@ -469,6 +471,8 @@ This is not just censorship. It is readability and trust protection. It keeps th
 - centers the text caret visually
 - enables cleaner single-step Left / Right caret movement
 - preserves caret position while typing instead of jumping to the end
+- adds embedded bottom-left Discord and Support buttons to the main menu
+- supports individually hiding the Discord and Support menu buttons through `[MenuItems]`
 
 ### Why it matters
 
@@ -518,6 +522,7 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | Section | Purpose |
 |-------------------------|--------------------------------------------------------------|
 | `[Ads]`                 | Main menu ad visibility behavior.                            |
+| `[MenuItems]`           | Main menu bottom-left button visibility behavior.            |
 | `[FloodGuard]`          | Inbound packet rate limiting and blackhole behavior.         |
 | `[FloodGuardAllowlist]` | Allowed message types and allowlist packet rate limits.      |
 | `[PickupThrottle]`      | Local pickup request throttling.                             |
@@ -528,28 +533,30 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 ### Config reference
 
 | Key | Default | What it controls |
-|---------------------------------------------------|--------------------------------------------:|------------------------------------------------------------|
-| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                        |
-| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                |
-| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.          |
-| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap. |
-| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.            |
-| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.   |
-| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.          |
-| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.      |
-| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                    |
-| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.      |
-| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.             |
-| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                       |
-| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                          |
-| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                      |
-| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote. |
-| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                 |
-| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.    |
-| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                             |
-| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                         |
-| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                           |
-| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                        |
+|---------------------------------------------------|--------------------------------------------:|--------------------------------------------------------------------|
+| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                                |
+| `ShowDiscordButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left CastleForge Discord button on the main menu. |
+| `ShowSupportButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left Support CastleForge button on the main menu. |
+| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                        |
+| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.                  |
+| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap.         |
+| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.                    |
+| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.           |
+| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.                  |
+| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.              |
+| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                            |
+| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.              |
+| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.                     |
+| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                               |
+| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                                  |
+| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                              |
+| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote.         |
+| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                         |
+| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.            |
+| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                     |
+| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                 |
+| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                   |
+| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                |
 
 ### Default config template
 
@@ -563,6 +570,12 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 [Ads]
 ; Hide the CMZ-Resurrection menu ad on the main menu.
 HideMenuAd                = true
+
+[MenuItems]
+; Main-menu bottom-left icon buttons.
+; These only control visibility/clickability, not embedded resource loading.
+ShowDiscordButton         = true
+ShowSupportButton         = true
 
 [FloodGuard]
 ; Master toggle for inbound flood protection / blackhole logic.
