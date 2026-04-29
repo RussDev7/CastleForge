@@ -54,19 +54,54 @@ If CastleForge has been useful to you and you’d like to support continued deve
 
 ## Quick install flow
 
+Most players should use the automatic install. Manual install is only needed if you want to place the loader and mod files yourself.
+
+### Option 1: Automatic install recommended
+
+1. Go to the **[CastleForge Releases](https://github.com/RussDev7/CastleForge/releases)** page.
+2. Download the latest **`full-v...`** ZIP.
+3. Extract the ZIP.
+4. Run **`Update&Launch.bat`**.
+5. CastleForge will copy the needed files into your CastleMiner Z folder and launch the game.
+
+You only need to run this once for the first install. You can run it again later when updating CastleForge.
+
+### Option 2: Manual install (advanced)
+
+Use this option if you want to install the loader and mod files yourself.
+
 1. Install **[ModLoader](CastleForge/ModLoaderFramework/ModLoader/README.md)** first.
-2. Open your CastleMiner Z game folder.
+2. Open your CastleMiner Z game folder:
+   ```text
+   C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
+   ```
 3. Create a folder named **`!Mods`** if it does not already exist.
 4. Put **`ModLoaderExtensions.dll`** and any other mod `.dll` files into the **`!Mods`** folder.
 5. Start CastleMiner Z.
-6. The first time the loader runs, you should see a small startup window asking whether to launch:
-   - **Play CastleMiner Z**
-   - **Play CastleMiner Z (no mods)**
-   - optionally **Always use this option**
-7. Choose **Play CastleMiner Z** to start the game with mods enabled.
-8. Open each mod README for screenshots, config options, commands, hotkeys, and troubleshooting.
 
-> `ModLoaderExtensions` is optional, but it is strongly recommended because many CastleForge mods are built to work best with it.
+> `ModLoaderExtensions` is optional, but strongly recommended because many CastleForge mods are built to work best with it.
+
+### First launch
+
+The first time the loader runs, you should see a small startup window asking how to launch the game:
+
+* **Play CastleMiner Z**
+* **Play CastleMiner Z (no mods)**
+* optionally **Always use this option**
+
+Choose **Play CastleMiner Z** to start the game with mods enabled.
+
+### Config files and mod settings
+
+Most mods create their own config files after the game starts at least once.
+
+Config files are usually created inside:
+
+```text
+C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z\!Mods
+```
+
+Open each mod README for screenshots, config options, commands, hotkeys, and troubleshooting.
 
 ## Dedicated server options
 
