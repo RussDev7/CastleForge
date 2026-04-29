@@ -249,6 +249,10 @@ Enabled = true
 # Lower values reduce lost time if the server crashes.
 SaveIntervalSeconds = 60
 
+# Logs every successful interval save.
+# Very spammy. Useful only when debugging RememberTime.
+LogIntervalSaves = false
+
 # Restores the saved time when the server process starts.
 RestoreOnStartup = true
 
@@ -271,6 +275,7 @@ SaveOnShutdown = true
             Dictionary<string, string> values = ReadIni(_configPath);
 
             _config.Enabled = GetBool(values, "General.Enabled", true);
+            _config.LogIntervalSaves = GetBool(values, "General.LogIntervalSaves", false);
             _config.RestoreOnStartup = GetBool(values, "General.RestoreOnStartup", true);
             _config.SaveOnShutdown = GetBool(values, "General.SaveOnShutdown", true);
 
@@ -315,7 +320,12 @@ Reason = {reason}
 
                 WriteAllTextAtomic(_statePath, text);
 
-                _log($"[RememberTime] Saved time {timeOfDay:0.000000} ({FormatDisplayDay(timeOfDay)}) via {reason}.");
+                bool isIntervalSave = string.Equals(reason, "interval", StringComparison.OrdinalIgnoreCase);
+
+                if (!isIntervalSave || _config.LogIntervalSaves)
+                {
+                    _log($"[RememberTime] Saved time {timeOfDay:0.000000} ({FormatDisplayDay(timeOfDay)}) via {reason}.");
+                }
             }
             catch (Exception ex)
             {
@@ -537,6 +547,12 @@ Reason = {reason}
             /// Number of seconds between interval saves.
             /// </summary>
             public int SaveIntervalSeconds = 60;
+
+            /// <summary>
+            /// When true, successful interval saves are logged.
+            /// Shutdown saves and errors are still logged separately.
+            /// </summary>
+            public bool LogIntervalSaves = false;
 
             /// <summary>
             /// When true, the plugin restores the saved time during server startup.

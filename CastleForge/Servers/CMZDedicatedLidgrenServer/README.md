@@ -876,6 +876,10 @@ SaveIntervalSeconds = 60
 # Restores the saved time when the server process starts.
 RestoreOnStartup = true
 
+# Logs every successful interval save.
+# Very spammy. Useful only when debugging RememberTime.
+LogIntervalSaves = false
+
 # Writes one final time when the server stops cleanly.
 SaveOnShutdown = true
 ```
@@ -897,6 +901,8 @@ Reason = interval
 - `SaveIntervalSeconds = 60` is a good default for normal hosting.
 - If the process crashes, the server may lose up to the configured interval. Clean shutdowns still write one final save when `SaveOnShutdown = true`.
 - The saved time affects dynamic `{day}` and `{day00}` tokens after restore because those tokens use the authoritative server time.
+- `LogIntervalSaves = false` keeps normal interval saves quiet in the console. Startup, restore, shutdown, and error logs can still appear.
+- Set `LogIntervalSaves = true` only when debugging RememberTime save timing.
 
 ---
 

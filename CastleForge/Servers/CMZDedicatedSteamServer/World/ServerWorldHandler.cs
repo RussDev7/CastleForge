@@ -1285,7 +1285,13 @@ namespace CMZDedicatedSteamServer
                 bool finalSave = data[data.Length - 2] != 0;
 
                 SaveRawInventoryBytesForGamer(gamer, invBytes);
-                _log("ServerWorld: Saved inventory for player " + senderId + (finalSave ? " [final]" : ""));
+
+                // Normal inventory saves are noisy, so only show them when verbose host logging is enabled.
+                // Final saves are still useful to see during disconnect/shutdown.
+                if (_logHostMessages || finalSave)
+                {
+                    _log("ServerWorld: Saved inventory for player " + senderId + (finalSave ? " [final]" : ""));
+                }
             }
             catch (Exception ex)
             {
