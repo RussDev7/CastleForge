@@ -103,6 +103,8 @@ C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z\!Mods
 
 Open each mod README for screenshots, config options, commands, hotkeys, and troubleshooting.
 
+---
+
 ## Dedicated server options
 
 CastleForge now includes two dedicated-server transports:
