@@ -719,6 +719,12 @@ namespace CMZDedicatedSteamServer.Hosting
                 if (payloadBytes == null)
                     return;
 
+                if (!TryValidateDeclaredSenderId(senderSteamId, senderId, "CH1 OP3"))
+                    return;
+
+                if (ShouldDropClientAuthorityPacket(senderId, recipientId, payloadBytes, "CH1 OP3"))
+                    return;
+
                 if (ShouldDropInboundPacket(senderId, recipientId, 1, 3, payloadBytes, senderSteamId))
                     return;
 
@@ -737,6 +743,12 @@ namespace CMZDedicatedSteamServer.Hosting
                 int dataSize = Convert.ToInt32(readInt32.Invoke(packet, null));
                 byte[] payloadBytes = dataSize > 0 ? (byte[])readBytes.Invoke(packet, [dataSize]) : [];
                 if (payloadBytes == null || payloadBytes.Length < 1)
+                    return;
+
+                if (!TryValidateDeclaredSenderId(senderSteamId, senderId, "CH1 OP4"))
+                    return;
+
+                if (ShouldDropClientAuthorityPacket(senderId, 0, payloadBytes, "CH1 OP4"))
                     return;
 
                 if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderSteamId))
@@ -771,7 +783,12 @@ namespace CMZDedicatedSteamServer.Hosting
                 }
 
                 if (isPlayerExists && requestResponse)
+                {
                     ReplayCachedPlayerExistsToJoiner(senderSteamId, senderId);
+
+                    // Reassert that player id 0 / the dedicated server is the host authority.
+                    BroadcastAuthoritativeServerAppoint();
+                }
 
                 foreach (ConnectedSteamPeer peer in _peers.GetConnectedPeersSnapshot())
                 {
@@ -798,6 +815,12 @@ namespace CMZDedicatedSteamServer.Hosting
             int len = Convert.ToInt32(readInt32.Invoke(packet, null));
             byte[] data = len < 0 ? null : (len == 0 ? [] : (byte[])readBytes.Invoke(packet, [len]));
             if (data == null || data.Length < 1)
+                return;
+
+            if (!TryValidateDeclaredSenderId(senderSteamId, senderId, "CH0"))
+                return;
+
+            if (ShouldDropClientAuthorityPacket(senderId, recipientId, data, "CH0"))
                 return;
 
             if (ShouldDropInboundPacket(senderId, recipientId, 0, 0, data, senderSteamId))
@@ -1047,6 +1070,135 @@ namespace CMZDedicatedSteamServer.Hosting
                 PlayerName = trimmed,
                 RemoteKey = ServerCommandPermissionStore.BuildIdentityKeyFromRawTarget(trimmed)
             };
+        }
+        #endregion
+
+        #region Host Authority Messages
+
+        /// <summary>
+        /// Builds an AppointServerMessage that appoints the dedicated server/host id 0.
+        /// </summary>
+        private byte[] BuildServerAppointPayload()
+        {
+            if (_codec == null)
+                return null;
+
+            return _codec.BuildPayload(
+                "DNA.CastleMinerZ.Net.AppointServerMessage",
+                msg =>
+                {
+                    _codec.SetMember(msg, "PlayerID", (byte)0);
+                });
+        }
+
+        private void BroadcastAuthoritativeServerAppoint()
+        {
+            byte[] payload = BuildServerAppointPayload();
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            object delivery = GetReliableOrderedDeliveryMethod();
+
+            foreach (ConnectedSteamPeer peer in _peers.GetConnectedPeersSnapshot())
+                SendChannel0PayloadToSteam(peer.SteamId, peer.Gid, 0, payload, delivery);
+        }
+        #endregion
+
+        #region Packet Security / Host Authority
+
+        /// <summary>
+        /// Validates that the sender id declared inside the CMZ packet matches the Steam peer's assigned GID.
+        ///
+        /// Security:
+        /// - Prevents clients from spoofing sender id 0.
+        /// - Prevents clients from impersonating another player.
+        /// - Should run before command handling, world handling, or relay.
+        /// </summary>
+        private bool TryValidateDeclaredSenderId(ulong senderSteamId, byte declaredSenderId, string route)
+        {
+            if (_peers == null || !_peers.TryGetConnectedPeer(senderSteamId, out ConnectedSteamPeer peer) || peer == null)
+            {
+                _log($"[Security] Dropped {route}: unknown Steam peer {senderSteamId}; declared player={declaredSenderId}.");
+                return false;
+            }
+
+            if (peer.Gid != declaredSenderId)
+            {
+                _log($"[Security] Dropped {route}: spoofed sender id. Declared={declaredSenderId}, actual={peer.Gid}, name={peer.Gamertag}, steam={senderSteamId}.");
+                return false;
+            }
+
+            // Remote clients should never be player id 0. Player id 0 is the dedicated server/host.
+            if (declaredSenderId == 0)
+            {
+                _log($"[Security] Dropped {route}: remote client attempted to send as host id 0. name={peer.Gamertag}, steam={senderSteamId}.");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Drops client-authored messages that only the authoritative dedicated server is allowed to send.
+        /// </summary>
+        private bool ShouldDropClientAuthorityPacket(byte senderId, byte recipientId, byte[] payload, string route)
+        {
+            if (_codec == null || payload == null || payload.Length < 1)
+                return false;
+
+            string typeName;
+
+            try
+            {
+                typeName = _codec.GetTypeName(payload[0]);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(typeName))
+                return false;
+
+            if (!IsServerOnlyMessage(typeName))
+                return false;
+
+            _log($"[Security] Dropped client-authored {ShortTypeName(typeName)} from player {senderId}; recipient={recipientId}; route={route}.");
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true for messages that should only ever originate from the dedicated server/host.
+        /// </summary>
+        private static bool IsServerOnlyMessage(string typeName)
+        {
+            return typeName switch
+            {
+                "DNA.CastleMinerZ.Net.AppointServerMessage"               or
+                "DNA.CastleMinerZ.Net.KickMessage"                        or
+                "DNA.CastleMinerZ.Net.WorldInfoMessage"                   or
+                "DNA.CastleMinerZ.Net.ProvideDeltaListMessage"            or
+                "DNA.CastleMinerZ.Net.ProvideChunkMessage"                or
+                "DNA.CastleMinerZ.Net.InventoryRetrieveFromServerMessage" or
+                "DNA.CastleMinerZ.Net.RestartLevelMessage"                => true,
+                _ => false,
+            };
+        }
+
+        /// <summary>
+        /// Gets the short class name from a reflected full type name.
+        /// </summary>
+        private static string ShortTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+                return string.Empty;
+
+            int index = typeName.LastIndexOf('.');
+            return index >= 0 && index + 1 < typeName.Length
+                ? typeName.Substring(index + 1)
+                : typeName;
         }
         #endregion
 

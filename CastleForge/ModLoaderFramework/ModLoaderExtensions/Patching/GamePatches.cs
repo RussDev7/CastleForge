@@ -24,6 +24,7 @@ using System.Diagnostics;
 using System.Reflection;
 using DNA.CastleMinerZ;
 using DNA.Net.Lidgren;
+using Newtonsoft.Json;
 using DNA.Drawing.UI;
 using DNA.Drawing;
 using System.Linq;
@@ -460,6 +461,521 @@ namespace ModLoaderExt
 
                 // Fallback: Full path.
                 return p;
+            }
+        }
+        #endregion
+
+        #endregion
+
+        #region Settings / Profile Save Hardening
+
+        #region Safe user.settings Load/Save Guard
+
+        /// <summary>
+        /// Hardens vanilla %LOCALAPPDATA%\CastleMinerZ\user.settings handling.
+        /// 
+        /// Vanilla writes directly to user.settings with File.WriteAllText and silently
+        /// swallows all load/save exceptions. If the game is killed, crashes, loses file
+        /// access, or multiple instances touch the same file, user.settings can become
+        /// empty/partial/corrupt with no visible error.
+        /// 
+        /// This guard:
+        /// - Loads validated settings only.
+        /// - Recovers from user.settings.bak when possible.
+        /// - Quarantines bad files as user.settings.bad_yyyyMMdd_HHmmss.
+        /// - Saves through user.settings.tmp and atomically replaces the final file.
+        /// - Clamps unsafe values before they reach ProfiledContentManager.
+        /// </summary>
+        internal static class UserSettingsFileGuard
+        {
+            private static readonly object _sync = new object();
+
+            private const string SettingsFileName = "user.settings";
+            private const string BackupFileName = "user.settings.bak";
+
+            private static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore,
+                DefaultValueHandling = DefaultValueHandling.Include
+            };
+
+            private static string SettingsPath
+                => Path.Combine(GlobalSettings.GetAppDataDirectory(), SettingsFileName);
+
+            private static string BackupPath
+                => Path.Combine(GlobalSettings.GetAppDataDirectory(), BackupFileName);
+
+            private static string TempPath
+                => SettingsPath + ".tmp";
+
+            /// <summary>
+            /// Safely loads user.settings into the active GlobalSettings instance.
+            /// Falls back to user.settings.bak, then defaults, instead of letting a bad
+            /// file silently poison startup.
+            /// </summary>
+            public static void SafeLoad(GlobalSettings target)
+            {
+                if (target == null)
+                    return;
+
+                lock (_sync)
+                {
+                    try
+                    {
+                        string path = SettingsPath;
+                        string backup = BackupPath;
+
+                        if (TryReadSettings(path, out GlobalSettings loaded, out string reason))
+                        {
+                            ApplyTo(target, loaded);
+                            return;
+                        }
+
+                        if (File.Exists(path))
+                        {
+                            Log($"[UserSettings] Invalid user.settings detected: {reason}. Moving it aside.");
+                            QuarantineBadFile(path);
+                        }
+
+                        if (TryReadSettings(backup, out loaded, out reason))
+                        {
+                            ApplyTo(target, loaded);
+                            Log("[UserSettings] Recovered settings from user.settings.bak.");
+                            SafeSave(target);
+                            return;
+                        }
+
+                        // Keep the current constructor defaults, then save a clean file.
+                        Normalize(target);
+                        Log("[UserSettings] No valid user.settings backup found. Recreating defaults.");
+                        SafeSave(target);
+                    }
+                    catch (Exception ex)
+                    {
+                        GamePatches.LogException(ex, "UserSettingsFileGuard.SafeLoad");
+
+                        // Do not crash startup over settings.
+                        try
+                        {
+                            Normalize(target);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Safely saves user.settings using a validated temp file and atomic replace.
+            /// </summary>
+            public static void SafeSave(GlobalSettings settings)
+            {
+                if (settings == null)
+                    return;
+
+                lock (_sync)
+                {
+                    try
+                    {
+                        string dir = GlobalSettings.GetAppDataDirectory();
+                        Directory.CreateDirectory(dir);
+
+                        Normalize(settings);
+
+                        string json = JsonConvert.SerializeObject(settings, Formatting.Indented, JsonSettings);
+
+                        string temp = TempPath;
+                        string path = SettingsPath;
+                        string backup = BackupPath;
+
+                        WriteTextDurable(temp, json);
+
+                        if (!TryReadSettings(temp, out GlobalSettings check, out string reason))
+                            throw new InvalidDataException("Temp user.settings failed validation: " + reason);
+
+                        ReplaceFile(temp, path);
+
+                        // Keep a known-good copy after the final file has passed validation.
+                        File.Copy(path, backup, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        GamePatches.LogException(ex, "UserSettingsFileGuard.SafeSave");
+
+                        // Best effort cleanup only.
+                        try
+                        {
+                            if (File.Exists(TempPath))
+                                File.Delete(TempPath);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Attempts to read and validate a GlobalSettings JSON file.
+            /// </summary>
+            private static bool TryReadSettings(string path, out GlobalSettings settings, out string reason)
+            {
+                settings = null;
+                reason = null;
+
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    {
+                        reason = "file does not exist";
+                        return false;
+                    }
+
+                    string json = File.ReadAllText(path, Encoding.UTF8);
+
+                    if (string.IsNullOrWhiteSpace(json))
+                    {
+                        reason = "file is empty";
+                        return false;
+                    }
+
+                    settings = JsonConvert.DeserializeObject<GlobalSettings>(json);
+
+                    if (settings == null)
+                    {
+                        reason = "JSON deserialized to null";
+                        return false;
+                    }
+
+                    Normalize(settings);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    reason = ex.GetType().Name + ": " + ex.Message;
+                    settings = null;
+                    return false;
+                }
+            }
+
+            /// <summary>
+            /// Copies loaded values onto the already-created vanilla GlobalSettings instance.
+            /// </summary>
+            private static void ApplyTo(GlobalSettings target, GlobalSettings loaded)
+            {
+                if (target == null || loaded == null)
+                    return;
+
+                Normalize(loaded);
+
+                target.FullScreen = loaded.FullScreen;
+                target.AskForFacebook = loaded.AskForFacebook;
+                target.ScreenSize = loaded.ScreenSize;
+                target.TextureQualityLevel = loaded.TextureQualityLevel;
+            }
+
+            /// <summary>
+            /// Clamps unsafe settings values before they affect content loading or display setup.
+            /// </summary>
+            private static void Normalize(GlobalSettings settings)
+            {
+                if (settings == null)
+                    return;
+
+                if (settings.TextureQualityLevel < 1 || settings.TextureQualityLevel > 3)
+                    settings.TextureQualityLevel = 1;
+
+                int width = settings.ScreenSize.Width;
+                int height = settings.ScreenSize.Height;
+
+                bool badSize =
+                    width < 640 ||
+                    height < 360 ||
+                    width > 8192 ||
+                    height > 8192;
+
+                if (badSize)
+                    settings.ScreenSize = new Size(1280, 720);
+            }
+
+            /// <summary>
+            /// Writes text and flushes the file stream before replacement.
+            /// </summary>
+            private static void WriteTextDurable(string path, string text)
+            {
+                using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (StreamWriter writer = new StreamWriter(fs, new UTF8Encoding(false)))
+                {
+                    writer.Write(text);
+                    writer.Flush();
+                    fs.Flush(true);
+                }
+            }
+
+            /// <summary>
+            /// Replaces the target file with the temp file. File.Replace is preferred because
+            /// it is atomic on the same volume.
+            /// </summary>
+            private static void ReplaceFile(string tempPath, string finalPath)
+            {
+                if (!File.Exists(finalPath))
+                {
+                    File.Move(tempPath, finalPath);
+                    return;
+                }
+
+                string previousPath = finalPath + ".previous";
+
+                try
+                {
+                    File.Replace(tempPath, finalPath, previousPath, true);
+
+                    try
+                    {
+                        if (File.Exists(previousPath))
+                            File.Delete(previousPath);
+                    }
+                    catch
+                    {
+                    }
+                }
+                catch
+                {
+                    // Fallback for environments where File.Replace fails.
+                    if (File.Exists(finalPath))
+                        File.Delete(finalPath);
+
+                    File.Move(tempPath, finalPath);
+                }
+            }
+
+            /// <summary>
+            /// Moves a corrupt settings file aside so startup does not repeatedly hit it.
+            /// </summary>
+            private static void QuarantineBadFile(string path)
+            {
+                try
+                {
+                    if (!File.Exists(path))
+                        return;
+
+                    string badPath = path + ".bad_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+                    int counter = 1;
+                    while (File.Exists(badPath))
+                    {
+                        badPath = path + ".bad_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + counter;
+                        counter++;
+                    }
+
+                    File.Move(path, badPath);
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "UserSettingsFileGuard.QuarantineBadFile");
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(GlobalSettings), nameof(GlobalSettings.Load))]
+        internal static class GlobalSettings_Load_SafeUserSettings
+        {
+            /// <summary>
+            /// Replaces vanilla GlobalSettings.Load with validated load + backup recovery.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix(GlobalSettings __instance)
+            {
+                UserSettingsFileGuard.SafeLoad(__instance);
+                return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(GlobalSettings), nameof(GlobalSettings.Save))]
+        internal static class GlobalSettings_Save_SafeUserSettings
+        {
+            /// <summary>
+            /// Replaces vanilla GlobalSettings.Save with atomic temp-file save.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix(GlobalSettings __instance)
+            {
+                UserSettingsFileGuard.SafeSave(__instance);
+                return false;
+            }
+        }
+        #endregion
+
+        #region PlayerStats DrawDistance Compatibility Guard
+
+        /// <summary>
+        /// Keeps PlayerStats.DrawDistance inside a safe range without breaking RenderDistancePlus.
+        /// 
+        /// Important:
+        /// - Vanilla CastleMiner Z uses DrawDistance as a 0..4 tier index.
+        /// - RenderDistancePlus stores extended render-setting values directly in DrawDistance.
+        /// 
+        /// Behavior:
+        /// - If RenderDistancePlus is NOT loaded, clamp to the vanilla range.
+        /// - If RenderDistancePlus IS loaded and its step table is found, snap to that table.
+        /// - If RenderDistancePlus IS loaded but its step table cannot be reflected, fall back to vanilla clamp.
+        /// </summary>
+        internal static class PlayerStatsSettingsGuard
+        {
+            private const int VanillaMinDrawDistance = 0;
+            private const int VanillaMaxDrawDistance = 4;
+
+            /// <summary>
+            /// Normalizes DrawDistance without destroying extended RenderDistancePlus values.
+            /// </summary>
+            public static void Normalize(CastleMinerZPlayerStats stats)
+            {
+                if (stats == null)
+                    return;
+
+                int value = stats.DrawDistance;
+
+                if (IsRenderDistancePlusLoaded())
+                {
+                    int[] validValues = TryGetRenderDistancePlusSteps();
+
+                    if (validValues != null && validValues.Length > 0)
+                    {
+                        stats.DrawDistance = SnapToNearest(value, validValues);
+                        return;
+                    }
+
+                    // RenderDistancePlus was detected, but its valid step table could not be read.
+                    // Fall back to vanilla instead of using hardcoded RenderDistancePlus values.
+                    ClampToVanilla(stats);
+                    return;
+                }
+
+                ClampToVanilla(stats);
+            }
+
+            /// <summary>
+            /// Clamps DrawDistance to the vanilla CastleMiner Z range.
+            /// </summary>
+            private static void ClampToVanilla(CastleMinerZPlayerStats stats)
+            {
+                if (stats == null)
+                    return;
+
+                if (stats.DrawDistance < VanillaMinDrawDistance)
+                    stats.DrawDistance = VanillaMinDrawDistance;
+                else if (stats.DrawDistance > VanillaMaxDrawDistance)
+                    stats.DrawDistance = VanillaMaxDrawDistance;
+            }
+
+            /// <summary>
+            /// Returns true when the RenderDistancePlus assembly or patch helper is loaded.
+            /// Kept reflection-based so ModLoaderExtensions does not need a hard dependency on RenderDistancePlus.
+            /// </summary>
+            private static bool IsRenderDistancePlusLoaded()
+            {
+                try
+                {
+                    if (AccessTools.TypeByName("RenderDistancePlus.GamePatches+RenderSettingSnapper") != null)
+                        return true;
+
+                    foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        AssemblyName name = asm.GetName();
+
+                        if (name != null &&
+                            string.Equals(name.Name, "RenderDistancePlus", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+
+                return false;
+            }
+
+            /// <summary>
+            /// Reflection read of RenderDistancePlus's supported render-setting values.
+            /// </summary>
+            private static int[] TryGetRenderDistancePlusSteps()
+            {
+                try
+                {
+                    Type snapperType = AccessTools.TypeByName("RenderDistancePlus.GamePatches+RenderSettingSnapper");
+                    if (snapperType == null)
+                        return null;
+
+                    FieldInfo field = AccessTools.Field(snapperType, "RenderSettingByStep");
+                    if (field == null)
+                        return null;
+
+                    if (!(field.GetValue(null) is int[] values) || values.Length == 0)
+                        return null;
+
+                    return values;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            /// <summary>
+            /// Snaps a value to the nearest valid DrawDistance value.
+            /// </summary>
+            private static int SnapToNearest(int value, int[] validValues)
+            {
+                if (validValues == null || validValues.Length == 0)
+                    return value;
+
+                int best = validValues[0];
+                int bestDistance = Math.Abs(value - best);
+
+                for (int i = 1; i < validValues.Length; i++)
+                {
+                    int candidate = validValues[i];
+                    int distance = Math.Abs(value - candidate);
+
+                    if (distance < bestDistance)
+                    {
+                        best = candidate;
+                        bestDistance = distance;
+                    }
+                }
+
+                return best;
+            }
+        }
+
+        [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.LoadPlayerData))]
+        internal static class CastleMinerZGame_LoadPlayerData_ClampDrawDistance
+        {
+            /// <summary>
+            /// Normalizes DrawDistance after vanilla loads player stats.
+            /// RenderDistancePlus extended values are preserved when that mod is loaded.
+            /// </summary>
+            [HarmonyPostfix]
+            private static void Postfix(CastleMinerZGame __instance)
+            {
+                PlayerStatsSettingsGuard.Normalize(__instance?.PlayerStats);
+            }
+        }
+
+        [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.SavePlayerStats))]
+        internal static class CastleMinerZGame_SavePlayerStats_ClampDrawDistance
+        {
+            /// <summary>
+            /// Normalizes DrawDistance before vanilla writes player stats.
+            /// RenderDistancePlus extended values are preserved when that mod is loaded.
+            /// </summary>
+            [HarmonyPrefix]
+            private static void Prefix(CastleMinerZPlayerStats playerStats)
+            {
+                PlayerStatsSettingsGuard.Normalize(playerStats);
             }
         }
         #endregion

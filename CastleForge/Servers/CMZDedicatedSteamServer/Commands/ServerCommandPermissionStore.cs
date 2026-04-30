@@ -284,7 +284,7 @@ namespace CMZDedicatedSteamServer.Commands
             sb.AppendLine("# steam:76561198000000000=Admin");
             sb.AppendLine();
             sb.AppendLine("# Lidgren can use names or IPs:");
-            sb.AppendLine("# name:Jacob Ladders=Admin");
+            sb.AppendLine("# name:Jacob Smith=Admin");
             sb.AppendLine("# ip:127.0.0.1=Admin");
             sb.AppendLine();
             sb.AppendLine("[Players]");
@@ -416,7 +416,7 @@ namespace CMZDedicatedSteamServer.Commands
             sb.AppendLine("# Persistent command ranks for players.");
             sb.AppendLine("# Examples:");
             sb.AppendLine("# steam:76561198000000000=Admin");
-            sb.AppendLine("# name:Jacob Ladders=Moderator");
+            sb.AppendLine("# name:Jacob Smith=Moderator");
             sb.AppendLine("# ip:127.0.0.1=Admin");
             sb.AppendLine();
             sb.AppendLine("[Players]");

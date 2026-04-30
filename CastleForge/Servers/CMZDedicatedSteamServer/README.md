@@ -36,6 +36,7 @@ That gives you a cleaner setup for:
 - Can persist and restore world time between restarts through the built-in **RememberTime** plugin.
 - Can be launched from **DirectConnect** using **Launch Dedicated (Steam)**.
 - Includes **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops, command permissions, and operator ranks
+- Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
 
 ---
 
@@ -468,6 +469,18 @@ steam|76561198000000000|Jacob Smith|Griefing protected areas|638813123456789000
 ```
 
 This means a player changing their Steam display name will not bypass the ban.
+
+---
+
+## Packet security / host authority
+
+The dedicated server treats player id `0` as the authoritative server/host identity.
+
+Inbound client packets are checked before command handling, world handling, or relay. The server validates that the sender id declared inside the CastleMiner Z packet matches the real connected peer assigned by the transport.
+
+The server also drops client-authored host-only messages, including forced host migration and spoofed kick-style packets. This prevents modified clients from appointing themselves as host authority or sending fake host/admin packets to other players.
+
+This protection is always enabled and does not require a config option.
 
 ---
 
@@ -1024,6 +1037,20 @@ You can reload command files without restarting:
 ```text
 reload commands
 ```
+
+</details>
+
+<details>
+<summary><strong>The server logs a packet security drop</strong></summary>
+
+Messages such as `[Security] Dropped CH0`, `[Security] Dropped CH1 OP3`, or `[Security] Dropped CH1 OP4` mean the server rejected a packet before relay.
+
+Common reasons include:
+- a client declared the wrong sender id
+- a client tried to send as host/player id `0`
+- a client tried to send a host-only packet such as host migration or a kick-style packet
+
+This usually indicates a modified, incompatible, or misbehaving client. The packet is ignored and is not forwarded to other players.
 
 </details>
 

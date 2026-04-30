@@ -1602,6 +1602,147 @@ namespace CMZDedicatedLidgrenServer
         }
         #endregion
 
+        #region Packet Security / Host Authority
+
+        /// <summary>
+        /// Validates that the sender id declared inside the CMZ packet matches the player id
+        /// assigned to the actual network connection.
+        ///
+        /// Security:
+        /// - Prevents clients from spoofing sender id 0.
+        /// - Prevents clients from impersonating another connected player.
+        /// - Should run before command handling, world handling, or relay.
+        /// </summary>
+        private bool TryValidateDeclaredSenderId(object senderConn, byte declaredSenderId, string route)
+        {
+            if (senderConn == null)
+            {
+                _log($"[Security] Dropped {route}: missing sender connection for declared player {declaredSenderId}.");
+                return false;
+            }
+
+            if (!_connectionToGamer.TryGetValue(senderConn, out object gamer) || gamer == null)
+            {
+                _log($"[Security] Dropped {route}: sender connection is not mapped to a gamer. Declared player={declaredSenderId}.");
+                return false;
+            }
+
+            byte actualId = ReadGamerId(gamer);
+
+            if (actualId != declaredSenderId)
+            {
+                string name = ReadGamerName(gamer);
+                string ip = TryGetConnectionIp(senderConn);
+
+                _log($"[Security] Dropped {route}: spoofed sender id. Declared={declaredSenderId}, actual={actualId}, name={name}, ip={ip}.");
+                return false;
+            }
+
+            // Remote clients should never be player id 0. Player id 0 is the dedicated server/host.
+            if (declaredSenderId == 0)
+            {
+                string name = ReadGamerName(gamer);
+                string ip = TryGetConnectionIp(senderConn);
+
+                _log($"[Security] Dropped {route}: remote client attempted to send as host id 0. name={name}, ip={ip}.");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Drops client-authored messages that only the authoritative dedicated server is allowed to send.
+        /// </summary>
+        private bool ShouldDropClientAuthorityPacket(byte senderId, byte recipientId, byte[] payload, string route)
+        {
+            if (_codec == null || payload == null || payload.Length < 1)
+                return false;
+
+            string typeName;
+
+            try
+            {
+                typeName = _codec.GetTypeName(payload[0]);
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(typeName))
+                return false;
+
+            if (!IsServerOnlyMessage(typeName))
+                return false;
+
+            _log($"[Security] Dropped client-authored {ShortTypeName(typeName)} from player {senderId}; recipient={recipientId}; route={route}.");
+
+            return true;
+        }
+
+        /// <summary>
+        /// Returns true for messages that should only ever originate from the dedicated server/host.
+        /// </summary>
+        private static bool IsServerOnlyMessage(string typeName)
+        {
+            return typeName switch
+            {
+                "DNA.CastleMinerZ.Net.AppointServerMessage"               or
+                "DNA.CastleMinerZ.Net.KickMessage"                        or
+                "DNA.CastleMinerZ.Net.WorldInfoMessage"                   or
+                "DNA.CastleMinerZ.Net.ProvideDeltaListMessage"            or
+                "DNA.CastleMinerZ.Net.ProvideChunkMessage"                or
+                "DNA.CastleMinerZ.Net.InventoryRetrieveFromServerMessage" or
+                "DNA.CastleMinerZ.Net.RestartLevelMessage"                => true,
+                _ => false,
+            };
+        }
+
+        /// <summary>
+        /// Gets the short class name from a reflected full type name.
+        /// </summary>
+        private static string ShortTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+                return string.Empty;
+
+            int index = typeName.LastIndexOf('.');
+            return index >= 0 && index + 1 < typeName.Length
+                ? typeName.Substring(index + 1)
+                : typeName;
+        }
+        #endregion
+
+        #region Host Authority Messages
+
+        /// <summary>
+        /// Builds an AppointServerMessage that appoints the dedicated server/host id 0.
+        /// </summary>
+        private byte[] BuildServerAppointPayload()
+        {
+            if (_codec == null)
+                return null;
+
+            return _codec.BuildPayload(
+                "DNA.CastleMinerZ.Net.AppointServerMessage",
+                msg =>
+                {
+                    _codec.SetMember(msg, "PlayerID", (byte)0);
+                });
+        }
+
+        private void BroadcastAuthoritativeServerAppoint()
+        {
+            byte[] payload = BuildServerAppointPayload();
+
+            if (payload == null || payload.Length == 0)
+                return;
+
+            BroadcastChannel0Payload(0, payload);
+        }
+        #endregion
+
         #region Data Message Dispatch
 
         /// <summary>
@@ -1686,6 +1827,12 @@ namespace CMZDedicatedLidgrenServer
                         return;
 
                     object senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+                    if (!TryValidateDeclaredSenderId(senderConn, senderId, "CH1 OP3"))
+                        return;
+
+                    if (ShouldDropClientAuthorityPacket(senderId, recipientId, payloadBytes, "CH1 OP3"))
+                        return;
+
                     if (ShouldDropInboundPacket(senderId, recipientId, 1, 3, payloadBytes, senderConn, 0UL))
                         return;
 
@@ -1716,6 +1863,12 @@ namespace CMZDedicatedLidgrenServer
                         return;
 
                     var senderConn = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+                    if (!TryValidateDeclaredSenderId(senderConn, senderId, "CH1 OP4"))
+                        return;
+
+                    if (ShouldDropClientAuthorityPacket(senderId, 0, payloadBytes, "CH1 OP4"))
+                        return;
+
                     if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderConn, 0UL))
                         return;
 
@@ -1763,6 +1916,9 @@ namespace CMZDedicatedLidgrenServer
                     if (isPlayerExists && requestResponse)
                     {
                         ReplayCachedPlayerExistsToJoiner(senderConn, senderId);
+
+                        // Reassert that player id 0 / the dedicated server is the host authority.
+                        BroadcastAuthoritativeServerAppoint();
                     }
 
                     // 3) Relay the original payload to all peers except sender,
@@ -1823,6 +1979,12 @@ namespace CMZDedicatedLidgrenServer
                 return;
 
             object senderConn0 = msgType.GetProperty("SenderConnection")?.GetValue(msg);
+            if (!TryValidateDeclaredSenderId(senderConn0, senderId0, "CH0"))
+                return;
+
+            if (ShouldDropClientAuthorityPacket(senderId0, recipientId, data, "CH0"))
+                return;
+
             if (ShouldDropInboundPacket(senderId0, recipientId, 0, 0, data, senderConn0, 0UL))
                 return;
 

@@ -16,7 +16,7 @@ namespace CMZDedicatedSteamServer.Commands
     ///
     /// Examples:
     /// !kick Jacob
-    /// !kick "Jacob Ladders" Optional reason here
+    /// !kick "Jacob Smith" Optional reason here
     /// !ban 76561198000000000 Griefing
     /// </summary>
     internal static class ServerCommandParser

@@ -218,7 +218,7 @@ namespace Restore360Water
         #region Persisted Biome Bands
 
         public R360WBiomeBandConfig Classic  = new R360WBiomeBandConfig(false, -64f,   -31.5f, false);
-        public R360WBiomeBandConfig Lagoon   = new R360WBiomeBandConfig(true,  -3.5f,  9.5f,   false);
+        public R360WBiomeBandConfig Lagoon   = new R360WBiomeBandConfig(false, -3.5f,  9.5f,   false);
         public R360WBiomeBandConfig Desert   = new R360WBiomeBandConfig(false, -43.5f, -31.5f, false);
         public R360WBiomeBandConfig Mountain = new R360WBiomeBandConfig(false, -64f,   -31.5f, false);
         public R360WBiomeBandConfig Arctic   = new R360WBiomeBandConfig(false, -43.5f, -31.5f, false);

@@ -369,7 +369,7 @@ namespace CMZDedicatedLidgrenServer
                 {
                     log("Usage: kick <id|steamid|name> [reason]");
                     log("Example: kick 2 Being annoying");
-                    log("Example: kick \"Jacob Ladders\" Being annoying");
+                    log("Example: kick \"Jacob Smith\" Being annoying");
                     return;
                 }
 
@@ -385,7 +385,7 @@ namespace CMZDedicatedLidgrenServer
                 {
                     log("Usage: ban <id|steamid|name> [reason]");
                     log("Example: ban 2 Griefing protected areas");
-                    log("Example: ban \"Jacob Ladders\" Griefing protected areas");
+                    log("Example: ban \"Jacob Smith\" Griefing protected areas");
                     return;
                 }
 
@@ -467,8 +467,8 @@ namespace CMZDedicatedLidgrenServer
         /// Supported examples:
         ///   kick 2 Being annoying
         ///   ban 76561198000000000 Griefing
-        ///   kick "Jacob Ladders" Being annoying
-        ///   ban "Jacob Ladders" Griefing protected areas
+        ///   kick "Jacob Smith" Being annoying
+        ///   ban "Jacob Smith" Griefing protected areas
         ///
         /// Notes:
         /// - Quoted targets allow player names with spaces.
@@ -485,7 +485,7 @@ namespace CMZDedicatedLidgrenServer
 
             args = args.Trim();
 
-            // Quoted target: "Jacob Ladders" optional reason here
+            // Quoted target: "Jacob Smith" optional reason here
             if (args.StartsWith("\""))
             {
                 int closingQuote = args.IndexOf('"', 1);

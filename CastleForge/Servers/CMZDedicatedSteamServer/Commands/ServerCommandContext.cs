@@ -43,7 +43,7 @@ namespace CMZDedicatedSteamServer.Commands
 
         /// <summary>
         /// Chat content after the "Player: " prefix is removed.
-        /// Example: !kick "Jacob Ladders" griefing
+        /// Example: !kick "Jacob Smith" griefing
         /// </summary>
         public string RawText { get; set; }
 

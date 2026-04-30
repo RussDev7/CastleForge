@@ -37,6 +37,7 @@ That gives you a cleaner setup for:
 - Automatically clears Endurance-mode death wipes by sending a server-side restart/respawn when all real connected players are dead.
 - Includes a packaged **server layout** with sample config, sample world data, and a default inventory template.
 - Includes server-side **Player Enforcement** commands with IP/name-backed bans, optional ban reasons, and transport-level hard drops.
+- Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
 
 ---
 
@@ -536,6 +537,18 @@ name|Jacob Smith|Jacob Smith|Griefing protected areas|638813123456789000
 ### Lidgren ban limitations
 
 Lidgren bans are not as strong as SteamID bans. IP bans can be bypassed with VPNs or dynamic IP changes, and name bans can be bypassed by changing names. For stronger identity enforcement, use the Steam dedicated server when possible.
+
+---
+
+## Packet security / host authority
+
+The dedicated server treats player id `0` as the authoritative server/host identity.
+
+Inbound client packets are checked before command handling, world handling, or relay. The server validates that the sender id declared inside the CastleMiner Z packet matches the real connected peer assigned by the transport.
+
+The server also drops client-authored host-only messages, including forced host migration and spoofed kick-style packets. This prevents modified clients from appointing themselves as host authority or sending fake host/admin packets to other players.
+
+This protection is always enabled and does not require a config option.
 
 ---
 
@@ -1172,6 +1185,20 @@ You can reload command files without restarting:
 ```text
 reload commands
 ```
+
+</details>
+
+<details>
+<summary><strong>The server logs a packet security drop</strong></summary>
+
+Messages such as `[Security] Dropped CH0`, `[Security] Dropped CH1 OP3`, or `[Security] Dropped CH1 OP4` mean the server rejected a packet before relay.
+
+Common reasons include:
+- a client declared the wrong sender id
+- a client tried to send as host/player id `0`
+- a client tried to send a host-only packet such as host migration or a kick-style packet
+
+This usually indicates a modified, incompatible, or misbehaving client. The packet is ignored and is not forwarded to other players.
 
 </details>
 
