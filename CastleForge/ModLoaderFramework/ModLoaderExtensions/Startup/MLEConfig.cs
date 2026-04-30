@@ -56,7 +56,7 @@ namespace ModLoaderExt
     {
         // [FloodGuard].
         
-        public static volatile bool FloodGuardEnabled         = true;
+        public static volatile bool FloodGuardEnabled         = false;
         public static volatile int  PerSenderMaxPacketsPerSec = 512;
         public static volatile int  BlackholeMs               = 30000;
         public static volatile bool DoNotExemptHost           = true;
@@ -173,7 +173,7 @@ namespace ModLoaderExt
         public bool ShowSupportButton = true;
 
         // [FloodGuard].
-        public bool FloodGuardEnabled         = true;
+        public bool FloodGuardEnabled         = false;
         public int  PerSenderMaxPacketsPerSec = 512;
         public int  BlackholeMs               = 30000;
         public bool DoNotExemptHost           = true;
@@ -312,7 +312,7 @@ namespace ModLoaderExt
                 ShowSupportButton = ini.GetBool("MenuItems", "ShowSupportButton", true),
 
                 // [FloodGuard].
-                FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", true),
+                FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", false),
                 PerSenderMaxPacketsPerSec = Clamp(ini.GetInt("FloodGuard", "PerSenderMaxPacketsPerSec", 512), 1, 50000),
                 BlackholeMs               = Clamp(ini.GetInt("FloodGuard", "BlackholeMs", 30000), 0, 600000),
                 DoNotExemptHost           = ini.GetBool("FloodGuard", "DoNotExemptHost", true),

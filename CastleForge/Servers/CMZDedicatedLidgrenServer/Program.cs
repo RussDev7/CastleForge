@@ -13,6 +13,26 @@ namespace CMZDedicatedLidgrenServer
 {
     internal static class Program
     {
+        #region Command Audit Logging State
+
+        /// <summary>
+        /// Synchronizes command audit file writes so console and server threads cannot write over each other.
+        /// </summary>
+        private static readonly object CommandAuditLogSync = new object();
+
+        /// <summary>
+        /// Base directory where the server executable is running.
+        /// Used to create Logs\commands-yyyy-MM-dd.log.
+        /// </summary>
+        private static string CommandAuditBaseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+        /// <summary>
+        /// Controls whether command audit lines are mirrored to the dated log file.
+        /// </summary>
+        private static bool CommandAuditLogEnabled = true;
+
+        #endregion
+
         #region Entry Point
 
         /// <summary>
@@ -51,6 +71,9 @@ namespace CMZDedicatedLidgrenServer
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 Log($"Config file       : {Path.Combine(baseDir, "server.properties")}");
                 ServerConfig config = ServerConfig.Load(baseDir);
+
+                CommandAuditBaseDir = baseDir;
+                CommandAuditLogEnabled = config.LogCommandAudit;
 
                 // Expected sub-folder containing CastleMinerZ.exe and companion assemblies.
                 string gamePath = string.IsNullOrWhiteSpace(config.GamePath)
@@ -193,7 +216,7 @@ namespace CMZDedicatedLidgrenServer
                     gamePath: gamePath,
                     port: config.Port,
                     maxPlayers: config.MaxPlayers,
-                    log: Console.WriteLine,
+                    log: Log,
                     gameAsm: gameAsm,
                     worldFolder: string.IsNullOrWhiteSpace(config.WorldFolder) ? null : config.WorldFolder,
                     saveRoot: baseDir,
@@ -216,7 +239,7 @@ namespace CMZDedicatedLidgrenServer
 
                 server.Start();
 
-                StartConsoleCommandThread(server, Console.WriteLine);
+                StartConsoleCommandThread(server, Log);
 
                 Console.WriteLine();
                 Console.WriteLine("Server started.");
@@ -520,12 +543,50 @@ namespace CMZDedicatedLidgrenServer
         #region Logging
 
         /// <summary>
-        /// Writes a timestamped server message to the console.
+        /// Writes a timestamped server message to the console and mirrors command audit lines to a dated file.
         /// </summary>
         /// <param name="message">Message to write.</param>
         private static void Log(string message)
         {
-            Console.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}");
+            string safeMessage = message ?? string.Empty;
+            string stampedLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {safeMessage}";
+
+            Console.WriteLine(stampedLine);
+
+            if (CommandAuditLogEnabled && IsCommandAuditLine(safeMessage))
+                AppendCommandAuditLogLine(stampedLine);
+        }
+
+        /// <summary>
+        /// Returns true when a console line belongs in the command audit log.
+        /// </summary>
+        private static bool IsCommandAuditLine(string message)
+        {
+            return !string.IsNullOrWhiteSpace(message) &&
+                   message.StartsWith("[Commands]", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Appends one command audit line to Logs\commands-yyyy-MM-dd.log.
+        /// </summary>
+        private static void AppendCommandAuditLogLine(string line)
+        {
+            try
+            {
+                string logsDir = Path.Combine(CommandAuditBaseDir, "Logs");
+                Directory.CreateDirectory(logsDir);
+
+                string path = Path.Combine(logsDir, "commands-" + DateTime.Now.ToString("yyyy-MM-dd") + ".log");
+
+                lock (CommandAuditLogSync)
+                {
+                    File.AppendAllText(path, line + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // Never let logging failures break the dedicated server loop.
+            }
         }
         #endregion
     }

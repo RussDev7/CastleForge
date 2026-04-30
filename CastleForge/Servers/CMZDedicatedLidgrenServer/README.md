@@ -38,6 +38,7 @@ That gives you a cleaner setup for:
 - Includes a packaged **server layout** with sample config, sample world data, and a default inventory template.
 - Includes server-side **Player Enforcement** commands with IP/name-backed bans, optional ban reasons, and transport-level hard drops.
 - Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
+- Logs command usage to dated audit files under `Logs\commands-yyyy-MM-dd.log` when `log-command-audit=true`.
 
 ---
 
@@ -287,6 +288,8 @@ A typical packaged runtime layout looks like:
 │  └─ README.txt
 ├─ Inventory/
 │  └─ default.inv
+├─ Logs/
+│  └─ commands-yyyy-MM-dd.log
 └─ Worlds/
    └─ {world-guid}/
       └─ world.info
@@ -340,6 +343,11 @@ difficulty=1
 
 # Optional behavior
 allow-client-time-sync=false
+
+# Logging / audit
+log-command-audit=true
+log-network-packets=false
+log-host-messages=false
 ```
 
 ### Dynamic server-name tokens
@@ -447,6 +455,7 @@ For **CMZDedicatedLidgrenServer**, the resolved message is sent through discover
 | `pvp-state`              | Session PVP numeric value.                                                                                                                               |
 | `difficulty`             | Session difficulty numeric value.                                                                                                                        |
 | `allow-client-time-sync` | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior.           |
+| `log-command-audit`      | Writes command usage audit lines to `Logs\commands-yyyy-MM-dd.log`. Enabled by default so hosts can review who ran console and in-game commands.         |
 
 ---
 
@@ -492,7 +501,7 @@ ban 192.168.1.50 Griefing protected areas
 unban jacob
 unban "Jacob Smith"
 unban 192.168.1.50
-````
+```
 
 ### Names with spaces
 
@@ -515,6 +524,32 @@ ban 2 Griefing protected areas
 Kick and ban commands support optional reasons. The reason is saved to the ban list and passed to the transport disconnect path when possible.
 
 Because this uses a hard drop path, the reason should be treated as best-effort display text. A modified client may hide the visible message, but the server still removes the peer from the authoritative session.
+
+### Command audit logging
+
+When `log-command-audit=true`, the server mirrors command activity to a dated file:
+
+```text
+Logs\commands-yyyy-MM-dd.log
+```
+
+The audit log records console commands, in-game commands, denied commands, and unknown command attempts.
+
+Example entries:
+
+```text
+[2026-04-30 22:45:11] [Commands] Jacob (gid=1, name:Jacob, alt=ip:192.168.1.50) ran !help.
+[2026-04-30 22:45:18] [Commands] Console ran !reload commands.
+[2026-04-30 22:45:31] [Commands] Denied !ban 2 from Player2 (gid=2, steam:76561198000000000), rank=Default, required=Moderator.
+```
+
+This file is intended for lightweight moderation/audit history. It only mirrors command-related `[Commands]` lines and does not replace the normal console output or packet debug logs.
+
+To disable command audit files:
+
+```properties
+log-command-audit=false
+```
 
 ### Ban storage
 
@@ -927,7 +962,7 @@ Default prefix:
 
 ```text
 !
-````
+```
 
 Examples:
 
@@ -1110,7 +1145,7 @@ CMZDedicatedLidgrenServer does not have a strong SteamID identity for direct-IP 
 [Players]
 name:Jacob Smith=Admin
 ip:192.168.1.50=Moderator
-````
+```
 
 Name-based permissions are easy to read but can be bypassed if a player changes names. IP-based permissions are stronger for private/LAN servers, but can still change if a player uses a VPN, proxy, or dynamic IP address.
 
@@ -1129,7 +1164,7 @@ Examples of protected rank entries:
 steam:76561198000000000=Admin
 name:Jacob Smith=Admin
 ip:192.168.1.50=Admin
-````
+```
 
 Steam servers should prefer `steam:<steamid>` because it is stable across name changes. Lidgren servers may use `name:` or `ip:` entries, but those are weaker because names and IP addresses can change.
 
@@ -1174,11 +1209,13 @@ Check:
 - Your player has the required rank in `Commands\CommandRanks.ini`.
 - You seeded at least one Admin before trying to use `!op`.
 - Use quotes around names with spaces:
+- Make sure the server build includes CH1/relay command handling if commands are visible in chat but do not execute.
+- Check the console and `Logs\commands-yyyy-MM-dd.log` for `[Commands]` denied/unknown entries.
 
 ```text
 !op "Jacob Smith"
 !kick "Jacob Smith" Being annoying
-````
+```
 
 You can reload command files without restarting:
 

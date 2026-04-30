@@ -37,6 +37,7 @@ That gives you a cleaner setup for:
 - Can be launched from **DirectConnect** using **Launch Dedicated (Steam)**.
 - Includes **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops, command permissions, and operator ranks
 - Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
+- Logs command usage to dated audit files under `Logs\commands-yyyy-MM-dd.log` when `log-command-audit=true`.
 
 ---
 
@@ -157,6 +158,8 @@ A typical packaged runtime layout looks like:
 │  └─ README.txt
 ├─ Inventory/
 │  └─ default.inv
+├─ Logs/
+│  └─ commands-yyyy-MM-dd.log
 └─ Worlds/
    └─ {world-guid}/
       └─ world.info
@@ -227,6 +230,11 @@ infinite-resource-mode=false
 
 # Optional behavior
 allow-client-time-sync=false
+
+# Logging / audit
+log-command-audit=true
+log-network-packets=false
+log-host-messages=false
 ```
 
 ### Dynamic server-name tokens
@@ -344,6 +352,7 @@ For **CMZDedicatedSteamServer**, the resolved message is published through the S
 | `difficulty`                  | Session difficulty numeric value.                                                                                                                                   |
 | `infinite-resource-mode`      | Enables/disables infinite-resource session metadata.                                                                                                                |
 | `allow-client-time-sync`      | Allows client-sent `TimeOfDayMessage` packets to update server time. Recommended to leave `false` unless you intentionally want that behavior.                      |
+| `log-command-audit`           | Writes command usage audit lines to `Logs\commands-yyyy-MM-dd.log`. Enabled by default so hosts can review who ran console and in-game commands.                    |
 
 ---
 
@@ -450,6 +459,32 @@ ban 2 Griefing protected areas
 ```
 
 Because this uses a hard drop path, the reason should be treated as best-effort display text. A modified client may hide the visible message, but the server still removes the peer from the authoritative session.
+
+### Command audit logging
+
+When `log-command-audit=true`, the server mirrors command activity to a dated file:
+
+```text
+Logs\commands-yyyy-MM-dd.log
+```
+
+The audit log records console commands, in-game commands, denied commands, and unknown command attempts.
+
+Example entries:
+
+```text
+[2026-04-30 22:45:11] [Commands] Jacob (gid=1, steam:76561198113864655, alt=name:Jacob) ran !help.
+[2026-04-30 22:45:18] [Commands] Console ran !reload commands.
+[2026-04-30 22:45:31] [Commands] Denied !ban 2 from Player2 (gid=2, steam:76561198000000000), rank=Default, required=Moderator.
+```
+
+This file is intended for lightweight moderation/audit history. It only mirrors command-related `[Commands]` lines and does not replace the normal console output or packet debug logs.
+
+To disable command audit files:
+
+```properties
+log-command-audit=false
+```
 
 ### Ban storage
 
@@ -797,7 +832,7 @@ Default prefix:
 
 ```text
 !
-````
+```
 
 Examples:
 
@@ -979,7 +1014,7 @@ CMZDedicatedSteamServer should use SteamID-backed command ranks whenever possibl
 ```ini
 [Players]
 steam:76561198000000000=Admin
-````
+```
 
 Name-based entries can be useful as a fallback, but SteamID entries are stronger because players can change their Steam display name without changing their SteamID.
 
@@ -996,7 +1031,7 @@ Examples of protected rank entries:
 steam:76561198000000000=Admin
 name:Jacob Smith=Admin
 ip:192.168.1.50=Admin
-````
+```
 
 Steam servers should prefer `steam:<steamid>` because it is stable across name changes. Lidgren servers may use `name:` or `ip:` entries, but those are weaker because names and IP addresses can change.
 
@@ -1030,13 +1065,31 @@ Check:
 ```text
 !op "Jacob Smith"
 !kick "Jacob Smith" Being annoying
-````
+```
 
 You can reload command files without restarting:
 
 ```text
 reload commands
 ```
+
+</details>
+
+<details>
+<summary><strong>In-game Steam commands show in chat but do not run</strong></summary>
+
+Make sure you are using a build that handles commands through the Steam CH1 chat/broadcast route.
+
+Symptoms of an older build include:
+- `!help` appears as normal chat instead of opening help.
+- The console does not print a `[Commands] ... ran !help.` line.
+- `Logs\commands-yyyy-MM-dd.log` is not created even though `log-command-audit=true`.
+
+Also check:
+- `Commands\CommandPermissions.ini` exists.
+- `[Settings] Enabled=true`.
+- The command prefix matches what you are typing, usually `!`.
+- Your player has the required rank in `Commands\CommandRanks.ini`.
 
 </details>
 
@@ -1109,7 +1162,7 @@ Use:
 ```text
 bans
 unban 76561198000000000
-````
+```
 
 to remove the SteamID ban.
 

@@ -41,6 +41,12 @@ namespace CMZDedicatedLidgrenServer
         /// </summary>
         public bool LogHostMessages { get; set; } = false;
 
+        /// <summary>
+        /// Writes command audit lines to Logs\commands-yyyy-MM-dd.log.
+        /// Enabled by default so hosts can review who ran which commands.
+        /// </summary>
+        public bool LogCommandAudit { get; set; } = true;
+
         #endregion
 
         #region Core Server Identity
@@ -231,6 +237,9 @@ namespace CMZDedicatedLidgrenServer
 
             if (map.TryGetValue("log-host-messages", out string logHostMessages) && bool.TryParse(logHostMessages, out bool logHost))
                 cfg.LogHostMessages = logHost;
+
+            if (map.TryGetValue("log-command-audit", out string logCommandAuditRaw) && bool.TryParse(logCommandAuditRaw, out bool logCommandAudit))
+                cfg.LogCommandAudit = logCommandAudit;
 
             #endregion
 

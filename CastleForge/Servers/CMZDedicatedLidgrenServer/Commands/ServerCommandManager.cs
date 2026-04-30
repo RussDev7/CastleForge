@@ -160,6 +160,14 @@ namespace CMZDedicatedLidgrenServer.Commands
             if (!_commands.TryGetValue(commandName, out ServerCommandDefinition command))
             {
                 context.SendReply("[Server] Unknown command. Use " + _permissions.Prefix + "help.");
+
+                context.WriteLog(
+                    "[Commands] Unknown command from " +
+                    BuildCommandActorLabel(context) +
+                    ": " +
+                    SanitizeCommandTextForLog(context.RawText) +
+                    ".");
+
                 return true;
             }
 
@@ -178,13 +186,10 @@ namespace CMZDedicatedLidgrenServer.Commands
 
                 context.WriteLog(
                     "[Commands] Denied " +
-                    _permissions.Prefix +
-                    command.Name +
+                    SanitizeCommandTextForLog(context.RawText) +
                     " from " +
-                    SafeName(context.PlayerName, context.PlayerId) +
-                    " (" +
-                    (context.RemoteKey ?? "unknown") +
-                    "), rank=" +
+                    BuildCommandActorLabel(context) +
+                    ", rank=" +
                     ServerCommandRankHelper.ToConfigString(senderRank) +
                     ", required=" +
                     ServerCommandRankHelper.ToConfigString(requiredRank) +
@@ -192,6 +197,8 @@ namespace CMZDedicatedLidgrenServer.Commands
 
                 return true;
             }
+
+            LogCommandExecution(context);
 
             try
             {
@@ -652,6 +659,95 @@ namespace CMZDedicatedLidgrenServer.Commands
                 PlayerName = rawTarget,
                 RemoteKey = key
             };
+        }
+
+        /// <summary>
+        /// Logs a successful command dispatch before the command handler runs.
+        /// Summary: Gives the dedicated server console a clear audit trail of who ran which command.
+        /// </summary>
+        private static void LogCommandExecution(ServerCommandContext context)
+        {
+            if (context == null)
+                return;
+
+            context.WriteLog(
+                "[Commands] " +
+                BuildCommandActorLabel(context) +
+                " ran " +
+                SanitizeCommandTextForLog(context.RawText) +
+                ".");
+        }
+
+        /// <summary>
+        /// Builds a readable command sender label for console auditing.
+        /// Steam shows steam:SteamID; Lidgren shows name: plus optional ip: fallback keys.
+        /// </summary>
+        private static string BuildCommandActorLabel(ServerCommandContext context)
+        {
+            if (context == null)
+                return "Unknown";
+
+            string name = SafeName(context.PlayerName, context.PlayerId);
+
+            if (string.Equals(context.RemoteKey, "console", StringComparison.OrdinalIgnoreCase))
+                return "Console";
+
+            string key = string.IsNullOrWhiteSpace(context.RemoteKey)
+                ? "unknown"
+                : context.RemoteKey;
+
+            string label =
+                name +
+                " (gid=" +
+                context.PlayerId +
+                ", " +
+                key;
+
+            if (context.AdditionalRemoteKeys != null && context.AdditionalRemoteKeys.Length > 0)
+            {
+                string[] extraKeys = [.. context.AdditionalRemoteKeys.Where(x => !string.IsNullOrWhiteSpace(x))];
+
+                if (extraKeys.Length > 0)
+                    label += ", alt=" + string.Join(",", extraKeys);
+            }
+
+            label += ")";
+
+            return label;
+        }
+
+        /// <summary>
+        /// Removes line breaks and redacts future sensitive command forms before writing to the console.
+        /// </summary>
+        private static string SanitizeCommandTextForLog(string rawText)
+        {
+            if (string.IsNullOrWhiteSpace(rawText))
+                return "<empty>";
+
+            string text = rawText
+                .Replace('\r', ' ')
+                .Replace('\n', ' ')
+                .Trim();
+
+            while (text.Contains("  "))
+                text = text.Replace("  ", " ");
+
+            string firstToken = text.Split([' '], 2)[0]
+                .TrimStart('!', '/', '.')
+                .ToLowerInvariant();
+
+            if (firstToken == "login" ||
+                firstToken == "password" ||
+                firstToken == "setpassword" ||
+                firstToken == "auth")
+            {
+                int firstSpace = text.IndexOf(' ');
+                return firstSpace < 0
+                    ? text
+                    : text.Substring(0, firstSpace) + " <redacted>";
+            }
+
+            return text;
         }
         #endregion
     }

@@ -653,10 +653,11 @@ namespace CMZDedicatedSteamServer.Hosting
 
                 case 7:
                 {
+                    if (senderSteamId != 0UL)
+                        _forceDroppedSteamIds.Add(senderSteamId);
+
                     if (_peers.RemoveBySteamId(senderSteamId, out ConnectedSteamPeer peer))
                     {
-                        // Re-add temporarily so RemoveSteamPeerFromServer can run safely if you want one shared path,
-                        // or just keep your existing block. The important part is to avoid double notifications.
                         _approval.RemovePeer(senderSteamId);
                         _connectionToGamer.Remove(senderSteamId);
                         _playerExistsPayloadById.Remove(peer.Gid);
@@ -752,6 +753,9 @@ namespace CMZDedicatedSteamServer.Hosting
                     return;
 
                 if (ShouldDropInboundPacket(senderId, 0, 1, 4, payloadBytes, senderSteamId))
+                    return;
+
+                if (TryHandleServerChatCommand(senderId, senderSteamId, payloadBytes))
                     return;
 
                 if (_config.LogNetworkPackets)
@@ -1119,7 +1123,30 @@ namespace CMZDedicatedSteamServer.Hosting
         {
             if (_peers == null || !_peers.TryGetConnectedPeer(senderSteamId, out ConnectedSteamPeer peer) || peer == null)
             {
-                _log($"[Security] Dropped {route}: unknown Steam peer {senderSteamId}; declared player={declaredSenderId}.");
+                bool isPending =
+                    _approval != null &&
+                    _approval.TryGetPending(senderSteamId, out _);
+
+                if (isPending)
+                {
+                    _log($"[Security] Dropped {route}: Steam peer {senderSteamId} sent data before connected status; declared player={declaredSenderId}.");
+                    return false;
+                }
+
+                if (senderSteamId != 0UL && _forceDroppedSteamIds.Add(senderSteamId))
+                {
+                    _log($"[Security] Dropped {route}: unknown Steam peer {senderSteamId}; declared player={declaredSenderId}. Late data will be ignored until fresh approval.");
+
+                    try
+                    {
+                        _steam?.DenyConnection(senderSteamId, "Connection dropped.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log($"[Security] Steam deny failed for unknown peer {senderSteamId}: {ex.Message}");
+                    }
+                }
+
                 return false;
             }
 

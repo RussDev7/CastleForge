@@ -30,6 +30,12 @@ namespace CMZDedicatedSteamServer.Config
         public bool LogNetworkPackets { get; set; } = false;
         public bool LogHostMessages { get; set; } = false;
 
+        /// <summary>
+        /// Writes command audit lines to Logs\commands-yyyy-MM-dd.log.
+        /// Enabled by default so hosts can review who ran which commands.
+        /// </summary>
+        public bool LogCommandAudit { get; set; } = true;
+
         #endregion
 
         #region Core Identity
@@ -102,6 +108,9 @@ namespace CMZDedicatedSteamServer.Config
 
             if (map.TryGetValue("log-host-messages", out string logHostMessages) && bool.TryParse(logHostMessages, out bool logHost))
                 cfg.LogHostMessages = logHost;
+
+            if (map.TryGetValue("log-command-audit", out string logCommandAuditRaw) && bool.TryParse(logCommandAuditRaw, out bool logCommandAudit))
+                cfg.LogCommandAudit = logCommandAudit;
 
             if (map.TryGetValue("server-name", out string serverName) && !string.IsNullOrWhiteSpace(serverName))
                 cfg.ServerName = serverName;
