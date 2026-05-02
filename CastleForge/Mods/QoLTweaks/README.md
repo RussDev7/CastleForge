@@ -2,7 +2,7 @@
 
 ![Preview](_Images/Preview.png)
 
-> A lightweight **quality-of-life feature pack** for CastleMiner Z that improves building reach, offline chat, text input, HUD readability, chat usability, and vertical freedom—without burying the player under menus or setup.
+> A lightweight **quality-of-life feature pack** for CastleMiner Z that improves building reach, offline chat, text input, HUD readability, chat usability, and vertical freedom-without burying the player under menus or setup.
 
 ---
 
@@ -19,17 +19,6 @@ This mod is especially useful for players who:
 - want console messages to stay more visible,
 - need better text entry and **Ctrl+V paste support**, and
 - want to remove the vanilla upper world-height ceiling for testing, building, or free movement.
-
----
-
-### Suggested feature gallery images
-- **Placeholder:** `docs/images/mods/qoltweaks/construction-range.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/offline-chat.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/targeted-block-label.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/wide-chat-input.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/console-opacity.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/text-input-paste.png`
-- **Placeholder:** `docs/images/mods/qoltweaks/world-height.png`
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Re-skin CastleMiner Z far beyond simple block textures.**
 >  
-> **TexturePacks** is a full runtime content replacement system for CastleForge that lets players and pack authors swap **terrain**, **item icons**, **held-item skins**, **XNB models**, **HUD and inventory sprites**, **menu screens**, **fonts**, **sound effects**, **music**, **terrain shaders**, **skyboxes**, and more — all through a pack folder structure designed for real-world modding workflows.
+> **TexturePacks** is a full runtime content replacement system for CastleForge that lets players and pack authors swap **terrain**, **item icons**, **held-item skins**, **XNB models**, **HUD and inventory sprites**, **menu screens**, **fonts**, **sound effects**, **music**, **terrain shaders**, **skyboxes**, and more - all through a pack folder structure designed for real-world modding workflows.
 
 ---
 

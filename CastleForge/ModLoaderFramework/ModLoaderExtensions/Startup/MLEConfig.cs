@@ -154,6 +154,30 @@ namespace ModLoaderExt
     }
     #endregion
 
+    #region Vanilla Spawners
+
+    /// <summary>
+    /// Runtime knobs for vanilla spawner behavior.
+    /// Written by MLEConfig.ApplyToStatics(), read by spawner generation / activation patches.
+    /// </summary>
+    internal static class VanillaSpawnerConfig
+    {
+        // [VanillaSpawners].
+
+        /// <summary>
+        /// When false, prevents newly generated cave / hell terrain from placing vanilla spawner blocks.
+        /// Existing generated chunks are not changed.
+        /// </summary>
+        public static volatile bool GenerateSpawnerBlocks = true;
+
+        /// <summary>
+        /// When false, existing vanilla spawner blocks cannot be clicked / activated.
+        /// This does not delete existing spawner blocks.
+        /// </summary>
+        public static volatile bool AllowSpawnerActivation = true;
+    }
+    #endregion
+
     #endregion
 
     /// <summary>
@@ -206,6 +230,10 @@ namespace ModLoaderExt
         // [EntityLimits]
         public bool LimitEntities     = true;
         public int  MaxGlobalEntities = 500;
+
+        // [VanillaSpawners].
+        public bool GenerateSpawnerBlocks  = true;
+        public bool AllowSpawnerActivation = true;
 
         // [Hotkeys].
         // Hotkey to reload this config at runtime.
@@ -293,6 +321,14 @@ namespace ModLoaderExt
                     "; Maximum visible/global entities when LimitEntities=true.",
                     "MaxGlobalEntities = 500",
                     "",
+                    "[VanillaSpawners]",
+                    "; Controls vanilla-generated monster / alien / boss spawner blocks.",
+                    "; GenerateSpawnerBlocks=false prevents NEW spawner blocks from being placed during terrain generation.",
+                    "; Existing chunks / saves are not modified.",
+                    "GenerateSpawnerBlocks  = true",
+                    "; AllowSpawnerActivation=false makes existing vanilla spawner blocks non-clickable.",
+                    "AllowSpawnerActivation = true",
+                    "",
                     "[Hotkeys]",
                     "; Reload this config while in-game:",
                     "ReloadConfig       = Ctrl+Shift+R",
@@ -300,6 +336,7 @@ namespace ModLoaderExt
             }
 
             EnsureMenuItemsDefaults();
+            EnsureVanillaSpawnerDefaults();
             var ini = SimpleIni.Load(ConfigPath);
 
             var cfg = new MLEConfig
@@ -343,6 +380,10 @@ namespace ModLoaderExt
                 // [EntityLimits].
                 LimitEntities     = ini.GetBool("EntityLimits", "LimitEntities", true),
                 MaxGlobalEntities = Clamp(ini.GetInt("EntityLimits", "MaxGlobalEntities", 500), 0, 50000),
+
+                // [VanillaSpawners].
+                GenerateSpawnerBlocks  = ini.GetBool("VanillaSpawners", "GenerateSpawnerBlocks", true),
+                AllowSpawnerActivation = ini.GetBool("VanillaSpawners", "AllowSpawnerActivation", true),
 
                 // [Hotkeys].
                 ReloadConfigHotkey = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R"),
@@ -410,6 +451,10 @@ namespace ModLoaderExt
             ImpersonationConfig.HostOnlyRespondWhenProtectEveryone = HostOnlyRespondWhenProtectEveryone;
 
             NewlineChatConfig.IgnoreChatNewlines = IgnoreChatNewlines;
+
+            // [VanillaSpawners].
+            VanillaSpawnerConfig.GenerateSpawnerBlocks  = GenerateSpawnerBlocks;
+            VanillaSpawnerConfig.AllowSpawnerActivation = AllowSpawnerActivation;
 
             // [EntityLimits].
             EntityLimiterSystem.LimitEntities     = LimitEntities;
@@ -480,6 +525,27 @@ namespace ModLoaderExt
 
                 EnsureIniKeyDefault(lines, "MenuItems", "ShowDiscordButton", "true", 26);
                 EnsureIniKeyDefault(lines, "MenuItems", "ShowSupportButton", "true", 26);
+
+                File.WriteAllLines(ConfigPath, lines.ToArray());
+            }
+            catch
+            {
+                // Do not block config loading if optional default insertion fails.
+            }
+        }
+
+        /// <summary>
+        /// Ensures newer [VanillaSpawners] defaults exist in older config files without
+        /// overwriting user-customized values.
+        /// </summary>
+        private static void EnsureVanillaSpawnerDefaults()
+        {
+            try
+            {
+                var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+                EnsureIniKeyDefault(lines, "VanillaSpawners", "GenerateSpawnerBlocks", "true", 26);
+                EnsureIniKeyDefault(lines, "VanillaSpawners", "AllowSpawnerActivation", "true", 26);
 
                 File.WriteAllLines(ConfigPath, lines.ToArray());
             }

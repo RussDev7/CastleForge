@@ -11,8 +11,8 @@
 
 It supports two main workflows:
 
-- **Manual mode** — you choose the remote language yourself.
-- **Auto mode** — incoming messages are auto-detected, and your replies follow the **last language detected from other players**.
+- **Manual mode** - you choose the remote language yourself.
+- **Auto mode** - incoming messages are auto-detected, and your replies follow the **last language detected from other players**.
 
 It also includes:
 
@@ -215,9 +215,9 @@ ReloadConfig          = Ctrl+Shift+R
 |---|---|---|
 | `/translate` | `/t` | Toggle auto-translate mode |
 | `/language <code>` | `/lang <code>`, `/l <code>` | Toggle manual translation using a specific language code |
-| `/toff` | — | Turn all translation off |
+| `/toff` | - | Turn all translation off |
 | `/tclear` | `/tc` | Clear both the manual remote language and the last auto-detected language |
-| `/tstatus` | — | Print current baseline, manual remote, last detected language, and mode |
+| `/tstatus` | - | Print current baseline, manual remote, last detected language, and mode |
 
 ### Baseline language
 

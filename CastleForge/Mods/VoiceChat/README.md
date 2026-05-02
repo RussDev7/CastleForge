@@ -51,7 +51,7 @@ A lot of "voice chat" mods stop at simply enabling transmission. VoiceChat goes 
 - It adds **quality-of-life feedback** with a simple on-screen speaking banner.
 - It **cleans up voice resources on session leave** instead of leaving capture/playback state hanging.
 
-In other words, this mod is not just about talking — it is about making the entire voice path more reliable and more usable.
+In other words, this mod is not just about talking - it is about making the entire voice path more reliable and more usable.
 
 ---
 
@@ -154,7 +154,7 @@ On first run, the mod creates:
 
 This build embeds Harmony internally, so there is no separate Harmony install step for the player.
 
-![Installation placeholder](_Images/VoicechatInstall.png)
+![Installation](_Images/VoicechatInstall.png)
 
 ---
 

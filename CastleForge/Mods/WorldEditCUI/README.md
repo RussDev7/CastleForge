@@ -516,6 +516,6 @@ Use:
 
 ## Credits
 
-- **RussDev7** — original WorldEdit-CSharp project, CastleForge integration, and WorldEditCUI addon adaptation
-- **EngineHub / WorldEditCUI inspiration** — for the original idea of a visual frontend for WorldEdit-style selections
-- **CastleForge / CastleMiner Z modding stack** — for the mod-loading and runtime environment this addon builds on
+- **RussDev7** - original WorldEdit-CSharp project, CastleForge integration, and WorldEditCUI addon adaptation
+- **EngineHub / WorldEditCUI inspiration** - for the original idea of a visual frontend for WorldEdit-style selections
+- **CastleForge / CastleMiner Z modding stack** - for the mod-loading and runtime environment this addon builds on

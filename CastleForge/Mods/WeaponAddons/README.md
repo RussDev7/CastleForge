@@ -1271,7 +1271,7 @@ Check:
 
 ## Final thoughts
 
-WeaponAddons is not just “a mod that changes a gun.”  
+WeaponAddons is not just "a mod that changes a gun.”  
 It is a flexible runtime content system for CastleMiner Z that lets creators package weapons as structured data packs with models, icons, sounds, recipes, and runtime item identity.
 
 For a GitHub audience, that is a strong pitch:

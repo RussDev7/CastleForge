@@ -251,59 +251,6 @@ Some systems may still expect the load screen object to exist. FastBoot avoids b
 
 ---
 
-## Repository Placement
-
-For the project layout you shared, this README is best placed at:
-
-```text
-CastleForge/
-└─ CastleForge/
-   └─ Mods/
-      └─ FastBoot/
-         └─ README.md
-```
-
-A good companion image folder pattern would be something like:
-
-```text
-CastleForge/
-└─ Assets/
-   └─ Images/
-      └─ Mods/
-         └─ FastBoot/
-            ├─ FastBootHero.png
-            ├─ FastBootFeatures.png
-            ├─ FastBootFlow.png
-            └─ FastBootInstall.png
-```
-
-If you later add those assets, you can replace each placeholder block with normal GitHub image links.
-
----
-
-## Suggested Screenshot / Art Plan
-
-### 1) Hero banner
-Show the value proposition immediately.
-- Left side: normal loading screen / fade screen
-- Right side: gameplay or main menu already visible
-- Text overlay idea: **Boot Faster. Wait Less.**
-
-### 2) Feature explainer image
-Use arrows or labels pointing to:
-- pushed screen,
-- forced finished state,
-- skipped draw,
-- skipped update.
-
-### 3) Flow graphic
-Turn the included Mermaid flow into a polished static diagram if you want a cleaner showcase image.
-
-### 4) Installation screenshot
-Show the exact folder users need to drop the mod into.
-
----
-
 ## FAQ
 
 ### Does FastBoot change gameplay?

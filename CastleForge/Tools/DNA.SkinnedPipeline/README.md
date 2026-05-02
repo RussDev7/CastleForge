@@ -33,7 +33,7 @@ In plain terms, this tool exists so that **skinned content can be compiled in a 
 ## Why this tool stands out
 
 ### Built specifically around CMZ / DNA runtime expectations
-This is not a generic “maybe it works” skinned model helper. It is shaped around the way the DNA runtime expects skeleton and animation-related data to be stored in compiled content.
+This is not a generic "maybe it works" skinned model helper. It is shaped around the way the DNA runtime expects skeleton and animation-related data to be stored in compiled content.
 
 ### Uses a real XNA pipeline extension instead of a post-build hack
 Rather than editing compiled files after the fact, it plugs into the content pipeline properly through a custom processor and custom writers.

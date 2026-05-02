@@ -87,8 +87,6 @@ The mod invalidates the cached 2D item icon atlases so the UI can regenerate ico
 
 ## Supported material entries
 
-![Materials placeholder](_Images/materials.png)
-
 *Image suggestion: a horizontal material strip with one representative item from each material tier.*
 
 The generated default config includes entries for these material names:
@@ -220,7 +218,7 @@ Gold   = 255,189,0,255
 
 ### Notes
 
-- RGB uses **0–255** integer ranges.
+- RGB uses **0-255** integer ranges.
 - Alpha is optional, but supported when provided.
 - Invalid or unrecognized color values fall back to the vanilla default for that material.
 

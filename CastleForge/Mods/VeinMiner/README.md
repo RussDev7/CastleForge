@@ -109,9 +109,9 @@ The connected-vein search is intentionally limited so the mod stays controlled a
 
 It uses three separate safety controls:
 
-- **MaxTraversalCells** – maximum number of cells the search may visit.
-- **MaxBlocksToMine** – maximum number of extra blocks VeinMiner may remove after the first block.
-- **MaxAxisRadius** – maximum distance allowed from the original mined block on each axis.
+- **MaxTraversalCells** - maximum number of cells the search may visit.
+- **MaxBlocksToMine** - maximum number of extra blocks VeinMiner may remove after the first block.
+- **MaxAxisRadius** - maximum distance allowed from the original mined block on each axis.
 
 These limits help prevent huge scans or excessive chain-mining through very large deposits.
 
@@ -147,8 +147,8 @@ When triggered, the mod reloads the config and reapplies runtime settings withou
 
 You can enable:
 
-- **DoAnnouncement** – shows a player-facing in-game message after vein mining.
-- **DoLogging** – writes vein mining details to the log.
+- **DoAnnouncement** - shows a player-facing in-game message after vein mining.
+- **DoLogging** - writes vein mining details to the log.
 
 By default, both are off for a cleaner experience.
 
@@ -496,11 +496,11 @@ The mod applies Harmony patches on startup and unpatches its own Harmony ID duri
 
 If you are building out the GitHub page with images later, these would be great captures:
 
-1. **Hero banner** – player mining into a rich ore wall underground
-2. **Before / after comparison** – one block mined versus the resulting cleared vein
-3. **Config file screenshot** – `VeinMiner.Config.ini` open with the important sections highlighted
-4. **Hot-reload demo** – edit config, press the reload hotkey, show the confirmation message
-5. **Ore showcase collage** – gold, iron, copper, coal, diamond, and slime examples
+1. **Hero banner** - player mining into a rich ore wall underground
+2. **Before / after comparison** - one block mined versus the resulting cleared vein
+3. **Config file screenshot** - `VeinMiner.Config.ini` open with the important sections highlighted
+4. **Hot-reload demo** - edit config, press the reload hotkey, show the confirmation message
+5. **Ore showcase collage** - gold, iron, copper, coal, diamond, and slime examples
 
 ---
 
@@ -567,4 +567,4 @@ This removes the mod and its saved settings.
 
 ## Closing note
 
-VeinMiner is one of those mods that immediately makes mining feel better without turning the game into something else. It stays simple, fast, configurable, and easy to understand—exactly the kind of quality-of-life feature players tend to keep installed once they try it.
+VeinMiner is one of those mods that immediately makes mining feel better without turning the game into something else. It stays simple, fast, configurable, and easy to understand-exactly the kind of quality-of-life feature players tend to keep installed once they try it.

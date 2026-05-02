@@ -6443,6 +6443,79 @@ namespace ModLoaderExt
 
         #endregion
 
+        #region Patch - Vanilla Spawner Controls
+
+        /// <summary>
+        /// Prevents cave generation from placing new vanilla monster / alien spawner blocks
+        /// when [VanillaSpawners].GenerateSpawnerBlocks is false.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla path:
+        /// CaveBiome.BuildColumn(...)
+        ///   -> GetEnemyBlock(...)
+        ///
+        /// Returning an Empty block here keeps cave generation intact while skipping the
+        /// generated spawner block.
+        /// </remarks>
+        [HarmonyPatch(typeof(DNA.CastleMinerZ.Terrain.WorldBuilders.CaveBiome), "GetEnemyBlock")]
+        internal static class Patch_CaveBiome_GetEnemyBlock_DisableVanillaSpawners
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(ref int __result)
+            {
+                if (VanillaSpawnerConfig.GenerateSpawnerBlocks)
+                    return true;
+
+                __result = DNA.CastleMinerZ.Terrain.Block.SetType(
+                    0,
+                    DNA.CastleMinerZ.Terrain.BlockTypeEnum.Empty);
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Prevents hell floor generation from placing new vanilla boss spawner blocks
+        /// when [VanillaSpawners].GenerateSpawnerBlocks is false.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla path:
+        /// HellFloorBiome.BuildColumn(...)
+        ///   -> CheckForBossSpawns(...)
+        ///
+        /// Skipping this method prevents the boss spawner countdown from placing the
+        /// block and prevents the later AlterBlockMessage broadcast for that spawner.
+        /// </remarks>
+        [HarmonyPatch(typeof(DNA.CastleMinerZ.Terrain.WorldBuilders.HellFloorBiome), "CheckForBossSpawns")]
+        internal static class Patch_HellFloorBiome_CheckForBossSpawns_DisableVanillaBossSpawners
+        {
+            [HarmonyPrefix]
+            private static bool Prefix()
+            {
+                return VanillaSpawnerConfig.GenerateSpawnerBlocks;
+            }
+        }
+
+        /// <summary>
+        /// Optional interaction gate for existing vanilla spawner blocks.
+        /// When [VanillaSpawners].AllowSpawnerActivation is false, existing spawner blocks
+        /// remain in the world but are no longer treated as clickable spawners.
+        /// </summary>
+        [HarmonyPatch(typeof(DNA.CastleMinerZ.Terrain.BlockType), "IsSpawnerClickable")]
+        internal static class Patch_BlockType_IsSpawnerClickable_Config
+        {
+            [HarmonyPrefix]
+            private static bool Prefix(ref bool __result)
+            {
+                if (VanillaSpawnerConfig.AllowSpawnerActivation)
+                    return true;
+
+                __result = false;
+                return false;
+            }
+        }
+        #endregion
+
         #region In-Game Chat: History & Input
 
         #region Class: InGameChatHistory

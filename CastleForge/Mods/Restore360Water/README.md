@@ -52,9 +52,9 @@ The current implementation also adds a surprising amount of quality-of-life arou
 
 ## Why this mod stands out
 
-Most “water restoration” ideas stop at simply drawing a plane. Restore360Water goes much further.
+Most "water restoration" ideas stop at simply drawing a plane. Restore360Water goes much further.
 
-It does not just render water — it also updates the game’s runtime water behavior so the restored water is actually meaningful:
+It does not just render water - it also updates the game’s runtime water behavior so the restored water is actually meaningful:
 
 - **Biome-aware water bands:** Water can exist only within configured vertical ranges for specific biomes.
 - **Gameplay-aware state rewrites:** Player water checks are redirected so movement, underwater state, HUD behavior, and audio respect the active band.
@@ -83,9 +83,6 @@ Restore360Water restores and extends the dormant **360-style surface water prese
 - Falls back to a generated normal map if the texture is missing.
 - Restores local water sound behavior with configurable WAV files.
 
-<!-- ![Restore360Water_Features](Images/Restore360Water_Features.png) -->
-> **Image Placeholder:** Add a feature showcase image with labels pointing to the water surface, underwater tint, reflection, and a shoreline/wading example.
-
 ---
 
 ## What it does not do
@@ -96,7 +93,7 @@ It does **not** currently:
 
 - add true flowing voxel water
 - simulate block-by-block fluid spread
-- restore the older surrogate “Murky Water” block/item path as active gameplay
+- restore the older surrogate "Murky Water" block/item path as active gameplay
 - force the entire world to behave like one giant flooded map
 
 The repository still contains Murky Water art assets from earlier work, but the current build is centered on the plane-based approach.
@@ -557,4 +554,4 @@ This is why the mod feels more integrated than a simple cosmetic plane.
 
 Restore360Water is not just a nostalgia mod. It is a careful restoration of classic-feeling water presentation with modern configurability, biome awareness, and CastleForge-friendly runtime controls.
 
-If you want water to feel like it belongs in your world again — especially in curated or custom-generated worlds — this mod gives you a powerful foundation to build on.
+If you want water to feel like it belongs in your world again - especially in curated or custom-generated worlds - this mod gives you a powerful foundation to build on.

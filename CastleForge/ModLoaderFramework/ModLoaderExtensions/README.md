@@ -29,6 +29,7 @@ On top of that, ModLoaderExtensions also improves the game’s foundation with:
 - cleaner in-game text input behavior
 - developer helpers for embedded dependencies and resource extraction
 - defensive crash resistance around fragile vanilla code paths
+- optional vanilla spawner generation and activation controls
 
 In other words, this mod is first and foremost the **command extension layer** for CastleForge, with a broad set of additional fixes and quality-of-life improvements built around it.
 
@@ -51,16 +52,27 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 <summary><strong>Network stability and packet hardening</strong></summary>
 
 | Area | Patch / system | Type | What it changes |
-|---|---|---|---|
-| Network stability | Safe TX send (`LocalNetworkGamer.SendData`) | Fix | Logs and swallows known non-fatal lifecycle send errors instead of letting teardown or bad state crash the session. |
-| Network stability | Safe RX receive (`LocalNetworkGamer.ReceiveData`) | Fix | Handles malformed receive cases, drops bad queued packets, and prevents bad inbound data from repeatedly crashing the game loop. |
-| Network stability | Safe RX decode (`ReceiveData/RecieveData(BinaryReader)`) | Fix | Wraps message decode methods so malformed payloads are abandoned safely instead of breaking the full receive pipeline. |
-| Network stability | Safe message dispatch (`EnemyManager.HandleMessage`) | Fix | Prevents downstream message-handler exceptions from tearing down the game when enemy/network message routing hits bad state. |
-| Anti-spam / networking | FloodGuard packet gate + queued-packet purge | Improvement / Fix | Adds per-sender rate limits, timed blackhole logic, allowlist handling, and precise pending-data purge behavior for abusive or malformed traffic. |
-| Anti-spam / networking | Pickup request throttle | Improvement | Uses a config-backed token-bucket throttle for local pickup requests to reduce pickup spam abuse and accidental flooding. |
-| Network validation | Remote transform sanity checks (`PlayerUpdateMessage.Apply`) | Fix | Rejects NaN, Infinity, and absurd transform data from remote players before it can destabilize simulation or rendering. |
-| Net message hardening | `ShotgunShotMessage` validation | Fix | Validates shotgun payload/item data before it is trusted, reducing malformed message crashes or bad-state behavior. |
-| Net message hardening | Safe inventory-store handling on host | Fix | Guards the host-side inventory store path when sender state is invalid or unstable. |
+|------------------------|--------------------------------------------------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| Network stability      | Safe TX send (`LocalNetworkGamer.SendData`)                  | Fix               | Logs and swallows known non-fatal lifecycle send errors instead of letting teardown or bad state crash the session.                               |
+| Network stability      | Safe RX receive (`LocalNetworkGamer.ReceiveData`)            | Fix               | Handles malformed receive cases, drops bad queued packets, and prevents bad inbound data from repeatedly crashing the game loop.                  |
+| Network stability      | Safe RX decode (`ReceiveData/RecieveData(BinaryReader)`)     | Fix               | Wraps message decode methods so malformed payloads are abandoned safely instead of breaking the full receive pipeline.                            |
+| Network stability      | Safe message dispatch (`EnemyManager.HandleMessage`)         | Fix               | Prevents downstream message-handler exceptions from tearing down the game when enemy/network message routing hits bad state.                      |
+| Anti-spam / networking | FloodGuard packet gate + queued-packet purge                 | Improvement / Fix | Adds per-sender rate limits, timed blackhole logic, allowlist handling, and precise pending-data purge behavior for abusive or malformed traffic. |
+| Anti-spam / networking | Pickup request throttle                                      | Improvement       | Uses a config-backed token-bucket throttle for local pickup requests to reduce pickup spam abuse and accidental flooding.                         |
+| Network validation     | Remote transform sanity checks (`PlayerUpdateMessage.Apply`) | Fix               | Rejects NaN, Infinity, and absurd transform data from remote players before it can destabilize simulation or rendering.                           |
+| Net message hardening  | `ShotgunShotMessage` validation                              | Fix               | Validates shotgun payload/item data before it is trusted, reducing malformed message crashes or bad-state behavior.                               |
+| Net message hardening  | Safe inventory-store handling on host                        | Fix               | Guards the host-side inventory store path when sender state is invalid or unstable.                                                               |
+
+</details>
+
+<details>
+<summary><strong>World generation and vanilla spawner controls</strong></summary>
+
+| Area | Patch / system | Type | What it changes |
+|---------------------|---------------------------------------------|-------|--------------------------------------------------------------------------------------------------------------------------|
+| World generation    | Vanilla cave spawner generation toggle      | Tweak | Adds a config-backed option to prevent newly generated cave terrain from placing vanilla monster / alien spawner blocks. |
+| World generation    | Vanilla hell boss spawner generation toggle | Tweak | Adds a config-backed option to prevent newly generated hell terrain from placing vanilla boss spawner blocks.            |
+| Spawner interaction | Existing spawner activation toggle          | Tweak | Optionally makes existing vanilla spawner blocks non-clickable without deleting or modifying already generated worlds.   |
 
 </details>
 
@@ -85,8 +97,8 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 
 | Area | Patch / system | Type | What it changes |
 |---------------------|---------------------------------------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| Host migration      | Dragon migration hardening — outgoing handoff     | Fix               | Replaces unsafe dragon handoff logic with validated migration send behavior so null/stale state cannot crash or corrupt ownership transfer. |
-| Host migration      | Dragon migration hardening — incoming accept path | Fix               | Validates dragon migration payloads before accepting them locally, reducing crashes and invalid dragon ownership states.                    |
+| Host migration      | Dragon migration hardening - outgoing handoff     | Fix               | Replaces unsafe dragon handoff logic with validated migration send behavior so null/stale state cannot crash or corrupt ownership transfer. |
+| Host migration      | Dragon migration hardening - incoming accept path | Fix               | Validates dragon migration payloads before accepting them locally, reducing crashes and invalid dragon ownership states.                    |
 | Steam compatibility | Remember expected host during client join         | Compatibility fix | Tracks the expected host identity during join bootstrap so malformed host mapping can be repaired later.                                    |
 | Steam compatibility | Repair broken Steam host mapping                  | Compatibility fix | Fixes host mappings when the host arrives with a bad/non-standard visible gamer ID layout.                                                  |
 | Steam compatibility | Broadcast safety nets                             | Compatibility fix | Drops unsafe client broadcast attempts when host mapping is invalid instead of allowing exception spam or endless join-loop behavior.       |
@@ -133,10 +145,10 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 
 | Preview | What it demonstrates |
 |-----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| ![Main Menu](_Images/MainMenu.gif)            | **Main menu polish** — Shows the hidden ad behavior, mods-loaded banner, and bottom-left Discord / Support buttons on the main menu.   |
-| ![Chat Optimization](_Images/ChatHistory.gif) | **Chat and input improvements** — Shows chat history recall, command recall, and smoother text-entry behavior.                         |
-| ![Commands](_Images/CommandsHelp.png)         | **Shared command system** — Highlights `/help`, command paging, and the shared slash-command framework used by other CastleForge mods. |
-| ![Config File](_Images/ConfigFile.png)        | **Runtime configuration** — Shows the generated config and the main sections users can reload and tune without restarting.             |
+| ![Main Menu](_Images/MainMenu.gif)            | **Main menu polish** - Shows the hidden ad behavior, mods-loaded banner, and bottom-left Discord / Support buttons on the main menu.   |
+| ![Chat Optimization](_Images/ChatHistory.gif) | **Chat and input improvements** - Shows chat history recall, command recall, and smoother text-entry behavior.                         |
+| ![Commands](_Images/CommandsHelp.png)         | **Shared command system** - Highlights `/help`, command paging, and the shared slash-command framework used by other CastleForge mods. |
+| ![Config File](_Images/ConfigFile.png)        | **Runtime configuration** - Shows the generated config and the main sections users can reload and tune without restarting.             |
 
 ---
 
@@ -149,7 +161,7 @@ It fills two major roles:
 1. **Primary role:** it is the shared extension layer that enables `/ commands` and command registration across other CastleForge mods.
 2. **Secondary role:** it adds a broad collection of fixes, safeguards, and polish improvements that make the overall mod stack feel more stable and more professional.
 
-That makes it one of the most important “always-on” core mods in the CastleForge ecosystem.
+That makes it one of the most important "always-on" core mods in the CastleForge ecosystem.
 
 ### Required command infrastructure for other mods
 
@@ -171,6 +183,12 @@ That makes it one of the most important “always-on” core mods in the CastleF
 - deferred fullscreen session-end / kick teardown so hidden fullscreen transitions are less brittle
 - protection against stale inventory icon atlas render targets
 - non-fatal guards around fragile particle draw and profile callback paths
+
+### Vanilla world control
+
+- optional toggle to prevent newly generated vanilla spawner blocks
+- optional toggle to disable clicking / activating existing vanilla spawner blocks
+- keeps existing saves intact because it does not delete already generated spawners
 
 ### Chat and command quality-of-life
 
@@ -271,10 +289,6 @@ Instead of every mod reinventing command parsing, ModLoaderExtensions provides a
 - unknown slash-commands are suppressed and reported as unknown instead of being sent as ordinary chat
 - `/help` supports paging and optional per-mod filtering when commands are registered in the shared help registry
 
-### Screenshot ideas
-
-![Command System Placeholder](_Images/ModLoaderExtensions/Features/CommandSystem.png)
-
 </details>
 
 <details>
@@ -299,10 +313,6 @@ You can tune protection and quality-of-life behavior without constantly restarti
 ```
 
 > **Important:** the runtime folder uses the namespace name **`ModLoaderExt`**, not `ModLoaderExtensions`.
-
-### Screenshot ideas
-
-![Config Hot Reload Placeholder](_Images/ModLoaderExtensions/Features/HotReload.png)
 
 </details>
 
@@ -331,10 +341,6 @@ This makes debugging easier while also helping fragile runtime paths fail more g
 Caught_Exceptions.log
 ```
 
-### Screenshot ideas
-
-![Exception Logging Placeholder](_Images/ModLoaderExtensions/Features/ExceptionLogging.png)
-
 </details>
 
 <details>
@@ -355,10 +361,6 @@ ModLoaderExtensions includes targeted recovery logic for fragile fullscreen scen
 
 This directly targets the frustrating class of bugs where fullscreen focus changes leave chunks invisible, terrain stale, or teardown behavior unstable.
 
-### Screenshot ideas
-
-![Fullscreen Recovery Placeholder](_Images/ModLoaderExtensions/Features/FullscreenRecovery.png)
-
 </details>
 
 <details>
@@ -373,10 +375,6 @@ This directly targets the frustrating class of bugs where fullscreen focus chang
 ### Why it matters
 
 These are the kinds of annoying low-level issues that can produce rare crashes, render failures, or noisy exception spam without improving gameplay in any visible way.
-
-### Screenshot ideas
-
-![Defensive Hardening Placeholder](_Images/ModLoaderExtensions/Features/DefensiveHardening.png)
 
 </details>
 
@@ -401,16 +399,47 @@ These are the kinds of annoying low-level issues that can produce rare crashes, 
 
 ### Why it matters
 
-This is the “defensive shell” portion of the mod. It helps the game survive malformed traffic, spam bursts, and unstable state transitions with fewer catastrophic failures.
-
-### Screenshot ideas
-
-![FloodGuard Placeholder](_Images/ModLoaderExtensions/Features/FloodGuard.png)
+This is the "defensive shell" portion of the mod. It helps the game survive malformed traffic, spam bursts, and unstable state transitions with fewer catastrophic failures.
 
 </details>
 
 <details>
-<summary><strong>7) Steam host compatibility and migration guardrails</strong></summary>
+<summary><strong>7) Vanilla spawner controls</strong></summary>
+
+### What it does
+
+ModLoaderExtensions can optionally control vanilla spawner behavior through config.
+
+This includes:
+
+- preventing newly generated cave terrain from placing vanilla monster / alien spawner blocks
+- preventing newly generated hell terrain from placing vanilla boss spawner blocks
+- optionally making existing vanilla spawner blocks non-clickable
+
+### Why it matters
+
+Vanilla spawners can become annoying when players stay around one area for a long time and generated terrain keeps accumulating spawner blocks nearby.
+
+This feature lets players or hosts reduce that clutter without deleting existing world data.
+
+### Important notes
+
+- This does **not** remove spawner blocks that already exist in generated chunks.
+- This only affects newly generated terrain after the config is changed.
+- For multiplayer, the host and clients should use matching settings to avoid terrain-generation mismatch or visual desync.
+
+### Recommended setting to stop new vanilla spawners
+
+```ini
+[VanillaSpawners]
+GenerateSpawnerBlocks  = false
+AllowSpawnerActivation = true
+```
+
+</details>
+
+<details>
+<summary><strong>8) Steam host compatibility and migration guardrails</strong></summary>
 
 ### Included protections
 
@@ -426,14 +455,10 @@ This is the “defensive shell” portion of the mod. It helps the game survive 
 
 This is one of the most interesting parts of the mod. It targets broken or modded host states that would otherwise cause loading hangs, null host lookups, dropped traffic, or client instability.
 
-### Screenshot ideas
-
-![Steam Host Guard Placeholder](_Images/ModLoaderExtensions/Features/SteamHostGuard.png)
-
 </details>
 
 <details>
-<summary><strong>8) Gamertag integrity and chat sanitization</strong></summary>
+<summary><strong>9) Gamertag integrity and chat sanitization</strong></summary>
 
 ### Included protections
 
@@ -451,14 +476,10 @@ This is one of the most interesting parts of the mod. It targets broken or modde
 
 This is not just censorship. It is readability and trust protection. It keeps the player list, chat feed, and join/leave flow from being abused by control-character spam, blank-name nonsense, or simple chat impersonation tricks.
 
-### Screenshot ideas
-
-![Chat Protection Placeholder](_Images/ModLoaderExtensions/Features/ChatProtections.png)
-
 </details>
 
 <details>
-<summary><strong>9) Menu and text-input quality-of-life</strong></summary>
+<summary><strong>10) Menu and text-input quality-of-life</strong></summary>
 
 ### Included improvements
 
@@ -477,10 +498,6 @@ This is not just censorship. It is readability and trust protection. It keeps th
 ### Why it matters
 
 These are deceptively small changes that make the game and the mod stack feel more polished every single session.
-
-### Screenshot ideas
-
-![Menu And Input Placeholder](_Images/ModLoaderExtensions/Features/MenuAndInput.png)
 
 </details>
 
@@ -502,10 +519,8 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 ### Notes
 
 - `/help` depends on mods registering their commands into the shared `HelpRegistry`.
-- if no commands are registered, it will report that none are available.
-- help page size is scaled to screen height, then clamped to a safe range.
-
-![Help Command Placeholder](_Images/ModLoaderExtensions/Commands/Help.png)
+- If no commands are registered, it will report that none are available.
+- Help page size is scaled to screen height, then clamped to a safe range.
 
 ---
 
@@ -528,6 +543,7 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | `[PickupThrottle]`      | Local pickup request throttling.                             |
 | `[ChatProtections]`     | Gamertag sanitization, anti-impersonation, newline handling. |
 | `[EntityLimits]`        | Global entity limiting.                                      |
+| `[VanillaSpawners]`     | Vanilla spawner block generation and activation behavior.    |
 | `[Hotkeys]`             | Runtime config reload hotkey.                                |
 
 ### Config reference
@@ -556,6 +572,8 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                     |
 | `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                 |
 | `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                   |
+| `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.    |
+| `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.  |
 | `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                |
 
 ### Default config template
@@ -633,14 +651,62 @@ LimitEntities     = true
 ; Maximum visible/global entities when LimitEntities=true.
 MaxGlobalEntities = 500
 
+[VanillaSpawners]
+; Master toggle for vanilla-generated spawner blocks.
+; false prevents NEW cave / hell spawner blocks from being placed during terrain generation.
+; Existing chunks and saves are not modified.
+GenerateSpawnerBlocks  = true
+
+; Controls whether existing vanilla spawner blocks can be clicked / activated.
+; false leaves the blocks in the world but makes them non-clickable.
+AllowSpawnerActivation = true
+
 [Hotkeys]
 ; Reload this config while in-game:
-ReloadConfig      = Ctrl+Shift+R
+ReloadConfig = Ctrl+Shift+R
 ```
 
 </details>
 
-![Config Placeholder](_Images/ModLoaderExtensions/Config/ConfigOverview.png)
+---
+
+## Vanilla spawner controls
+
+ModLoaderExtensions can control vanilla-generated spawner blocks through config.
+
+This is useful if you stay around one area for a long time and do not want nearby generated terrain to keep accumulating monster, alien, or boss spawners.
+
+### Config location
+
+```text
+!Mods/ModLoaderExt/ModLoaderExt.Config.ini
+```
+
+### Disable new vanilla spawner generation
+
+```ini
+[VanillaSpawners]
+GenerateSpawnerBlocks  = false
+AllowSpawnerActivation = true
+```
+
+This prevents newly generated terrain from placing new vanilla spawner blocks.
+
+Existing chunks and saves are not modified.
+
+### Disable new spawners and existing activation
+
+```ini
+[VanillaSpawners]
+GenerateSpawnerBlocks  = false
+AllowSpawnerActivation = false
+```
+
+This prevents new vanilla spawner blocks and also makes already-existing vanilla spawner blocks non-clickable.
+
+### Multiplayer note
+
+For multiplayer, hosts and clients should use matching `[VanillaSpawners]` settings. Different world-generation settings can cause terrain mismatch or visual desync when new chunks are generated.
 
 ---
 
@@ -665,8 +731,6 @@ ModLoaderExtensions includes a built-in global entity limiter designed to enforc
 ### Why it matters
 
 This helps keep runaway entity situations under control without relying only on visibility tricks.
-
-![Entity Limiter Placeholder](_Images/ModLoaderExtensions/Features/EntityLimiter.png)
 
 ---
 
@@ -744,6 +808,24 @@ Because this is the kind of framework mod that improves everything around it: st
 
 </details>
 
+<details>
+<summary><strong>I disabled vanilla spawners, but I still see old spawners</strong></summary>
+
+That is expected.
+
+`GenerateSpawnerBlocks=false` only prevents new vanilla spawner blocks from being placed during new terrain generation.
+
+It does not delete spawners that already exist in generated chunks or saved worlds.
+
+To stop existing spawners from being used, set:
+
+```ini
+[VanillaSpawners]
+AllowSpawnerActivation = false
+```
+
+</details>
+
 ---
 
 ## Summary
@@ -759,6 +841,7 @@ It brings together:
 - network flood and malformed-packet hardening
 - gamertag and chat integrity protections
 - menu and text input polish
+- vanilla spawner generation and activation controls
 - developer utilities for embedded resources and dependencies
 
 It may not be the most visibly flashy mod in the stack, but it is one of the most important.

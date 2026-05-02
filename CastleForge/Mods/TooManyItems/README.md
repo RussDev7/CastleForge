@@ -16,7 +16,7 @@ Instead of stopping at the vanilla item list, this mod goes further by:
 - adding multiplayer-aware handling for synthetic items so those extra items behave safely,
 - and giving you a clean way to tweak very-hard blocks, time, difficulty, and mode from inside the inventory screen.
 
-For creators, testers, hosts, and sandbox players, this makes TooManyItems much more than “just an item giver.” It becomes a lightweight creative-control panel built directly into the game.
+For creators, testers, hosts, and sandbox players, this makes TooManyItems much more than "just an item giver.” It becomes a lightweight creative-control panel built directly into the game.
 
 ![TooManyItems Preview](_Images/Preview.png)
 
@@ -174,7 +174,7 @@ The mod includes custom logic for:
 
 ### 9) Hard block settings
 
-The Settings panel includes controls for a “hard block” group.
+The Settings panel includes controls for a "hard block" group.
 
 This lets you:
 
@@ -262,8 +262,8 @@ The search box is designed to be simple and stable:
 
 The panel supports two useful behavior toggles:
 
-- **HideUnusable** – removes items the mod considers unsafe or unusable from the grid.
-- **SortItems** – changes ordering behavior.
+- **HideUnusable** - removes items the mod considers unsafe or unusable from the grid.
+- **SortItems** - changes ordering behavior.
 
 When you search, results are kept stable and alphabetically useful.
 
@@ -316,7 +316,7 @@ This is one of the most useful quality-of-life features in the mod. It lets you 
 - a testing/debug loadout,
 - an event/admin loadout.
 
-This carries forward one of the best ideas from the original TooManyItems documentation: being able to save your “real” inventory, swap into a build or testing kit, and then restore yourself later without rebuilding everything by hand.
+This carries forward one of the best ideas from the original TooManyItems documentation: being able to save your "real" inventory, swap into a build or testing kit, and then restore yourself later without rebuilding everything by hand.
 
 ![Save Slots](_Images/SaveSlots.png)
 

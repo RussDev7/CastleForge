@@ -55,7 +55,7 @@ This mod is best described as a **power overlay for advanced players, hosts, tes
 
 ## Why this mod stands out
 
-CastleWallsMk2 is not limited to “toggle a few cheats and move on.” It goes much further:
+CastleWallsMk2 is not limited to "toggle a few cheats and move on.” It goes much further:
 
 - It exposes an in-game ImGui overlay with a large multi-tab interface.
 - It includes **live editors** for player inventory, world metadata, enemies, and dragons.
@@ -162,7 +162,7 @@ CastleWallsMk2 also includes a handful of smaller quality-of-life improvements t
   - keeps the **Teleport** option in its normal vanilla slot
   - prevents it from disappearing in cases where vanilla would normally hide it, such as certain mode/difficulty combinations
 
-- **Removes the PvP restriction from “Teleport To Player”**
+- **Removes the PvP restriction from "Teleport To Player”**
   - keeps the normal **online-only** requirement
   - removes the extra PvP visibility gate so the option is available more consistently
 
@@ -239,7 +239,7 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 - categorized action buttons for selected players, all players, local player, world, and debug
 
 <details>
-<summary><strong>Main tab — full feature breakdown</strong></summary>
+<summary><strong>Main tab - full feature breakdown</strong></summary>
 
 ### Player / self tools
 

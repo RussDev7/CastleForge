@@ -21,13 +21,13 @@ but it quickly became a handy admin‑side tool for **testing your own server** 
 
 ## Why this mod stands out
 
-- **One‑click UI integration** – the button feels native to CastleMiner Z.  
-- **Fully asynchronous pipeline** – no game‑freezing loops.  
-- **Configurable rate‑limiting** – avoids Steam kickbacks while staying fast.  
-- **Editable word‑list** – ships with ~10 k common passwords; replace or trim as needed.  
-- **Verbose logging** – every attempt is timestamped for later analysis.  
-- **Graceful cancel** – press <kbd>Esc</kbd> or leave the screen to abort safely.  
-- **Self‑cleaning** – Harmony hooks are removed when the game exits.  
+- **One‑click UI integration** - the button feels native to CastleMiner Z.  
+- **Fully asynchronous pipeline** - no game‑freezing loops.  
+- **Configurable rate‑limiting** - avoids Steam kickbacks while staying fast.  
+- **Editable word‑list** - ships with ~10 k common passwords; replace or trim as needed.  
+- **Verbose logging** - every attempt is timestamped for later analysis.  
+- **Graceful cancel** - press <kbd>Esc</kbd> or leave the screen to abort safely.  
+- **Self‑cleaning** - Harmony hooks are removed when the game exits.  
 
 ---
 
@@ -76,7 +76,7 @@ If they do not exist next to the mod, they are extracted automatically at startu
 3. Launch the game and look for:
 
    ```
-   [BruteForceJoin] ApplyAllPatches OK – WordList loaded (..... entries)
+   [BruteForceJoin] ApplyAllPatches OK - WordList loaded (..... entries)
    ```
 
 ---
@@ -104,7 +104,7 @@ The very first line in the distributed **`WordList.txt`** is:
 
 Lines that start with `#` are treated as *comments* and skipped when the mod streams the list.  
 `#ExampleComment` is simply a reminder that **no automatic numeric‑suffix expansion** is applied when
-testing passwords – the file is used *exactly* as written.  
+testing passwords - the file is used *exactly* as written.  
 Feel free to add other comment lines (`#MyNotes`, `#Region 1`, etc.) to organize larger lists.
 
 
@@ -119,8 +119,8 @@ Feel free to add other comment lines (`#MyNotes`, `#Region 1`, etc.) to organi
 
 | Symptom | Likely cause / fix |
 |---------|-------------------|
-| Button missing | ModLoader not installed or patch failed – check log. |
-| Immediate disconnects | Server build mismatch – update game.          |
+| Button missing | ModLoader not installed or patch failed - check log. |
+| Immediate disconnects | Server build mismatch - update game.          |
 | Freeze after many attempts | Too many candidates; increase `DelayMs`. |
 
 ---
@@ -135,7 +135,7 @@ Feel free to add other comment lines (`#MyNotes`, `#Region 1`, etc.) to organi
 
 ## License & credits
 
-* © 2025 **RussDev7** – GPL‑3.0-or‑later
+* © 2025 **RussDev7** - GPL‑3.0-or‑later
 
 ---
 

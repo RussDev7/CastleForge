@@ -13,14 +13,14 @@ DirectConnect is especially useful alongside **CMZDedicatedLidgrenServer**, and 
 
 ---
 
-## Image Placeholder: Preview
+## Preview
 ![Preview](_Images/Preview.png)
 
 ---
 
 ## Why use DirectConnect?
 
-CastleMiner Z was not built around a modern “type in an IP and join” experience for custom dedicated hosting. DirectConnect fills that gap by blending a manual connection flow directly into the game’s frontend instead of forcing players to use external tools or awkward workarounds.
+CastleMiner Z was not built around a modern "type in an IP and join" experience for custom dedicated hosting. DirectConnect fills that gap by blending a manual connection flow directly into the game’s frontend instead of forcing players to use external tools or awkward workarounds.
 
 ### Highlights
 - **Direct Connect by IP** from inside the game.
@@ -35,7 +35,7 @@ CastleMiner Z was not built around a modern “type in an IP and join” experie
 
 ---
 
-## Image Placeholder: Direct Connect Flow
+## Direct Connect Flow
 ![DirectConnect](_Images/DirectConnect.png)
 
 ---
@@ -104,7 +104,7 @@ The cancel flow is designed to unwind cleanly without leaving a half-open join s
 
 ---
 
-## Image Placeholder: Connecting Screen
+## Connecting Screen
 ![CancelConnect](_Images/CancelConnect.png)
 
 ---
@@ -269,7 +269,7 @@ This is especially useful if you reconnect to the same host often during testing
 
 ---
 
-## Image Placeholder: Local Test Workflow
+## Local Test Workflow
 ![LocalTest](_Images/LocalTest.png)
 
 ---
@@ -346,7 +346,7 @@ That file stores the last address entered through the direct connect dialog.
 
 ---
 
-## Image Placeholder: Saved Address Example
+## Saved Address Example
 ![SavedAddress](_Images/SavedAddress.png)
 
 ---

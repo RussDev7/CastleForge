@@ -85,7 +85,7 @@ You can:
 - grant or revoke achievements by **ID** or **API name**
 - grant or revoke **all**, **steam**, **custom**, or a specific **difficulty tier**
 - print achievement unlock counts
-- inspect which blocks/items are still needed for the “mine/craft/hold everything” style achievements
+- inspect which blocks/items are still needed for the "mine/craft/hold everything" style achievements
 
 This is especially useful when testing configs, demoing the mod, or validating long-form completionist progress.
 
@@ -164,7 +164,7 @@ This mod also includes important behind-the-scenes work so long-term achievement
 | Command | Alias | What it does |
 |---|---|---|
 | `/achievement` | `/ach` | Grant, revoke, list, or inspect achievement progress |
-| `/mineallblocks` | `/mab` | Lists minable block types or shows which tracked blocks remain for the “mine every block” style achievement |
+| `/mineallblocks` | `/mab` | Lists minable block types or shows which tracked blocks remain for the "mine every block" style achievement |
 | `/craftallitems` | `/cai` | Lists craftable tracked items or shows which still need to be crafted |
 | `/holdallitems` | `/hai` | Lists craftable tracked items or shows which still need to be held long enough |
 

@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedSteamServer.Plugins.VanillaSpawners;
 using CMZDedicatedSteamServer.Plugins.Announcements;
 using CMZDedicatedSteamServer.Plugins.RegionProtect;
 using CMZDedicatedSteamServer.Plugins.RememberTime;
@@ -286,6 +287,7 @@ namespace CMZDedicatedSteamServer.Hosting
                 _plugins.Register(new ServerRegionProtectPlugin());
                 _plugins.Register(new ServerAnnouncementsPlugin());
                 _plugins.Register(new ServerRememberTimePlugin());
+                _plugins.Register(new ServerVanillaSpawnerPlugin());
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {

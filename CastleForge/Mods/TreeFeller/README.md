@@ -43,14 +43,14 @@ When you **effectively dig a log block** using a supported tool, TreeFeller:
 4. Removes the connected tree blocks in a controlled order.
 5. Spawns the same kind of drops the tool would normally create when digging those blocks.
 
-The result is a simple “cut once, collect faster” experience that keeps lumber gathering smooth and satisfying.
+The result is a simple "cut once, collect faster" experience that keeps lumber gathering smooth and satisfying.
 
 ![Gameplay - chopping a tree trunk](_Images/ChopStart.gif)
 
 ---
 
 ## Why TreeFeller stands out
-Unlike a blunt “delete every connected log” approach, TreeFeller is built with guardrails:
+Unlike a blunt "delete every connected log" approach, TreeFeller is built with guardrails:
 
 - **Natural-tree detection** helps avoid flattening random log builds.
 - **Search bounds** restrict how far the mod can scan horizontally and vertically.
@@ -115,7 +115,7 @@ That ordering helps the felling feel natural and visually clean.
 - No UI menu.
 - No command list.
 - No extra action key.
-- No special “TreeFeller mode” toggle.
+- No special "TreeFeller mode" toggle.
 
 ---
 

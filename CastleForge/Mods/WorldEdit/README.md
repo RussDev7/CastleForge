@@ -254,8 +254,8 @@ A cuboid is a 3D rectangular area. In WorldEdit, you define a selection by marki
 
 You can mark the two points using different methods:
 
-1. **Using a selection tool** – Left-click one block and right-click another while holding a selection tool. (Use `/wand` to get one.)
-2. **Using Position Commands** – Stand in a spot and type `/pos 1` or `/pos 2` to set selection points.
+1. **Using a selection tool** - Left-click one block and right-click another while holding a selection tool. (Use `/wand` to get one.)
+2. **Using Position Commands** - Stand in a spot and type `/pos 1` or `/pos 2` to set selection points.
 
 **Try It!** Select a 15×15×15 area and move to the next step.
 
@@ -1599,6 +1599,6 @@ This CastleForge version of **WorldEdit** is based on and evolves the earlier st
 
 ## Credits
 
-- **RussDev7** — original WorldEdit-CSharp project and CMZ/CastleForge integration
-- **EngineHub / Minecraft WorldEdit** — foundational inspiration for the workflow and command style
-- **CastleForge** — mod loader ecosystem and project structure this version lives in
+- **RussDev7** - original WorldEdit-CSharp project and CMZ/CastleForge integration
+- **EngineHub / Minecraft WorldEdit** - foundational inspiration for the workflow and command style
+- **CastleForge** - mod loader ecosystem and project structure this version lives in

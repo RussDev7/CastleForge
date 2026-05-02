@@ -19,7 +19,7 @@
 - syncing host settings to clients,
 - and loading **custom biome DLLs** from disk so new biome types can participate in rings, single-biome worlds, and random-region generation.
 
-This is not just a “new biome” mod. It is a **worldgen framework** for CastleMiner Z.
+This is not just a "new biome" mod. It is a **worldgen framework** for CastleMiner Z.
 
 ---
 
@@ -166,7 +166,7 @@ Uses the classic radial layout, with configurable:
 - ring biome assignment.
 
 ### Square Bands
-Uses **Chebyshev distance** to create square “rings” instead of circular ones, while still respecting repeat and mirror rules.
+Uses **Chebyshev distance** to create square "rings" instead of circular ones, while still respecting repeat and mirror rules.
 
 ### Single Biome
 Applies one biome across the entire surface. Great for:

@@ -390,7 +390,7 @@ Additional tuning controls include:
 
 That makes the addon flexible enough for both crisp low-resolution sprite work and smoother photo-based conversions.
 
-![Scaling placeholder](_Images/ScalingModes.png)
+![Scaling](_Images/ScalingModes.png)
 
 ### Statistics and progress
 The tool can display or update:
@@ -472,7 +472,7 @@ Consider adjusting your XML filter when:
 - you want a brighter or more stylized variant of the same palette
 - you are building art for a different content pack or project
 
-![Palette placeholder](_Images/PaletteTools.gif)
+![Palette](_Images/PaletteTools.gif)
 
 > **Image suggestion:** Show the color filter manager, custom color picker flow, and a small XML palette preview.
 
@@ -495,7 +495,7 @@ You can also save the generated result to disk as a schematic file for reuse lat
 - You can overwrite the previously saved schematic file directly from the editor.
 - Rotation and orientation settings affect how the schematic is produced.
 
-![Export placeholder](_Images/ExportWorkflow.gif)
+![Export](_Images/ExportWorkflow.gif)
 
 > **Image suggestion:** Show the copy-to-clipboard button, a `.schem` save dialog, and the result pasted into the world with WorldEdit.
 
@@ -903,7 +903,7 @@ Check the rotation, flat/standing mode, and X-axis/Y-axis settings before export
 
 ## Credits
 
-- **RussDev7** — original WorldEdit-CSharp tooling, CastleForge adaptation, CMZ integration, XML palette workflow, and companion source tooling
-- **CastleForge / WorldEdit** — clipboard and schematic workflow foundation used by this addon
+- **RussDev7** - original WorldEdit-CSharp tooling, CastleForge adaptation, CMZ integration, XML palette workflow, and companion source tooling
+- **CastleForge / WorldEdit** - clipboard and schematic workflow foundation used by this addon
 - Original project documentation and screenshots that inspired the editor workflow presentation
 - The companion `ImageColorsToXml` and `DNA.SkinnedPipeline` tools included in the CastleForge source tree

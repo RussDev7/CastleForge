@@ -39,6 +39,7 @@ That gives you a cleaner setup for:
 - Includes server-side **Player Enforcement** commands with IP/name-backed bans, optional ban reasons, and transport-level hard drops.
 - Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
 - Logs command usage to dated audit files under `Logs\commands-yyyy-MM-dd.log` when `log-command-audit=true`.
+- Includes a built-in **VanillaSpawners** plugin for disabling newly generated vanilla spawner blocks and optionally blocking existing spawner activation.
 
 ---
 
@@ -682,6 +683,7 @@ Current built-in plugin support includes:
 - **RegionProtect** server enforcement
 - **RememberTime** per-world time persistence between restarts
 - **Player Enforcement** console commands with IP/name-backed persistent bans, command permissions, and operator ranks
+- **VanillaSpawners** vanilla cave / alien / hell / boss spawner generation and activation controls
 - block mining / placing protection
 - explosion protection
 - crate item protection
@@ -883,6 +885,92 @@ Notes:
 - `PerSenderMaxPacketsPerSec` is counted per sender/GID over a one-second window.
 - `BlackholeMs` is how long to silently drop packets after the sender exceeds the limit.
 - `AllowedPlayers` bypasses FloodGuard for trusted players or test accounts.
+
+## VanillaSpawners Server Plugin
+
+The dedicated servers include a built-in **VanillaSpawners** plugin for controlling vanilla-generated spawner blocks.
+
+This is useful for long-running dedicated servers where players stay near one area for a long time and newly generated terrain can accumulate a large number of monster, alien, hell, or boss spawner blocks.
+
+VanillaSpawners can:
+
+- prevent new vanilla cave / alien / hell / boss spawner blocks from generating
+- optionally block activation of already-existing vanilla spawner blocks
+- keep old saves intact without deleting existing spawner blocks
+- enforce the behavior server-side even when players do not have a matching client-side mod installed
+
+### Config location
+
+For the Steam dedicated server:
+
+```text
+CMZDedicatedSteamServer/
+└─ Plugins/
+   └─ VanillaSpawners/
+      └─ VanillaSpawners.Config.ini
+````
+
+For the Lidgren dedicated server:
+
+```text
+CMZDedicatedLidgrenServer/
+└─ Plugins/
+   └─ VanillaSpawners/
+      └─ VanillaSpawners.Config.ini
+```
+
+### Example config
+
+```ini
+[General]
+Enabled = true
+
+# Allows new vanilla cave / alien / hell / boss spawner blocks to generate.
+# false prevents NEW spawner blocks from being placed in newly generated terrain.
+# Existing chunks and saves are not deleted or modified.
+GenerateSpawnerBlocks = true
+
+# Allows existing vanilla spawner blocks to be activated.
+# false consumes spawner-origin enemy spawns and spawner block-state changes server-side.
+AllowSpawnerActivation = true
+
+# Logs each blocked spawner activation packet.
+# Useful for debugging, but noisy if players keep trying old spawners.
+LogBlockedActivation = false
+```
+
+### Recommended setting to stop new spawners
+
+```ini
+[General]
+Enabled = true
+GenerateSpawnerBlocks = false
+AllowSpawnerActivation = true
+LogBlockedActivation = false
+```
+
+This prevents newly generated terrain from placing new vanilla spawner blocks, while still allowing existing spawner blocks to work.
+
+### Stricter setting
+
+```ini
+[General]
+Enabled = true
+GenerateSpawnerBlocks = false
+AllowSpawnerActivation = false
+LogBlockedActivation = false
+```
+
+This prevents new vanilla spawner blocks from generating and also blocks existing vanilla spawner activation server-side.
+
+### Notes and limitations
+
+* `GenerateSpawnerBlocks=false` only affects newly generated terrain.
+* Existing chunks and saved worlds are not modified.
+* Existing spawner blocks may still be visible in old worlds.
+* `AllowSpawnerActivation=false` blocks spawner-origin enemy spawns and spawner block-state changes server-side.
+* Vanilla clients may briefly appear to interact with an old spawner locally, but the server rejects the resulting spawner behavior.
+* For the cleanest client-side experience, pair the server plugin with the ModLoaderExtensions client-side vanilla spawner controls.
 
 ## RememberTime Server Plugin
 
@@ -1195,6 +1283,26 @@ Player Enforcement uses a hard drop / transport-level removal path. This is inte
 Some modified clients can hide, remove, or ignore the normal in-game kick-message pipeline. The dedicated server therefore removes the peer from server-side state, broadcasts a drop-peer update to remaining clients, and stops accepting packets from the removed peer.
 
 The visible reason message is best-effort only. A normal client may show it, but a modified client may hide it.
+
+</details>
+
+<details>
+<summary><strong>I disabled vanilla spawners, but I still see old spawner blocks</strong></summary>
+
+That is expected.
+
+`GenerateSpawnerBlocks=false` only prevents new vanilla spawner blocks from being placed during newly generated terrain.
+
+It does not delete or modify spawner blocks that already exist in generated chunks or saved worlds.
+
+To also block existing spawner use, set:
+
+```ini
+[General]
+AllowSpawnerActivation = false
+```
+
+Existing spawner blocks may still be visible to clients, but server-side spawner-origin enemy spawns and spawner block-state changes are rejected.
 
 </details>
 

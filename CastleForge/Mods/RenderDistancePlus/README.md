@@ -21,7 +21,7 @@ The result is a mod that feels natural to use in-game:
 
 ## Why this mod stands out
 
-RenderDistancePlus is not just a “number tweak.” It is a focused patch pack that solves **multiple parts of the vanilla render-distance pipeline** together:
+RenderDistancePlus is not just a "number tweak.” It is a focused patch pack that solves **multiple parts of the vanilla render-distance pipeline** together:
 
 - **Removes the internal draw-distance clamp** so values above the vanilla range actually increase terrain range.
 - **Adds 10 distinct in-game slider steps** for smoother control instead of the stock coarse tiers.
@@ -200,8 +200,6 @@ At the moment, **RenderDistancePlus does not expose a separate end-user config f
 - There are **no chat commands** in this mod.
 - There is **no separate config UI or `.ini`/`.json` file** in the provided implementation.
 - All normal usage happens through the **Graphics** tab in-game.
-
-> **Suggested screenshot placeholder:** A side-by-side image showing the vanilla drop-down versus the RenderDistancePlus slider.
 
 ---
 

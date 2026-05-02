@@ -874,6 +874,15 @@ namespace CMZDedicatedLidgrenServer
                 return false; // still relay so peers can see the spawned pickup
             }
 
+            if (typeName == "DNA.CastleMinerZ.Net.SpawnEnemyMessage")
+            {
+                if (TryRunWorldPlugins(typeName, senderId, data, senderConn, connectionToGamer, sendToClient))
+                    return true;
+
+                // Not consumed. Let normal relay continue so normal enemy spawns still work.
+                return false;
+            }
+
             if (typeName == "DNA.CastleMinerZ.Net.RequestPickupMessage")
             {
                 HandleRequestPickupMessage(senderId, data, senderConn, connections, connectionToGamer, sendToClient);

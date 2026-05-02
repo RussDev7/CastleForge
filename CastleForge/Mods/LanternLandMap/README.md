@@ -349,7 +349,7 @@ CastleForge/Mods/LanternLandMap/_Images/
 
 That keeps this mod self-contained and makes image paths clean in GitHub markdown.
 
-![Installation Placeholder](_Images/Install.png)
+![Installation](_Images/Install.png)
 
 ---
 
@@ -668,7 +668,7 @@ Y                    = 0
 
 ## Built-in math & Q\&A overlay
 
-One of the nicest touches in this mod is that it does not just visualize Lantern Land — it also explains it.
+One of the nicest touches in this mod is that it does not just visualize Lantern Land - it also explains it.
 
 Inside the map panel, there is a **`Math & Q&A (Read Me)`** button that opens an in-game overlay describing:
 
@@ -782,8 +782,6 @@ While the mod gives you an in-game overview map and live visualization, the calc
 This makes it a useful companion tool for players, modders, and anyone curious about how CastleMiner Z’s Lantern Land structure works under the hood.
 
 ![LLM Desmos Graph](_Images/LLMDesmosGraph.png)
-
-> **Image Placeholder:** Add a screenshot of the Desmos graph showing the Lantern Land generation math.
 
 ---
 

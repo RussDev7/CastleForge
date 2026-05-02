@@ -78,7 +78,7 @@ This is what the default file usually looks like:
     <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0,Profile=Client"/>
   </startup>
 </configuration>
-````
+```
 
 ### ModLoader version of `CastleMinerZ.exe.config`
 
@@ -195,7 +195,7 @@ For most Steam installs, it is here:
 
 ```text
 C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
-````
+```
 
 You should see files like:
 
@@ -313,7 +313,7 @@ If you already extracted the files, you can also unblock the copied DLLs with Po
 
 ```powershell
 Get-ChildItem "C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z" -Recurse | Unblock-File
-````
+```
 
 > If all mods fail with `FileLoadException` and `HRESULT: 0x80131515`, Windows likely blocked the downloaded files.
 
@@ -352,7 +352,7 @@ Typical Steam install location:
 
 ```text
 C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
-````
+```
 
 Put these files here:
 
@@ -404,7 +404,7 @@ You have 2 easy ways to remove CastleForge.
 <?xml version="1.0"?>
 <configuration>
 <startup><supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0,Profile=Client"/></startup></configuration>
-````
+```
 
 ### Option 2: Let Steam restore the game files
 

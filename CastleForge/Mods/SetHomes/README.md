@@ -40,7 +40,7 @@ SetHomes is intentionally simple to use, but it goes a little deeper than a basi
   Homes are stored separately for each world using the world ID, so names do not clash across saves.
 
 - **Default + named home workflow**  
-  You can keep one quick “main” home and still maintain a full list of named destinations.
+  You can keep one quick "main" home and still maintain a full list of named destinations.
 
 - **Multi-word home names**  
   Commands like `/sethome North Tower` are supported.
@@ -425,7 +425,7 @@ Because of this, the mod is usually ready to use as soon as the world and player
 
 ## Troubleshooting
 
-### “Home not found”
+### "Home not found"
 This usually means:
 
 - the home name does not exist in the **current world**
@@ -438,7 +438,7 @@ Try:
 /homes
 ```
 
-### “No world/player loaded yet”
+### "No world/player loaded yet"
 You attempted to use a command before the local player or current world was available.
 
 Wait until the world is fully loaded, then try again.

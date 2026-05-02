@@ -507,6 +507,6 @@ No. This tool does not generate or require a settings INI.
 
 ## Credits
 
-- **RussDev7** — original tool creation, CastleForge integration, and XML palette workflow
-- **WorldEdit-CSharp** — the source header notes that this class was taken from the earlier [WorldEdit-CSharp](https://github.com/RussDev7/WorldEdit-CSharp) project and adapted into this tool flow
-- **WorldEditPixelart** — primary companion workflow that benefits from the palette XMLs generated here
+- **RussDev7** - original tool creation, CastleForge integration, and XML palette workflow
+- **WorldEdit-CSharp** - the source header notes that this class was taken from the earlier [WorldEdit-CSharp](https://github.com/RussDev7/WorldEdit-CSharp) project and adapted into this tool flow
+- **WorldEditPixelart** - primary companion workflow that benefits from the palette XMLs generated here

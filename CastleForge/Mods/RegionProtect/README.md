@@ -94,7 +94,7 @@ The mod does not stop at normal mining. It also covers:
 Some game actions happen locally before normal authoritative processing fully resolves them. RegionProtect now patches those paths too, which helps the **host/local player obey the same rules** for protected crate use and protected crate destruction workflows.
 
 ### Designed around authoritative correction
-When an action is denied, RegionProtect does more than say “no.” It also tries to restore or re-sync the authoritative state so clients do not stay visually desynced after an illegal action.
+When an action is denied, RegionProtect does more than say "no.” It also tries to restore or re-sync the authoritative state so clients do not stay visually desynced after an illegal action.
 
 ### World-by-world persistence
 Every world gets its own protection database under the mod folder, which makes it much easier to keep server worlds, test worlds, and personal worlds separated.
@@ -370,7 +370,7 @@ Behavior:
 
 - if the first argument matches an existing region name, that region is edited,
 - otherwise the mod tries to edit the **first region at your current position**,
-- useful for “stand inside it and edit it” workflows.
+- useful for "stand inside it and edit it" workflows.
 
 ---
 
