@@ -29,7 +29,7 @@ On top of that, ModLoaderExtensions also improves the game’s foundation with:
 - cleaner in-game text input behavior
 - developer helpers for embedded dependencies and resource extraction
 - defensive crash resistance around fragile vanilla code paths
-- optional vanilla spawner generation and activation controls
+- optional vanilla spawner and random loot block generation controls
 
 In other words, this mod is first and foremost the **command extension layer** for CastleForge, with a broad set of additional fixes and quality-of-life improvements built around it.
 
@@ -66,13 +66,13 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 </details>
 
 <details>
-<summary><strong>World generation and vanilla spawner controls</strong></summary>
+<summary><strong>World generation, vanilla spawner, and loot block controls</strong></summary>
 
 | Area | Patch / system | Type | What it changes |
-|---------------------|---------------------------------------------|-------|--------------------------------------------------------------------------------------------------------------------------|
-| World generation    | Vanilla cave spawner generation toggle      | Tweak | Adds a config-backed option to prevent newly generated cave terrain from placing vanilla monster / alien spawner blocks. |
-| World generation    | Vanilla hell boss spawner generation toggle | Tweak | Adds a config-backed option to prevent newly generated hell terrain from placing vanilla boss spawner blocks.            |
-| Spawner interaction | Existing spawner activation toggle          | Tweak | Optionally makes existing vanilla spawner blocks non-clickable without deleting or modifying already generated worlds.   |
+|---------------------|---------------------------------------------|-------|---------------------------------------------------------------------------------------------------------------------------------|
+| World generation    | Vanilla cave loot block generation toggle   | Tweak | Adds a config-backed option to prevent newly generated cave terrain from placing vanilla `LootBlock` / `LuckyLootBlock` blocks. |
+| World generation    | Vanilla buried loot block generation toggle | Tweak | Adds a config-backed option to prevent ore-deposit terrain generation from placing buried vanilla loot blocks.                  |
+| Spawner interaction | Existing spawner activation toggle          | Tweak | Optionally makes existing vanilla spawner blocks non-clickable without deleting or modifying already generated worlds.          |
 
 </details>
 
@@ -187,8 +187,9 @@ That makes it one of the most important "always-on" core mods in the CastleForge
 ### Vanilla world control
 
 - optional toggle to prevent newly generated vanilla spawner blocks
+- optional toggle to prevent newly generated vanilla `LootBlock` / `LuckyLootBlock` blocks
 - optional toggle to disable clicking / activating existing vanilla spawner blocks
-- keeps existing saves intact because it does not delete already generated spawners
+- keeps existing saves intact because it does not delete already generated spawners or loot blocks
 
 ### Chat and command quality-of-life
 
@@ -404,36 +405,40 @@ This is the "defensive shell" portion of the mod. It helps the game survive malf
 </details>
 
 <details>
-<summary><strong>7) Vanilla spawner controls</strong></summary>
+<summary><strong>7) Vanilla world generation controls</strong></summary>
 
 ### What it does
 
-ModLoaderExtensions can optionally control vanilla spawner behavior through config.
+ModLoaderExtensions can optionally control vanilla spawner and random loot block generation through config.
 
 This includes:
 
 - preventing newly generated cave terrain from placing vanilla monster / alien spawner blocks
 - preventing newly generated hell terrain from placing vanilla boss spawner blocks
+- preventing newly generated terrain from placing vanilla `LootBlock` / `LuckyLootBlock` blocks
 - optionally making existing vanilla spawner blocks non-clickable
 
 ### Why it matters
 
-Vanilla spawners can become annoying when players stay around one area for a long time and generated terrain keeps accumulating spawner blocks nearby.
+Vanilla spawners and random loot blocks can become annoying when players stay around one area for a long time and generated terrain keeps accumulating clutter nearby.
 
 This feature lets players or hosts reduce that clutter without deleting existing world data.
 
 ### Important notes
 
-- This does **not** remove spawner blocks that already exist in generated chunks.
+- This does **not** remove spawner or loot blocks that already exist in generated chunks.
 - This only affects newly generated terrain after the config is changed.
+- `GenerateLootBlocks=false` targets vanilla `LootBlock` and `LuckyLootBlock` world-generation blocks.
+- It does not block normal crate/container blocks.
 - For multiplayer, the host and clients should use matching settings to avoid terrain-generation mismatch or visual desync.
 
-### Recommended setting to stop new vanilla spawners
+### Recommended setting to stop new vanilla spawners and loot blocks
 
 ```ini
 [VanillaSpawners]
 GenerateSpawnerBlocks  = false
 AllowSpawnerActivation = true
+GenerateLootBlocks     = false
 ```
 
 </details>
@@ -543,38 +548,39 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | `[PickupThrottle]`      | Local pickup request throttling.                             |
 | `[ChatProtections]`     | Gamertag sanitization, anti-impersonation, newline handling. |
 | `[EntityLimits]`        | Global entity limiting.                                      |
-| `[VanillaSpawners]`     | Vanilla spawner block generation and activation behavior.    |
+| `[VanillaSpawners]`     | Vanilla spawner and random loot block generation behavior.   |
 | `[Hotkeys]`             | Runtime config reload hotkey.                                |
 
 ### Config reference
 
 | Key | Default | What it controls |
-|---------------------------------------------------|--------------------------------------------:|--------------------------------------------------------------------|
-| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                                |
-| `ShowDiscordButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left CastleForge Discord button on the main menu. |
-| `ShowSupportButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left Support CastleForge button on the main menu. |
-| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                        |
-| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.                  |
-| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap.         |
-| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.                    |
-| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.           |
-| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.                  |
-| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.              |
-| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                            |
-| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.              |
-| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.                     |
-| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                               |
-| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                                  |
-| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                              |
-| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote.         |
-| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                         |
-| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.            |
-| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                     |
-| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                 |
-| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                   |
-| `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.    |
-| `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.  |
-| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                |
+|---------------------------------------------------|--------------------------------------------:|----------------------------------------------------------------------------------------|
+| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                                                    |
+| `ShowDiscordButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left CastleForge Discord button on the main menu.                     |
+| `ShowSupportButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left Support CastleForge button on the main menu.                     |
+| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                                            |
+| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.                                      |
+| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap.                             |
+| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.                                        |
+| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.                               |
+| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.                                      |
+| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.                                  |
+| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                                                |
+| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.                                  |
+| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.                                         |
+| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                                                   |
+| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                                                      |
+| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                                                  |
+| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote.                             |
+| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                                             |
+| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.                                |
+| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                                         |
+| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                                     |
+| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                                       |
+| `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.                        |
+| `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.                      |
+| `GenerateLootBlocks` in `[VanillaSpawners]`       | `true`                                      | Allows newly generated terrain to place vanilla `LootBlock` / `LuckyLootBlock` blocks. |
+| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                                    |
 
 ### Default config template
 
@@ -661,6 +667,11 @@ GenerateSpawnerBlocks  = true
 ; false leaves the blocks in the world but makes them non-clickable.
 AllowSpawnerActivation = true
 
+; Controls whether vanilla LootBlock / LuckyLootBlock blocks can generate.
+; false prevents NEW random loot blocks from being placed during terrain generation.
+; Existing chunks and saves are not modified.
+GenerateLootBlocks     = true
+
 [Hotkeys]
 ; Reload this config while in-game:
 ReloadConfig = Ctrl+Shift+R
@@ -670,11 +681,11 @@ ReloadConfig = Ctrl+Shift+R
 
 ---
 
-## Vanilla spawner controls
+## Vanilla world generation controls
 
-ModLoaderExtensions can control vanilla-generated spawner blocks through config.
+ModLoaderExtensions can control vanilla-generated spawner blocks and random loot blocks through config.
 
-This is useful if you stay around one area for a long time and do not want nearby generated terrain to keep accumulating monster, alien, or boss spawners.
+This is useful if you stay around one area for a long time and do not want nearby generated terrain to keep accumulating monster spawners, alien spawners, boss spawners, or random vanilla loot blocks.
 
 ### Config location
 
@@ -688,6 +699,7 @@ This is useful if you stay around one area for a long time and do not want nearb
 [VanillaSpawners]
 GenerateSpawnerBlocks  = false
 AllowSpawnerActivation = true
+GenerateLootBlocks = false
 ```
 
 This prevents newly generated terrain from placing new vanilla spawner blocks.
@@ -809,13 +821,15 @@ Because this is the kind of framework mod that improves everything around it: st
 </details>
 
 <details>
-<summary><strong>I disabled vanilla spawners, but I still see old spawners</strong></summary>
+<summary><strong>I disabled vanilla spawners or loot blocks, but I still see old ones</strong></summary>
 
 That is expected.
 
 `GenerateSpawnerBlocks=false` only prevents new vanilla spawner blocks from being placed during new terrain generation.
 
-It does not delete spawners that already exist in generated chunks or saved worlds.
+`GenerateLootBlocks=false` only prevents new vanilla `LootBlock` / `LuckyLootBlock` blocks from being placed during new terrain generation.
+
+These settings do not delete blocks that already exist in generated chunks or saved worlds.
 
 To stop existing spawners from being used, set:
 
@@ -841,7 +855,7 @@ It brings together:
 - network flood and malformed-packet hardening
 - gamertag and chat integrity protections
 - menu and text input polish
-- vanilla spawner generation and activation controls
+- vanilla spawner and random loot block generation controls
 - developer utilities for embedded resources and dependencies
 
 It may not be the most visibly flashy mod in the stack, but it is one of the most important.

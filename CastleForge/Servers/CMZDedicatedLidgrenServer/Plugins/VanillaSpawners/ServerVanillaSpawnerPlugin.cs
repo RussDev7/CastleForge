@@ -31,6 +31,11 @@ namespace CMZDedicatedLidgrenServer.Plugins.VanillaSpawners
         /// When false, existing vanilla spawner blocks are treated as non-clickable by patched host-side code.
         /// </summary>
         public static volatile bool AllowSpawnerActivation = true;
+
+        /// <summary>
+        /// When false, newly generated terrain will not place vanilla LootBlock / LuckyLootBlock blocks.
+        /// </summary>
+        public static volatile bool GenerateLootBlocks = true;
     }
     #endregion
 
@@ -96,7 +101,8 @@ namespace CMZDedicatedLidgrenServer.Plugins.VanillaSpawners
             _log(
                 $"[VanillaSpawners] Enabled={_config.Enabled}, " +
                 $"GenerateSpawnerBlocks={_config.GenerateSpawnerBlocks}, " +
-                $"AllowSpawnerActivation={_config.AllowSpawnerActivation}.");
+                $"AllowSpawnerActivation={_config.AllowSpawnerActivation}." +
+                $"GenerateLootBlocks={_config.GenerateLootBlocks}.");
         }
 
         /// <summary>
@@ -243,6 +249,11 @@ GenerateSpawnerBlocks = true
 # false consumes spawner-origin enemy spawns and spawner block-state changes server-side.
 AllowSpawnerActivation = true
 
+# Allows new vanilla LootBlock / LuckyLootBlock blocks to generate.
+# false prevents NEW loot blocks from being placed in newly generated terrain.
+# Existing chunks and saves are not deleted or modified.
+GenerateLootBlocks = true
+
 # Logs each blocked spawner activation packet.
 # Useful for debugging, but noisy if players keep trying old spawners.
 LogBlockedActivation = false
@@ -261,6 +272,7 @@ LogBlockedActivation = false
             _config.Enabled = GetBool(values, "General.Enabled", true);
             _config.GenerateSpawnerBlocks = GetBool(values, "General.GenerateSpawnerBlocks", true);
             _config.AllowSpawnerActivation = GetBool(values, "General.AllowSpawnerActivation", true);
+            _config.GenerateLootBlocks = GetBool(values, "General.GenerateLootBlocks", true);
             _config.LogBlockedActivation = GetBool(values, "General.LogBlockedActivation", false);
         }
 
@@ -275,6 +287,9 @@ LogBlockedActivation = false
 
             ServerVanillaSpawnerRuntime.AllowSpawnerActivation =
                 !_config.Enabled || _config.AllowSpawnerActivation;
+
+            ServerVanillaSpawnerRuntime.GenerateLootBlocks =
+                !_config.Enabled || _config.GenerateLootBlocks;
         }
         #endregion
 
@@ -429,6 +444,7 @@ LogBlockedActivation = false
             public bool Enabled = true;
             public bool GenerateSpawnerBlocks = true;
             public bool AllowSpawnerActivation = true;
+            public bool GenerateLootBlocks = true;
             public bool LogBlockedActivation = false;
         }
         #endregion
@@ -511,6 +527,189 @@ LogBlockedActivation = false
                 return true;
 
             __result = false;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Prevents buried / ore-deposit generated vanilla LootBlock and LuckyLootBlock blocks
+    /// when GenerateLootBlocks is false.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class Patch_OreDepositer_GenerateLootBlock_ServerVanillaLootBlocks
+    {
+        private static MethodBase TargetMethod()
+        {
+            Type type = AccessTools.TypeByName("DNA.CastleMinerZ.Terrain.WorldBuilders.OreDepositer");
+            return type == null ? null : AccessTools.Method(type, "GenerateLootBlock");
+        }
+
+        private static bool Prepare()
+        {
+            return TargetMethod() != null;
+        }
+
+        private static bool Prefix()
+        {
+            return ServerVanillaSpawnerRuntime.GenerateLootBlocks;
+        }
+    }
+
+    /// <summary>
+    /// Removes cave-generated vanilla LootBlock and LuckyLootBlock blocks from newly
+    /// generated cave columns when GenerateLootBlocks is false.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class Patch_CaveBiome_BuildColumn_ServerVanillaLootBlocks
+    {
+        private const int BlocksPerY = 128;
+        private const int BlocksPerZ = 128 * 384;
+
+        private const int BlockTypeMask = 2147479552;
+        private const int OpaqueMask = 512;
+        private const int AlphaMask = 2048;
+
+        private const int LootBlockType = 76;
+        private const int LuckyLootBlockType = 77;
+
+        private static MethodBase TargetMethod()
+        {
+            Type type = AccessTools.TypeByName("DNA.CastleMinerZ.Terrain.WorldBuilders.CaveBiome");
+            return type == null ? null : AccessTools.Method(type, "BuildColumn");
+        }
+
+        private static bool Prepare()
+        {
+            return TargetMethod() != null;
+        }
+
+        private static void Postfix(object terrain, int worldX, int worldZ, int minY)
+        {
+            if (ServerVanillaSpawnerRuntime.GenerateLootBlocks)
+                return;
+
+            if (terrain == null)
+                return;
+
+            try
+            {
+                RemoveLootBlocksFromGeneratedColumn(terrain, worldX, worldZ, minY);
+            }
+            catch
+            {
+                // Do not let optional cleanup break terrain generation.
+            }
+        }
+
+        /// <summary>
+        /// Scans only the column CaveBiome just generated and changes LootBlock /
+        /// LuckyLootBlock back to air.
+        /// </summary>
+        private static void RemoveLootBlocksFromGeneratedColumn(object terrain, int worldX, int worldZ, int minY)
+        {
+            FieldInfo blocksField = AccessTools.Field(terrain.GetType(), "_blocks");
+            FieldInfo worldMinField = AccessTools.Field(terrain.GetType(), "_worldMin");
+
+            if (blocksField == null || worldMinField == null)
+                return;
+
+            object worldMin = worldMinField.GetValue(terrain);
+
+            if (blocksField.GetValue(terrain) is not int[] blocks || worldMin == null)
+                return;
+
+            if (!TryReadIntMember(worldMin, "X", out int minX))
+                return;
+
+            if (!TryReadIntMember(worldMin, "Y", out int minWorldY))
+                return;
+
+            if (!TryReadIntMember(worldMin, "Z", out int minZ))
+                return;
+
+            int localX = worldX - minX;
+            int localZ = worldZ - minZ;
+
+            if (localX < 0 || localX >= 384 || localZ < 0 || localZ >= 384)
+                return;
+
+            for (int y = 0; y < 128; y++)
+            {
+                int localY = (minY + y) - minWorldY;
+
+                if (localY < 0 || localY >= 128)
+                    continue;
+
+                int index = localY + localX * BlocksPerY + localZ * BlocksPerZ;
+
+                if (index < 0 || index >= blocks.Length)
+                    continue;
+
+                int blockType = GetBlockTypeIndex(blocks[index]);
+
+                if (blockType == LootBlockType ||
+                    blockType == LuckyLootBlockType)
+                {
+                    blocks[index] = SetBlockTypeToEmpty(blocks[index]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads CastleMiner Z's encoded BlockTypeEnum value from packed block data.
+        /// </summary>
+        private static int GetBlockTypeIndex(int blockData)
+        {
+            return (int)(((uint)blockData & (uint)BlockTypeMask) >> 12);
+        }
+
+        /// <summary>
+        /// Clears the block type to Empty while keeping unrelated packed data as harmless as possible.
+        /// </summary>
+        private static int SetBlockTypeToEmpty(int blockData)
+        {
+            return blockData & ~BlockTypeMask & ~OpaqueMask & ~AlphaMask;
+        }
+
+        /// <summary>
+        /// Reads an int field or property from a reflected IntVector3-like value.
+        /// </summary>
+        private static bool TryReadIntMember(object value, string name, out int result)
+        {
+            result = 0;
+
+            if (value == null)
+                return false;
+
+            try
+            {
+                Type type = value.GetType();
+
+                FieldInfo field = type.GetField(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (field != null)
+                {
+                    result = Convert.ToInt32(field.GetValue(value));
+                    return true;
+                }
+
+                PropertyInfo property = type.GetProperty(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (property != null)
+                {
+                    result = Convert.ToInt32(property.GetValue(value, null));
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
             return false;
         }
     }

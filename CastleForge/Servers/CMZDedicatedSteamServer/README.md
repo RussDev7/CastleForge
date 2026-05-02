@@ -38,7 +38,7 @@ That gives you a cleaner setup for:
 - Includes **Player Enforcement** commands with SteamID-backed bans, saved player names, optional ban reasons, and transport-level hard drops, command permissions, and operator ranks
 - Hardens host authority by validating packet sender identity and blocking client-authored host-only messages such as forced host migration and spoofed kick packets.
 - Logs command usage to dated audit files under `Logs\commands-yyyy-MM-dd.log` when `log-command-audit=true`.
-- Includes a built-in **VanillaSpawners** plugin for disabling newly generated vanilla spawner blocks and optionally blocking existing spawner activation.
+- Includes a built-in **VanillaSpawners** plugin for disabling newly generated vanilla spawner blocks, disabling random vanilla loot blocks, and optionally blocking existing spawner activation.
 
 ---
 
@@ -553,7 +553,7 @@ Current built-in plugin support includes:
 - **RegionProtect** server enforcement
 - **RememberTime** per-world time persistence between restarts
 - **Player Enforcement** console and in-game commands with persistent bans, command permissions, operator ranks, and operator kick/ban protection
-- **VanillaSpawners** vanilla cave / alien / hell / boss spawner generation and activation controls
+- **VanillaSpawners** vanilla cave / alien / hell / boss spawner generation, activation, and random loot block controls
 - block mining / placing protection
 - explosion protection
 - crate item protection
@@ -758,15 +758,16 @@ Notes:
 
 ## VanillaSpawners Server Plugin
 
-The dedicated servers include a built-in **VanillaSpawners** plugin for controlling vanilla-generated spawner blocks.
+The dedicated servers include a built-in **VanillaSpawners** plugin for controlling vanilla-generated spawner blocks and random vanilla loot blocks.
 
-This is useful for long-running dedicated servers where players stay near one area for a long time and newly generated terrain can accumulate a large number of monster, alien, hell, or boss spawner blocks.
+This is useful for long-running dedicated servers where players stay near one area for a long time and newly generated terrain can accumulate a large number of monster, alien, hell, boss spawner blocks, or random loot blocks.
 
 VanillaSpawners can:
 
 - prevent new vanilla cave / alien / hell / boss spawner blocks from generating
+- prevent new random vanilla `LootBlock` / `LuckyLootBlock` blocks from generating
 - optionally block activation of already-existing vanilla spawner blocks
-- keep old saves intact without deleting existing spawner blocks
+- keep old saves intact without deleting existing spawner or loot blocks
 - enforce the behavior server-side even when players do not have a matching client-side mod installed
 
 ### Config location
@@ -804,22 +805,28 @@ GenerateSpawnerBlocks = true
 # false consumes spawner-origin enemy spawns and spawner block-state changes server-side.
 AllowSpawnerActivation = true
 
+# Allows new vanilla LootBlock / LuckyLootBlock blocks to generate.
+# false prevents NEW random loot blocks from being placed in newly generated terrain.
+# Existing chunks and saves are not deleted or modified.
+GenerateLootBlocks = true
+
 # Logs each blocked spawner activation packet.
 # Useful for debugging, but noisy if players keep trying old spawners.
 LogBlockedActivation = false
 ```
 
-### Recommended setting to stop new spawners
+### Recommended setting to stop new spawners and random loot blocks
 
 ```ini
 [General]
 Enabled = true
 GenerateSpawnerBlocks = false
 AllowSpawnerActivation = true
+GenerateLootBlocks = false
 LogBlockedActivation = false
 ```
 
-This prevents newly generated terrain from placing new vanilla spawner blocks, while still allowing existing spawner blocks to work.
+This prevents newly generated terrain from placing new vanilla spawner blocks or random vanilla loot blocks, while still allowing existing spawner blocks to work.
 
 ### Stricter setting
 
@@ -828,19 +835,23 @@ This prevents newly generated terrain from placing new vanilla spawner blocks, w
 Enabled = true
 GenerateSpawnerBlocks = false
 AllowSpawnerActivation = false
+GenerateLootBlocks = false
 LogBlockedActivation = false
 ```
 
-This prevents new vanilla spawner blocks from generating and also blocks existing vanilla spawner activation server-side.
+This prevents new vanilla spawner blocks and random vanilla loot blocks from generating, and also blocks existing vanilla spawner activation server-side.
 
 ### Notes and limitations
 
 * `GenerateSpawnerBlocks=false` only affects newly generated terrain.
+* `GenerateLootBlocks=false` only affects newly generated terrain.
 * Existing chunks and saved worlds are not modified.
-* Existing spawner blocks may still be visible in old worlds.
+* Existing spawner blocks and loot blocks may still be visible in old worlds.
+* `GenerateLootBlocks=false` targets vanilla `LootBlock` and `LuckyLootBlock` world-generation blocks.
+* It does not block normal crate/container blocks unless a separate crate-control feature is added later.
 * `AllowSpawnerActivation=false` blocks spawner-origin enemy spawns and spawner block-state changes server-side.
 * Vanilla clients may briefly appear to interact with an old spawner locally, but the server rejects the resulting spawner behavior.
-* For the cleanest client-side experience, pair the server plugin with the ModLoaderExtensions client-side vanilla spawner controls.
+* For the cleanest client-side experience, pair the server plugin with the ModLoaderExtensions client-side vanilla world-generation controls.
 
 ## RememberTime Server Plugin
 
@@ -1164,13 +1175,15 @@ reload commands
 </details>
 
 <details>
-<summary><strong>I disabled vanilla spawners, but I still see old spawner blocks</strong></summary>
+<summary><strong>I disabled vanilla spawners or loot blocks, but I still see old ones</strong></summary>
 
 That is expected.
 
 `GenerateSpawnerBlocks=false` only prevents new vanilla spawner blocks from being placed during newly generated terrain.
 
-It does not delete or modify spawner blocks that already exist in generated chunks or saved worlds.
+`GenerateLootBlocks=false` only prevents new vanilla `LootBlock` / `LuckyLootBlock` blocks from being placed during newly generated terrain.
+
+These settings do not delete or modify blocks that already exist in generated chunks or saved worlds.
 
 To also block existing spawner use, set:
 

@@ -154,7 +154,7 @@ namespace ModLoaderExt
     }
     #endregion
 
-    #region Vanilla Spawners
+    #region Vanilla Spawners / Loot Blocks
 
     /// <summary>
     /// Runtime knobs for vanilla spawner behavior.
@@ -175,6 +175,12 @@ namespace ModLoaderExt
         /// This does not delete existing spawner blocks.
         /// </summary>
         public static volatile bool AllowSpawnerActivation = true;
+
+        /// <summary>
+        /// When false, prevents newly generated terrain from placing vanilla LootBlock / LuckyLootBlock blocks.
+        /// Existing generated chunks are not modified.
+        /// </summary>
+        public static volatile bool GenerateLootBlocks = true;
     }
     #endregion
 
@@ -234,6 +240,7 @@ namespace ModLoaderExt
         // [VanillaSpawners].
         public bool GenerateSpawnerBlocks  = true;
         public bool AllowSpawnerActivation = true;
+        public bool GenerateLootBlocks     = true;
 
         // [Hotkeys].
         // Hotkey to reload this config at runtime.
@@ -328,6 +335,8 @@ namespace ModLoaderExt
                     "GenerateSpawnerBlocks  = true",
                     "; AllowSpawnerActivation=false makes existing vanilla spawner blocks non-clickable.",
                     "AllowSpawnerActivation = true",
+                    "; GenerateLootBlocks=false prevents NEW LootBlock / LuckyLootBlock blocks from being placed during terrain generation.",
+                    "GenerateLootBlocks     = true",
                     "",
                     "[Hotkeys]",
                     "; Reload this config while in-game:",
@@ -384,6 +393,7 @@ namespace ModLoaderExt
                 // [VanillaSpawners].
                 GenerateSpawnerBlocks  = ini.GetBool("VanillaSpawners", "GenerateSpawnerBlocks", true),
                 AllowSpawnerActivation = ini.GetBool("VanillaSpawners", "AllowSpawnerActivation", true),
+                GenerateLootBlocks     = ini.GetBool("VanillaSpawners", "GenerateLootBlocks", true),
 
                 // [Hotkeys].
                 ReloadConfigHotkey = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R"),
@@ -455,6 +465,7 @@ namespace ModLoaderExt
             // [VanillaSpawners].
             VanillaSpawnerConfig.GenerateSpawnerBlocks  = GenerateSpawnerBlocks;
             VanillaSpawnerConfig.AllowSpawnerActivation = AllowSpawnerActivation;
+            VanillaSpawnerConfig.GenerateLootBlocks     = GenerateLootBlocks;
 
             // [EntityLimits].
             EntityLimiterSystem.LimitEntities     = LimitEntities;
@@ -546,6 +557,7 @@ namespace ModLoaderExt
 
                 EnsureIniKeyDefault(lines, "VanillaSpawners", "GenerateSpawnerBlocks", "true", 26);
                 EnsureIniKeyDefault(lines, "VanillaSpawners", "AllowSpawnerActivation", "true", 26);
+                EnsureIniKeyDefault(lines, "VanillaSpawners", "GenerateLootBlocks", "true", 26);
 
                 File.WriteAllLines(ConfigPath, lines.ToArray());
             }

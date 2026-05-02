@@ -5,12 +5,14 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 #pragma warning disable IDE0060         // Silence IDE0060.
+using DNA.CastleMinerZ.Terrain.WorldBuilders;
 using Microsoft.Xna.Framework.Graphics;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework.Input;
 using DNA.CastleMinerZ.Inventory;
 using DNA.CastleMinerZ.Net.Steam;
 using System.Collections.Generic;
+using DNA.CastleMinerZ.Terrain;
 using DNA.Drawing.UI.Controls;
 using Microsoft.Xna.Framework;
 using DNA.Distribution.Steam;
@@ -6512,6 +6514,73 @@ namespace ModLoaderExt
 
                 __result = false;
                 return false;
+            }
+        }
+        #endregion
+
+        #region Patch - Vanilla Loot Block Controls
+
+        /// <summary>
+        /// Prevents buried / ore-deposit generated vanilla LootBlock and LuckyLootBlock blocks
+        /// when [VanillaSpawners].GenerateLootBlocks is false.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla path:
+        /// OreDepositer.BuildColumn(...)
+        ///   -> GenerateLootBlock(...)
+        ///
+        /// Returning false here leaves the original block alone instead of replacing it
+        /// with LootBlock or LuckyLootBlock.
+        /// </remarks>
+        [HarmonyPatch(typeof(OreDepositer), "GenerateLootBlock")]
+        internal static class Patch_OreDepositer_GenerateLootBlock_DisableVanillaLootBlocks
+        {
+            [HarmonyPrefix]
+            private static bool Prefix()
+            {
+                return VanillaSpawnerConfig.GenerateLootBlocks;
+            }
+        }
+
+        /// <summary>
+        /// Removes cave-generated vanilla LootBlock and LuckyLootBlock blocks from newly
+        /// generated cave columns when [VanillaSpawners].GenerateLootBlocks is false.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla cave loot blocks are placed directly inside CaveBiome.BuildColumn(...),
+        /// so this postfix scans only the generated column and changes those loot blocks
+        /// back to air.
+        /// </remarks>
+        [HarmonyPatch(typeof(CaveBiome), "BuildColumn")]
+        internal static class Patch_CaveBiome_BuildColumn_DisableVanillaLootBlocks
+        {
+            [HarmonyPostfix]
+            private static void Postfix(BlockTerrain terrain, int worldX, int worldZ, int minY)
+            {
+                if (VanillaSpawnerConfig.GenerateLootBlocks)
+                    return;
+
+                if (terrain == null || terrain._blocks == null)
+                    return;
+
+                for (int y = 0; y < 128; y++)
+                {
+                    IntVector3 worldPos = new IntVector3(worldX, minY + y, worldZ);
+                    int index = terrain.MakeIndexFromWorldIndexVector(worldPos);
+
+                    if (index < 0 || index >= terrain._blocks.Length)
+                        continue;
+
+                    BlockTypeEnum type = Block.GetTypeIndex(terrain._blocks[index]);
+
+                    if (type == BlockTypeEnum.LootBlock ||
+                        type == BlockTypeEnum.LuckyLootBlock)
+                    {
+                        terrain._blocks[index] = Block.SetType(
+                            terrain._blocks[index],
+                            BlockTypeEnum.Empty);
+                    }
+                }
             }
         }
         #endregion
