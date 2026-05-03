@@ -165,6 +165,7 @@ namespace CastleWallsMk2
         private static PlayerSelectScope _shootBlockScope, _shootAmmoScope, _explosiveLasersScope;
         private static VanishSelectScope _vanishScope;
         public  static bool              _spawnMobSamePos;      // For the 'target' section.
+        public  static bool              _cameraXyz, _cameraFov;
         private static bool _god,
                             _host,
                             _noKick,
@@ -225,7 +226,7 @@ namespace CastleWallsMk2
                             _forceRespawn,
                             _disableInvRetrieval,
                             _gravity,
-                            _cameraXyz,
+                            _cameraSettings,
                             _mute,
                             _muteWarnOffender,
                             _muteShowMessage,
@@ -285,8 +286,8 @@ namespace CastleWallsMk2
             _infiLaserPath = _infiLaserBounce = _explosiveLasers = _noTPOnServerRestart =
             _corruptOnKick = _projectileTuning = _freeFlyCamera = _rideDragon = _shootBowAmmo =
             _noClip = _explodingOres = _shootFireballAmmo = _rocketSpeed = _forceRespawn =
-            _disableInvRetrieval = _gravity = _cameraXyz = _mute = _muteWarnOffender = _trail =
-            _trailPrivate = _shower = _dragonCounter = _hat = _boots = _rapidItems = _disableControls =
+            _disableInvRetrieval = _gravity = _cameraXyz = _cameraSettings = _cameraFov = _mute = _muteWarnOffender =
+            _trail = _trailPrivate = _shower = _dragonCounter = _hat = _boots = _rapidItems = _disableControls =
             _itemVortex = _beaconMode = _chaosMode = _clockChaos = _dragonChaos = _ignoreChatNewlines = _hug =
             _noLavaVisuals = _reliableFlood = _blockEsp = _blockEspHideTracers = _nametags = _muteShowMessage =
             _spamTextShow = _spamTextStart = _spamTextSudo = _spamTextExpandBox = _chaoticAim = _disableItemPickups =
@@ -350,6 +351,7 @@ namespace CastleWallsMk2
         public static float                        _cameraXValue            = 0f;
         public static float                        _cameraYValue            = 0f;
         public static float                        _cameraZValue            = 0f;
+        public static float                        _cameraFovValue          = 73f;
         public static int                          _hugSpreadValue          = 0;
         public static int                          _reliableFloodBurstValue = 1000;
         private static int                         _dragonHealthMultiplier  = 1;
@@ -855,10 +857,13 @@ namespace CastleWallsMk2
             public static Action<bool>                                        OnDisableInvRetrieval;
             public static Action<bool>                                        OnGravity;
             public static Action<float>                                       OnGravityValue;
+            public static Action<bool>                                        OnCameraSettings;
             public static Action<bool>                                        OnCamera;
             public static Action<float>                                       OnCameraXValue;
             public static Action<float>                                       OnCameraYValue;
             public static Action<float>                                       OnCameraZValue;
+            public static Action<bool>                                        OnCameraFov;
+            public static Action<float>                                       OnCameraFovValue;
             public static Action<bool>                                        OnMute;
             public static Action<bool>                                        OnMuteWarnOffender;
             public static Action<bool>                                        OnMuteShowMessage;
@@ -928,13 +933,13 @@ namespace CastleWallsMk2
             public static Action<InventoryItemIDs>                            OnRapidItemsType = null;
             public static Action<InventoryItemIDs>                            OnShowerType     = null;
             public static Action<PlayerTargetMode, byte[]>                    OnRapidItemsPlayer;
-            public static Action<BlockTypeEnum>                               OnWearType        = null;
+            public static Action<BlockTypeEnum>                               OnWearType       = null;
             public static Action<PlayerTargetMode, byte[]>                    OnDisableControlsPlayer;
-            public static Action<InventoryItemIDs>                            OnItemVortexType  = null;
+            public static Action<InventoryItemIDs>                            OnItemVortexType = null;
             public static Action<PlayerTargetMode, byte>                      OnHugPlayer;
             public static Action<PlayerTargetMode, byte[]>                    OnReliableFloodPlayer;
-            public static Action<BlockTypeEnum[]>                             OnBlockEspTypes = null;
-            public static Action<BlockTypeEnum>                               OnTrailType     = null;
+            public static Action<BlockTypeEnum[]>                             OnBlockEspTypes  = null;
+            public static Action<BlockTypeEnum>                               OnTrailType      = null;
             public static Action<PlayerTargetMode, byte>                      OnSpamTextSudoPlayer;
             public static Action<PlayerTargetMode, byte[]>                    OnItemVortexPlayer;
             public static Action<PlayerTargetMode, byte>                      OnSudoPlayerPlayer;
@@ -942,6 +947,7 @@ namespace CastleWallsMk2
 
             // Buttons.
             public static Action                                              OnApplyTitle     = null;
+            public static Action                                              OnCameraFovDefault;
 
             // Debugging.
             public static Action<bool>                                        OnTest;
@@ -1572,13 +1578,27 @@ namespace CastleWallsMk2
                     CB_Checkbox    ("Gravity",           ref _gravity,                Callbacks.OnGravity);
                     CB_Slider      ("##gravityYValue",   ref _gravityValue,           Callbacks.OnGravityValue, min: -50.00f, max: 0f, enabled: _gravity, format: "%.2fx");
 
-                    CB_Checkbox    ("Camera XYZ",        ref _cameraXyz,              Callbacks.OnCamera);
-                    CB_TextDisabled("X", enabled: _cameraXyz, sameLineAfter: true);
+                    CB_Checkbox    ("Camera Settings",   ref _cameraSettings,         Callbacks.OnCameraSettings);
+                    CB_Checkbox    (" - Camera XYZ",     ref _cameraXyz,              Callbacks.OnCamera, enabled: _cameraSettings);
+                    CB_TextDisabled("X", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
                     CB_Slider      ("##cameraXValue",    ref _cameraXValue,           Callbacks.OnCameraXValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
-                    CB_TextDisabled("Y", enabled: _cameraXyz, sameLineAfter: true);
+                    CB_TextDisabled("Y", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
                     CB_Slider      ("##cameraYValue",    ref _cameraYValue,           Callbacks.OnCameraYValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
-                    CB_TextDisabled("Z", enabled: _cameraXyz, sameLineAfter: true);
+                    CB_TextDisabled("Z", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
                     CB_Slider      ("##cameraZValue",    ref _cameraZValue,           Callbacks.OnCameraZValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
+                    CB_Checkbox    (" - Camera FOV",     ref _cameraFov,              Callbacks.OnCameraFov, enabled: _cameraSettings);
+                    CB_Slider      ("##cameraFovValue",  ref _cameraFovValue,         Callbacks.OnCameraFovValue, min: 30f, max: 120f, enabled: _cameraSettings && _cameraFov, format: "%.0f°");
+                    CB_Button(
+                        "cameraFovDefault",
+                        "Reset FOV To Default",
+                        () =>
+                        {
+                            _cameraFovValue = CastleWallsMk2.VanillaDefaultFovDegrees;
+                            Callbacks.OnCameraFovDefault?.Invoke();
+                        },
+                        enabled: _cameraSettings && _cameraFov,
+                        tooltip: "Reset Camera FOV back to vanilla 73°."
+                    );
 
                     CB_Checkbox    ("Item Vortex",       ref _itemVortex,             Callbacks.OnItemVortex);
                     CB_Checkbox    (" - Beacon Mode",    ref _beaconMode,             Callbacks.OnBeaconMode, enabled: _itemVortex);
@@ -12449,9 +12469,10 @@ namespace CastleWallsMk2
                 { "_rocketSpeedValue",       new RememberedFloatSliderMeta(nameof(Callbacks.OnRocketSpeedValue),       0f,    500f,  () => _rocketSpeed) },
                 { "_guidedRocketSpeedValue", new RememberedFloatSliderMeta(nameof(Callbacks.OnGuidedRocketSpeedValue), 0f,    500f,  () => _rocketSpeed) },
                 { "_gravityValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnGravityValue),          -50f,   0f,    () => _gravity) },
-                { "_cameraXValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraXValue),         -100f,   100f,  () => _cameraXyz) },
-                { "_cameraYValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraYValue),         -100f,   100f,  () => _cameraXyz) },
-                { "_cameraZValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraZValue),         -100f,   100f,  () => _cameraXyz) },
+                { "_cameraXValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraXValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraYValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraYValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraZValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraZValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraFovValue",         new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraFovValue),        30f,    120f,  () => _cameraSettings && _cameraFov) },
             };
 
         // Some UI field names do not map 1:1 to callback names, so this alias table
@@ -12459,14 +12480,16 @@ namespace CastleWallsMk2
         private static readonly Dictionary<string, string> _rememberedToggleCallbackAliases =
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                { "_infItems",      nameof(Callbacks.OnInfiniteItems) },
-                { "_infDurability", nameof(Callbacks.OnInfiniteDurability) },
-                { "_infJump",       nameof(Callbacks.OnInfiniteJump) },
-                { "_infAmmo",       nameof(Callbacks.OnInfiniteAmmo) },
-                { "_infClips",      nameof(Callbacks.OnInfiniteClips) },
-                { "_cameraXyz",     nameof(Callbacks.OnCamera) },
-                { "_allHarvest",    nameof(Callbacks.OnAllGunsHarvest) },
-                { "_trailMode",     nameof(Callbacks.OnTrailMode) },
+                { "_infItems",        nameof(Callbacks.OnInfiniteItems) },
+                { "_infDurability",   nameof(Callbacks.OnInfiniteDurability) },
+                { "_infJump",         nameof(Callbacks.OnInfiniteJump) },
+                { "_infAmmo",         nameof(Callbacks.OnInfiniteAmmo) },
+                { "_infClips",        nameof(Callbacks.OnInfiniteClips) },
+                { "_cameraSettings",  nameof(Callbacks.OnCameraSettings) },
+                { "_cameraXyz",       nameof(Callbacks.OnCamera) },
+                { "_cameraFov",       nameof(Callbacks.OnCameraFov) },
+                { "_allHarvest",      nameof(Callbacks.OnAllGunsHarvest) },
+                { "_trailMode",       nameof(Callbacks.OnTrailMode) },
             };
 
         // UI bools listed here should never be part of the remembered-toggle system.
@@ -12684,8 +12707,7 @@ namespace CastleWallsMk2
 
             try
             {
-                bool hideName;
-                if (RememberedToggleStore.TryGetToggle("_ghostModeHideName", out hideName))
+                if (RememberedToggleStore.TryGetToggle("_ghostModeHideName", out bool hideName))
                 {
                     _ghostModeHideName = hideName;
 
@@ -12695,8 +12717,7 @@ namespace CastleWallsMk2
                     CastleWallsMk2._ghostModeHideNameEnabled = hideName;
                 }
 
-                bool ghostMode;
-                if (RememberedToggleStore.TryGetToggle("_ghostMode", out ghostMode))
+                if (RememberedToggleStore.TryGetToggle("_ghostMode", out bool ghostMode))
                 {
                     _ghostMode = ghostMode;
 

@@ -189,7 +189,8 @@ namespace CastleWallsMk2
                                 _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled, _chaosModeEnabled, _clockDiscordEnabled, _dragonDiscordEnabled,
                                 _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled, _spamTextEnabled, _spamTextSudoEnabled,
                                 _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
-                                _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled;
+                                _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled, _cameraFovEnabled, _cameraSettingsEnabled
+                                ;
 
         // Sliders:
         private static TriState _worldTimeState;
@@ -2909,6 +2910,25 @@ namespace CastleWallsMk2
             };
             #endregion
 
+            #region Camera Settings
+
+            Callbacks.OnCameraSettings = enabled =>
+            {
+                _cameraSettingsEnabled = enabled;
+
+                if (!enabled)
+                {
+                    // Reset UI state and runtime state together.
+                    IGMainUI._cameraXyz = false;
+                    IGMainUI._cameraFov = false;
+
+                    Callbacks.OnCamera?.Invoke(false);
+                    Callbacks.OnCameraFov?.Invoke(false);
+                }
+
+                SendLog($"Camera Settings: {enabled}");
+            };
+
             #region Camera XYZ
 
             Vector3 _originalEyePivotOffset = Vector3.Zero;
@@ -2977,6 +2997,52 @@ namespace CastleWallsMk2
                                                   _originalEyePivotOffset.Y + _cameraYValue,
                                                   _originalEyePivotOffset.Z + _cameraZValue);
             }
+            #endregion
+
+            #region Camera FOV
+
+            Callbacks.OnCameraFov = enabled =>
+            {
+                try
+                {
+                    _cameraFovEnabled = enabled;
+
+                    if (enabled)
+                        SetCameraFov(_cameraFovValue);
+                    else
+                        RestoreCameraFov();
+                }
+                catch { }
+
+                SendLog($"Custom Camera FOV: {enabled}");
+            };
+            Callbacks.OnCameraFovValue = value =>
+            {
+                try
+                {
+                    _cameraFovValue = value;
+
+                    if (_cameraFovEnabled)
+                        SetCameraFov(_cameraFovValue);
+                }
+                catch { }
+            };
+            Callbacks.OnCameraFovDefault = () =>
+            {
+                try
+                {
+                    IGMainUI._cameraFovValue = VanillaDefaultFovDegrees;
+                    _cameraFovValue = VanillaDefaultFovDegrees;
+
+                    if (_cameraFovEnabled)
+                        SetCameraFov(VanillaDefaultFovDegrees);
+                }
+                catch { }
+
+                SendLog("Camera FOV reset to default.");
+            };
+            #endregion
+
             #endregion
 
             #region Item Vortex
@@ -3727,7 +3793,8 @@ namespace CastleWallsMk2
                                    _beaconModeEnabled          = _chaosModeEnabled         = _clockDiscordEnabled        = _dragonDiscordEnabled   = _hugEnabled                 = _noLavaVisualsEnabled    =
                                    _reliableFloodEnabled       = _blockEspEnabled          = _blockEspNoTraceEnabled     = _nametagsEnabled        = _infiClipsEnabled           = _spamTextEnabled         =
                                    _spamTextSudoEnabled        = _chaoticAimEnabled        = _disableItemPickupEnabled   = _rapidPlaceEnabled      = _sudoPlayerEnabled          = _doorSpamEnabled         =
-                                   _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled           = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled
+                                   _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled           = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled       =
+                                   _cameraFovEnabled           = _cameraSettingsEnabled
                         = false;
 
                     // Disable TriState ticks.
@@ -6860,6 +6927,65 @@ namespace CastleWallsMk2
             {
                 SetDaySkyAtNight(!_isDaySkyAtNightEnabled);
             }
+        }
+        #endregion
+
+        #region Camera FOV Functions
+
+        public const   float  VanillaDefaultFovDegrees = 73f;
+        private static bool   _cameraFovOriginalCaptured;
+        private static Player _cameraFovOwner;
+        private static Angle  _originalDefaultFov;
+
+        /// <summary>
+        /// Applies a custom first-person camera FOV to the local player.
+        /// Updates DefaultFOV because vanilla refreshes FPSCamera.FieldOfView from DefaultFOV during Player.Update.
+        /// </summary>
+        private static void SetCameraFov(float fovDegrees)
+        {
+            Player player = CastleMinerZGame.Instance?.LocalPlayer;
+            if (player == null)
+                return;
+
+            // Keep this in a sane range. XNA perspective FOV must be > 0 and < 180 degrees.
+            fovDegrees = MathHelper.Clamp(fovDegrees, 30f, 120f);
+
+            if (!_cameraFovOriginalCaptured || !ReferenceEquals(_cameraFovOwner, player))
+            {
+                _cameraFovOwner = player;
+                _originalDefaultFov = player.DefaultFOV;
+                _cameraFovOriginalCaptured = true;
+            }
+
+            Angle fov = Angle.FromDegrees(fovDegrees);
+
+            // Durable value. Vanilla uses this every update.
+            player.DefaultFOV = fov;
+
+            // Immediate refresh so the slider feels responsive.
+            if (player.FPSCamera != null)
+                player.FPSCamera.FieldOfView = fov;
+        }
+
+        /// <summary>
+        /// Restores the local player's original FOV that was captured before Camera FOV was enabled.
+        /// </summary>
+        private static void RestoreCameraFov()
+        {
+            if (!_cameraFovOriginalCaptured || _cameraFovOwner == null)
+                return;
+
+            try
+            {
+                _cameraFovOwner.DefaultFOV = _originalDefaultFov;
+
+                if (_cameraFovOwner.FPSCamera != null)
+                    _cameraFovOwner.FPSCamera.FieldOfView = _originalDefaultFov;
+            }
+            catch { }
+
+            _cameraFovOwner = null;
+            _cameraFovOriginalCaptured = false;
         }
         #endregion
 

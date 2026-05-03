@@ -154,22 +154,23 @@ To return to world spawn:
 ### Core commands
 
 | Command | Usage | What it does |
-|---|---|---|
-| `/sethome` | `/sethome` | Saves the **default** home for the current world |
-| `/sethome <name>` | `/sethome Base` | Saves or overwrites a **named** home |
-| `/home` | `/home` | Teleports to the **default** home for the current world |
-| `/home <name>` | `/home Base` | Teleports to a **named** home |
-| `/delhome` | `/delhome` | Deletes the **default** home for the current world |
-| `/delhome <name>` | `/delhome Mine` | Deletes a **named** home |
-| `/homes` | `/homes` | Lists all homes saved for the current world |
-| `/spawn` | `/spawn` | Teleports the local player to the world spawn/start location |
+|-------------------|-----------------|--------------------------------------------------------------|
+| `/sethome`        | `/sethome`      | Saves the **default** home for the current world             |
+| `/sethome <name>` | `/sethome Base` | Saves a **named** home if that name does not already exist   |
+| `/home`           | `/home`         | Teleports to the **default** home for the current world      |
+| `/home <name>`    | `/home Base`    | Teleports to a **named** home                                |
+| `/delhome`        | `/delhome`      | Deletes the **default** home for the current world           |
+| `/delhome <name>` | `/delhome Mine` | Deletes a **named** home                                     |
+| `/homes`          | `/homes`        | Lists all homes saved for the current world                  |
+| `/spawn`          | `/spawn`        | Teleports the local player to the world spawn/start location |
 
 ### Important command behavior
 
 - Home names can contain **multiple words**
 - Home names are **case-insensitive**
 - Omitting the name uses the world’s **default** home
-- Saving a home with an existing name **overwrites** that entry for the current world
+- Saving a home with an existing name is **blocked** to prevent accidental overwrites
+- To move or replace a home, delete it first with `/delhome <name>`, then save it again with `/sethome <name>`
 - `/spawn` ignores arguments and always teleports to spawn
 - All commands operate on the **local player only**
 
@@ -436,6 +437,25 @@ Try:
 
 ```text
 /homes
+```
+
+### "Home already exists"
+
+This means a home with that name already exists in the **current world**.
+
+Home names are case-insensitive, so these are treated as the same name:
+
+```text
+Base
+base
+BASE
+```
+
+To replace an existing home, delete it first:
+
+```text
+/delhome Base
+/sethome Base
 ```
 
 ### "No world/player loaded yet"

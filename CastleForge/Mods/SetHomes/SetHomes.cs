@@ -139,7 +139,8 @@ namespace SetHomes
         /// <summary>
         /// /sethome [name]
         /// - If [name] is omitted, sets the per-world default home.
-        /// - Otherwise, saves/overwrites a named home for the current world.
+        /// - Otherwise, saves a named home for the current world.
+        /// - Existing home names are rejected instead of overwritten.
         /// </summary>
         [Command("/sethome")]
         private static void ExecuteSetHome(string[] args)
@@ -163,9 +164,17 @@ namespace SetHomes
                     ? string.Join(" ", args).Trim()
                     : null;
 
-                HomesStorage.SaveHome(worldKey, displayName, pos, rot, pit, overwrite: true);
-
                 string shown = HomesStorage.ToDisplayName(displayName);
+
+                // Prevent duplicate home names in the same world.
+                if (HomesStorage.TryGetHome(worldKey, displayName, out _, out _, out _))
+                {
+                    SendFeedback($"ERROR: Home '{shown}' already exists for this world. Delete it first with /delhome {shown}.");
+                    return;
+                }
+
+                HomesStorage.SaveHome(worldKey, displayName, pos, rot, pit, overwrite: false);
+
                 SendFeedback($"Home '{shown}' saved for this world.");
             }
             catch (Exception ex)

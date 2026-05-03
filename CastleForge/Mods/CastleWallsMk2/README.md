@@ -229,7 +229,7 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 ### Main tab at a glance
 
 - quick self tools
-- visibility and visual control
+- visibility, camera, and visual control
 - world and movement control
 - inventory and item behavior changes
 - host/admin punishment tools
@@ -336,7 +336,11 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
   - scope: You / Everyone
 - Ride Dragon
 - Gravity with slider
-- Camera XYZ with X/Y/Z sliders
+- Camera Settings
+  - Camera XYZ with X/Y/Z offset sliders
+  - Camera FOV with adjustable degree slider
+  - reset button to restore the vanilla default FOV
+  - remembered toggle and slider values when remember settings are enabled
 - Item Vortex
   - Beacon Mode
   - target picker
@@ -949,6 +953,8 @@ CastleWallsMk2.Bans.ini
 !NetLogs/
 UsernameList.txt
 ```
+
+`CastleWallsMk2.UserData.ini` may store local user data such as inventory save slots, remembered UI toggle states, and remembered slider values.
 
 ---
 
