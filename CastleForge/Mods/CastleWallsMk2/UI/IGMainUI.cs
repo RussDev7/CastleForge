@@ -948,6 +948,7 @@ namespace CastleWallsMk2
             // Buttons.
             public static Action                                              OnApplyTitle     = null;
             public static Action                                              OnCameraFovDefault;
+            public static Action                                              OnCameraXyzDefault;
 
             // Debugging.
             public static Action<bool>                                        OnTest;
@@ -1581,11 +1582,28 @@ namespace CastleWallsMk2
                     CB_Checkbox    ("Camera Settings",   ref _cameraSettings,         Callbacks.OnCameraSettings);
                     CB_Checkbox    (" - Camera XYZ",     ref _cameraXyz,              Callbacks.OnCamera, enabled: _cameraSettings);
                     CB_TextDisabled("X", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
-                    CB_Slider      ("##cameraXValue",    ref _cameraXValue,           Callbacks.OnCameraXValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
+                    CB_StepSlider  ("##cameraXValue",    ref _cameraXValue,           Callbacks.OnCameraXValue, min: -100f, max: 100f, enabled: _cameraSettings && _cameraXyz, format: "%.0f");
                     CB_TextDisabled("Y", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
-                    CB_Slider      ("##cameraYValue",    ref _cameraYValue,           Callbacks.OnCameraYValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
+                    CB_StepSlider  ("##cameraYValue",    ref _cameraYValue,           Callbacks.OnCameraYValue, min: -100f, max: 100f, enabled: _cameraSettings && _cameraXyz, format: "%.0f");
                     CB_TextDisabled("Z", enabled: _cameraSettings & _cameraXyz, sameLineAfter: true);
-                    CB_Slider      ("##cameraZValue",    ref _cameraZValue,           Callbacks.OnCameraZValue, min: -100f, max: 100f, enabled: _cameraXyz, format: "%.0f");
+                    CB_StepSlider  ("##cameraZValue",    ref _cameraZValue,           Callbacks.OnCameraZValue, min: -100f, max: 100f, enabled: _cameraSettings && _cameraXyz, format: "%.0f");
+                    CB_Button(
+                        "cameraXyzDefault",
+                        "Reset Camera XYZ",
+                        () =>
+                        {
+                            _cameraXValue = 0f;
+                            _cameraYValue = 0f;
+                            _cameraZValue = 0f;
+
+                            Callbacks.OnCameraXyzDefault?.Invoke();
+
+                            CaptureRememberedSliderSnapshot();
+                            QueueRememberedSliderRestore();
+                        },
+                        enabled: _cameraSettings && _cameraXyz,
+                        tooltip: "Reset Camera XYZ offsets back to 0."
+                    );
                     CB_Checkbox    (" - Camera FOV",     ref _cameraFov,              Callbacks.OnCameraFov, enabled: _cameraSettings);
                     CB_Slider      ("##cameraFovValue",  ref _cameraFovValue,         Callbacks.OnCameraFovValue, min: 30f, max: 120f, enabled: _cameraSettings && _cameraFov, format: "%.0f°");
                     CB_Button(
@@ -1594,7 +1612,11 @@ namespace CastleWallsMk2
                         () =>
                         {
                             _cameraFovValue = CastleWallsMk2.VanillaDefaultFovDegrees;
+
                             Callbacks.OnCameraFovDefault?.Invoke();
+
+                            CaptureRememberedSliderSnapshot();
+                            QueueRememberedSliderRestore();
                         },
                         enabled: _cameraSettings && _cameraFov,
                         tooltip: "Reset Camera FOV back to vanilla 73°."
@@ -12468,11 +12490,11 @@ namespace CastleWallsMk2
                 { "_speedScale",             new RememberedFloatSliderMeta(nameof(Callbacks.OnSpeedScale),             0.25f, 100f,  () => _movementSpeed) },
                 { "_rocketSpeedValue",       new RememberedFloatSliderMeta(nameof(Callbacks.OnRocketSpeedValue),       0f,    500f,  () => _rocketSpeed) },
                 { "_guidedRocketSpeedValue", new RememberedFloatSliderMeta(nameof(Callbacks.OnGuidedRocketSpeedValue), 0f,    500f,  () => _rocketSpeed) },
-                { "_gravityValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnGravityValue),          -50f,   0f,    () => _gravity) },
-                { "_cameraXValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraXValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
-                { "_cameraYValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraYValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
-                { "_cameraZValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraZValue),          -100f,  100f,  () => _cameraSettings && _cameraXyz) },
-                { "_cameraFovValue",         new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraFovValue),        30f,    120f,  () => _cameraSettings && _cameraFov) },
+                { "_gravityValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnGravityValue),           -50f,  0f,    () => _gravity) },
+                { "_cameraXValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraXValue),           -100f, 100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraYValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraYValue),           -100f, 100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraZValue",           new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraZValue),           -100f, 100f,  () => _cameraSettings && _cameraXyz) },
+                { "_cameraFovValue",         new RememberedFloatSliderMeta(nameof(Callbacks.OnCameraFovValue),         30f,   120f,  () => _cameraSettings && _cameraFov) },
             };
 
         // Some UI field names do not map 1:1 to callback names, so this alias table
@@ -12534,13 +12556,13 @@ namespace CastleWallsMk2
 
         // Returns the set of bool UI fields that are eligible to be remembered.
         // Requirements:
-        // 1. Must be a private static bool on IGMainUI
+        // 1. Must be a static bool field on IGMainUI, public or non-public
         // 2. Must not be explicitly excluded
         // 3. Must resolve to a valid Action<bool> callback so it can be re-applied
         private static IEnumerable<FieldInfo> GetRememberedToggleUiFields()
         {
             return typeof(IGMainUI)
-                .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
+                .GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
                 .Where(f => f.FieldType == typeof(bool))
                 .Where(f => !_rememberedToggleExcludedUiFields.Contains(f.Name))
                 .Where(f => ResolveRememberedToggleCallback(f.Name) != null);
@@ -13631,7 +13653,7 @@ namespace CastleWallsMk2
             ImGui.SetNextItemWidth(w);
 
             float totalW = w;
-            float sliderW = Math.Max(1f, 1 - (btnW * 2f) - (spacing * 2f));
+            float sliderW = Math.Max(1f, totalW - (btnW * 2f) - (spacing * 2f));
 
             bool  changed = false;
             float before  = value;

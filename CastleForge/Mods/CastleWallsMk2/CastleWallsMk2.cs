@@ -2936,6 +2936,8 @@ namespace CastleWallsMk2
             {
                 try
                 {
+                    _cameraXyzEnabled = enabled;
+
                     AccessTools.FieldRef<FPSRig, Entity> PitchPivot = AccessTools.FieldRefAccess<FPSRig, Entity>("pitchPiviot");
                     var pivot = PitchPivot(CastleMinerZGame.Instance?.LocalPlayer);
 
@@ -2950,7 +2952,8 @@ namespace CastleWallsMk2
                     else
                     {
                         // Restore original value.
-                        pivot.LocalPosition = _originalEyePivotOffset;
+                        if (pivot != null)
+                            pivot.LocalPosition = _originalEyePivotOffset;
                     }
                 } catch { }
                 SendLog($"Custom Camera XYZ: {enabled}");
@@ -2987,6 +2990,25 @@ namespace CastleWallsMk2
                     // Update the camera position.
                     SetEyePivotOffset();
                 } catch { }
+            };
+            Callbacks.OnCameraXyzDefault = () =>
+            {
+                try
+                {
+                    IGMainUI._cameraXValue = 0f;
+                    IGMainUI._cameraYValue = 0f;
+                    IGMainUI._cameraZValue = 0f;
+
+                    _cameraXValue = 0f;
+                    _cameraYValue = 0f;
+                    _cameraZValue = 0f;
+
+                    if (_cameraSettingsEnabled && _cameraXyzEnabled)
+                        SetEyePivotOffset();
+                }
+                catch { }
+
+                SendLog("Camera XYZ reset to default.");
             };
 
             void SetEyePivotOffset()

@@ -338,9 +338,10 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 - Gravity with slider
 - Camera Settings
   - Camera XYZ with X/Y/Z offset sliders
+  - reset button to restore XYZ offsets back to `0 / 0 / 0`
   - Camera FOV with adjustable degree slider
-  - reset button to restore the vanilla default FOV
-  - remembered toggle and slider values when remember settings are enabled
+  - reset button to restore the vanilla default FOV of `73°`
+  - remembered toggle, slider, and reset-default values when remember settings are enabled
 - Item Vortex
   - Beacon Mode
   - target picker
@@ -980,6 +981,7 @@ If your goal is to showcase the depth of CastleForge as a platform, this is a st
 - Packet capture features require **Npcap**.
 - The code injector is intentionally powerful and should be treated as an advanced feature.
 - Several destructive world/session actions are guarded by explicit UI flows or SHIFT confirmation.
+- Camera Settings are local/client-side visual controls. Reset buttons restore Camera XYZ offsets to `0 / 0 / 0` and Camera FOV to the vanilla `73°` default.
 
 ---
 
