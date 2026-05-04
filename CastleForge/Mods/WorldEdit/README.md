@@ -30,6 +30,7 @@ It is designed to let you make fast world changes **without leaving the game**.
 - [Wands, tools, and brushes](#wands-tools-and-brushes)
 - [Performance, async placement, and undo history](#performance-async-placement-and-undo-history)
 - [Optional addon integration](#optional-addon-integration)
+- [External schematic conversion tools](#external-schematic-conversion-tools)
 - [Full command reference](#full-command-reference)
 - [Troubleshooting](#troubleshooting)
 - [Credits](#credits)
@@ -46,6 +47,7 @@ WorldEdit is a high-speed in-game world editing mod that lets you:
 - generate shapes such as cubes, spheres, cylinders, cones, pyramids, rings, diamonds, floors, prisms, and formula-based structures
 - use clipboard workflows like copy, cut, paste, rotate, flip, clear clipboard, and matrix placement
 - save and load clipboard data as `.schem` files through file dialogs
+- import CastleMiner Z `.schem` files converted from Minecraft WorldEdit/Sponge `.schem` files with an optional external converter
 - perform chunk-based copy, cut, paste, and deletion operations
 - bind actions to held items using **tool mode**
 - sculpt terrain interactively using **brush mode**
@@ -482,6 +484,28 @@ The schematic workflow uses Windows file dialogs:
 
 That makes it user-friendly for players who want quick export/import without memorizing file paths.
 
+#### Minecraft WorldEdit/Sponge `.schem` conversion
+
+WorldEdit loads CastleMiner Z WorldEdit `.schem` files. If you have a Minecraft WorldEdit/Sponge `.schem`, convert it first with the optional external tool **[MCToCMZSchemConverter](https://github.com/RussDev7/MCToCMZSchemConverter)**.
+
+Recommended flow:
+
+1. Export or download a Minecraft WorldEdit/Sponge `.schem`.
+2. Convert it with `MCToCMZSchemConverter.exe` and a tuned `block-map.json`.
+3. Check the generated `.unmapped.txt` report and add any missing block mappings.
+4. Load the converted CastleMiner Z `.schem` with `/schematic load`.
+5. Stand where you want the structure placed, then run `/paste`.
+
+Example converter command:
+
+```bat
+MCToCMZSchemConverter.exe castle.schem castle_cmz.schem block-map.json --preserve-origin
+```
+
+Use `--save-air` only when you want converted air/empty blocks to erase existing CastleMiner Z terrain during paste.
+
+> **Note:** MCToCMZSchemConverter is a separate companion repository, not a bundled CastleForge mod. It exists to prepare Minecraft schematics for this WorldEdit schematic workflow.
+
 ### Crate/container awareness
 The mod contains clipboard sidecar logic for container data so copied/pasted structures can preserve more than just raw block IDs where supported.
 
@@ -650,6 +674,36 @@ These will be better documented in their own dedicated readmes:
 - `WorldEditPixelart`
 
 That keeps this page focused on the base mod.
+
+---
+
+## External schematic conversion tools
+
+### MCToCMZSchemConverter
+
+**[MCToCMZSchemConverter](https://github.com/RussDev7/MCToCMZSchemConverter)** is an optional external companion tool for converting Minecraft WorldEdit/Sponge `.schem` files into CastleMiner Z WorldEdit `.schem` files.
+
+Use it when you want to bring Minecraft builds into CastleMiner Z WorldEdit:
+
+```bat
+MCToCMZSchemConverter.exe <input.schem> <output.schem> <block-map.json> [--save-air] [--preserve-origin]
+```
+
+Common options:
+
+- `block-map.json` controls how Minecraft blocks map to CastleMiner Z blocks.
+- `--preserve-origin` keeps the Minecraft/Sponge horizontal paste origin while using CMZ-friendly floor placement.
+- `--save-air` writes `Empty` blocks into the output schematic so paste can erase existing terrain.
+- The generated `.unmapped.txt` report lists Minecraft blocks that need more mapping coverage.
+
+After conversion, use this mod's normal schematic flow:
+
+```text
+/schematic load
+/paste
+```
+
+> **Compatibility note:** Converted schematics depend on the quality of the block map. Minecraft has many blocks that do not have direct CastleMiner Z equivalents, so some manual mapping/tuning is expected.
 
 ---
 
@@ -1599,6 +1653,6 @@ This CastleForge version of **WorldEdit** is based on and evolves the earlier st
 
 ## Credits
 
-- **RussDev7** - original WorldEdit-CSharp project and CMZ/CastleForge integration
+- **RussDev7** - original WorldEdit-CSharp project, CMZ/CastleForge integration, and MCToCMZSchemConverter companion tool
 - **EngineHub / Minecraft WorldEdit** - foundational inspiration for the workflow and command style
 - **CastleForge** - mod loader ecosystem and project structure this version lives in
