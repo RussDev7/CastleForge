@@ -949,109 +949,303 @@ namespace WorldEdit
 
         #region Make Blocks Full Brightness
 
+        #region Chunk Geometry
+
+        /// <summary>
+        /// Chunk Geometry Helper
+        /// ---------------------
+        /// Geometry helpers for visual toggles (e.g. - xray / fullbright):
+        /// - <see cref="RebuildVisible(bool)"/> queues geometry rebuild work in the engine's
+        ///   _computeGeometryPool for either the visible ring of chunks (fast path) or all
+        ///   24x24 loaded chunks (heavy path), then drains the queue and finalizes vertex buffers.
+        /// - Each queued chunk increments its _numUsers latch so the later geometry/vb build
+        ///   can safely decrement it - preventing "stuck busy" chunks that hide mined/placed updates.
+        ///
+        /// Notes & Safety:
+        /// - Balances per-chunk usage latches (_numUsers.Increment) before enqueuing, matching the
+        ///   engine's later Decrement during BuildPendingVertexBuffers().
+        /// - Skips chunks that are still WAITING_TO_LOAD.
+        /// - Defaults to rebuilding only the drawable ring around the player to avoid big hitches.
+        /// </summary>
+        public static class ChunkGeometryRefresher
+        {
+            // Reflect BlockTerrain._computeGeometryPool and its Add/Drain methods once.
+            private static readonly FieldInfo _geomPoolFI = AccessTools.Field(typeof(BlockTerrain), "_computeGeometryPool");
+            private static readonly MethodInfo _poolAddMI;
+            private static readonly MethodInfo _poolDrainMI;
+
+            static ChunkGeometryRefresher()
+            {
+                // Resolve Add(int) / Drain() once from the pool's concrete type.
+                var poolType = _geomPoolFI.FieldType;
+                _poolAddMI = AccessTools.Method(poolType, "Add", new[] { typeof(int) });
+                _poolDrainMI = AccessTools.Method(poolType, "Drain", Type.EmptyTypes);
+            }
+
+            /// <summary>
+            /// Rebuild geometry for the currently loaded; visible ring of chunks.
+            /// Pass <paramref name="all"/> = true to force all 24x24 indices (heavier, may hitch).
+            ///
+            /// Implementation notes:
+            /// - Uses _computeGeometryPool.Add(index) to schedule jobs.
+            /// - Increments chunk._numUsers before enqueuing so the engine's later decrement stays balanced.
+            /// - Skips WAITING_TO_LOAD chunks.
+            /// - After queuing, calls Drain() and BuildPendingVertexBuffers() to apply immediately.
+            /// </summary>
+            public static void RebuildVisible(bool all = false)
+            {
+                var bt = BlockTerrain.Instance;
+                if (bt == null || !bt.IsReady) return;
+
+                var pool = _geomPoolFI.GetValue(bt);
+                if (pool == null || _poolAddMI == null || _poolDrainMI == null) return;
+
+                if (all)
+                {
+                    // Full 24x24 ring (576). Expect a noticeable hitch.
+                    for (int idx = 0; idx < 576; idx++)
+                        QueueOne(bt, pool, idx);
+                }
+                else
+                {
+                    // Only the drawable ring around the current eye chunk: Cheaper + avoids load spikes.
+                    int eye = bt._currentEyeChunkIndex;
+                    var baseIv = new IntVector3(eye % 24, 0, eye / 24);
+                    var offs = bt._radiusOrderOffsets; // Already computed by BlockTerrain.
+
+                    for (int k = 0; k < offs.Length; k++)
+                    {
+                        var iv = new IntVector3(baseIv.X + offs[k].X, 0, baseIv.Z + offs[k].Z);
+                        if (iv.X < 0 || iv.X >= 24 || iv.Z < 0 || iv.Z >= 24) continue;
+                        int idx = iv.X + iv.Z * 24;
+                        QueueOne(bt, pool, idx);
+                    }
+                }
+
+                // Kick the jobs and then finish vertex buffers now (same path main loop uses).
+                _poolDrainMI.Invoke(pool, null);
+                bt.BuildPendingVertexBuffers();
+            }
+
+            /// <summary>
+            /// Queue one chunk for geometry rebuild:
+            /// - Skip if chunk is not yet loaded.
+            /// - Increment _numUsers to balance later decrements in the geometry/VB pipeline.
+            /// - Enqueue via _computeGeometryPool.Add(index).
+            /// </summary>
+            private static void QueueOne(BlockTerrain bt, object pool, int idx)
+            {
+                // Skip chunks still waiting to load.
+                if (bt._chunks[idx]._action == BlockTerrain.NextChunkAction.WAITING_TO_LOAD)
+                    return;
+
+                // IMPORTANT: Balance the later Decrement() performed during VB build.
+                bt._chunks[idx]._numUsers.Increment();
+
+                // Mark as needs-geometry and enqueue the work.
+                _poolAddMI.Invoke(pool, new object[] { idx });
+            }
+        }
+        #endregion
+
         #region Runtime Helper
 
         /// <summary>
         /// Turn fullbright on/off now:
-        /// - flips the global flag,
-        /// - updates every BlockType singleton's DrawFullBright,
-        /// - requeues geometry for all loaded chunks so visuals update immediately.
+        /// - Captures the vanilla DrawFullBright state once,
+        /// - Flips the global runtime flag,
+        /// - When enabled, forces every BlockType singleton's DrawFullBright to true,
+        /// - When disabled, restores each BlockType singleton back to its original vanilla DrawFullBright value,
+        /// - Requeues geometry for all loaded chunks so visuals update immediately.
         /// </summary>
+        /// <remarks>
+        /// Important:
+        /// Do not simply set DrawFullBright = false when disabling fullbright.
+        /// Some vanilla blocks are supposed to stay fullbright/glowing, such as:
+        /// - Space Goo / Slime-style blocks,
+        /// - Loot blocks,
+        /// - Lucky loot blocks,
+        /// - Lava-style blocks,
+        /// - Other vanilla emissive/fullbright blocks.
+        ///
+        /// This helper preserves those original vanilla values so turning fullbright off
+        /// does not permanently break glowing blocks until the game is restarted.
+        /// </remarks>
         public static class FullBrightRuntime
         {
             /// <summary>
-            /// Global toggle you can flip at runtime (e.g. a chat command).
-            /// Call <see cref="FullBrightRuntime.SetEnabled(bool)"/> to apply immediately.
+            /// Original vanilla DrawFullBright values captured from each BlockType singleton.
+            /// These are used when disabling fullbright so vanilla glowing blocks are restored correctly.
+            /// </summary>
+            private static readonly Dictionary<BlockTypeEnum, bool> _vanillaDrawFullBright =
+                new Dictionary<BlockTypeEnum, bool>();
+
+            /// <summary>
+            /// Prevents recapturing vanilla values after the mod has already modified them.
+            /// This must remain false until the first call to <see cref="CaptureVanillaDefaults"/>.
+            /// </summary>
+            private static bool _capturedVanillaDefaults;
+
+            /// <summary>
+            /// Global toggle you can check at runtime.
+            /// Call <see cref="FullBrightRuntime.SetEnabled(bool)"/> to apply the visual state immediately.
             /// </summary>
             public static bool UseFullBrightTiles { get; private set; } = false;
 
-            /// <summary>Public entrypoint you can call from a UI / chat command.</summary>
+            /// <summary>
+            /// Public entrypoint you can call from a UI, config reload, remembered toggle, or chat command.
+            /// </summary>
+            /// <param name="enabled">
+            /// True to force all blocks to render fullbright.
+            /// False to restore the original vanilla fullbright/glow state.
+            /// </param>
             public static void SetEnabled(bool enabled)
             {
+                // 1) Capture vanilla values before changing the global flag.
+                // This prevents the BlockType.GetType postfix from forcing values to true
+                // while we are trying to record the original vanilla state.
+                CaptureVanillaDefaults();
+
+                // 2) Flip the global runtime flag.
                 UseFullBrightTiles = enabled;
 
-                // 1) Touch all BlockType singletons so their flag matches right now.
-                TouchAllBlockTypes(enabled);
+                // 3) Touch all BlockType singletons so their flag matches right now.
+                if (enabled)
+                    ForceAllBlockTypesFullBright();
+                else
+                    RestoreVanillaFullBright();
 
-                // 2) Force geometry rebuild on all loaded chunks.
-                RebuildAllChunkGeometry();
+                // 4) Force geometry rebuild on all loaded chunks.
+                ChunkGeometryRefresher.RebuildVisible(all: true);
             }
 
             /// <summary>
-            /// Safely iterate the BlockType enum and set DrawFullBright
-            /// on each real BlockType instance.
+            /// Captures the original vanilla DrawFullBright state for every real BlockType singleton.
             /// </summary>
-            private static void TouchAllBlockTypes(bool enabled)
+            /// <remarks>
+            /// This is intentionally only done once.
+            /// If we recaptured after enabling fullbright, every block would appear to have
+            /// DrawFullBright = true, and we would lose the real vanilla glow settings.
+            /// </remarks>
+            private static void CaptureVanillaDefaults()
             {
+                if (_capturedVanillaDefaults)
+                    return;
+
+                _capturedVanillaDefaults = true;
+
                 try
                 {
                     Array values = Enum.GetValues(typeof(BlockTypeEnum));
+
+                    // Some enum values can be aliases. Track raw integer IDs so we only cache each
+                    // underlying BlockType value once.
+                    HashSet<int> seen = new HashSet<int>();
+
                     for (int i = 0; i < values.Length; i++)
                     {
-                        var e = (BlockTypeEnum)values.GetValue(i);
-                        // Some enum values can be aliases; just guard with try/catch.
+                        BlockTypeEnum e = (BlockTypeEnum)values.GetValue(i);
+                        int key = (int)e;
+
+                        if (!seen.Add(key))
+                            continue;
+
                         try
                         {
                             BlockType bt = BlockType.GetType(e);
+
                             if (bt != null)
-                                bt.DrawFullBright = enabled;
+                                _vanillaDrawFullBright[e] = bt.DrawFullBright;
                         }
-                        catch { /* ignore bad/unused enum entries */ }
+                        catch
+                        {
+                            // Ignore bad/unused enum entries.
+                        }
                     }
                 }
                 catch
                 {
-                    // As a fallback, touching only common types is still fine;
-                    // the postfix keeps future fetches consistent.
+                    // If this fails, the postfix still keeps future fullbright fetches consistent.
+                    // Disabling fullbright just may not be able to restore every vanilla value.
                 }
             }
 
             /// <summary>
-            /// Use BlockTerrain's internal ChunkActionPool to schedule a geometry rebuild
-            /// for every loaded chunk (24 x 24 ring = 576 indices), then drain the queue.
+            /// Safely iterates the BlockType enum and forces DrawFullBright = true
+            /// on each real BlockType instance.
             /// </summary>
-            private static void RebuildAllChunkGeometry()
+            private static void ForceAllBlockTypesFullBright()
             {
-                var terrain = BlockTerrain.Instance;
-                if (terrain == null)
-                    return;
-
-                // Reflect private fields/methods:
-                //   BlockTerrain._computeGeometryPool : ChunkActionPool
-                //   ChunkActionPool.Add(int)          : void
-                //   ChunkActionPool.Drain()           : void
-                var poolField = AccessTools.Field(typeof(BlockTerrain), "_computeGeometryPool");
-                if (poolField == null)
-                    return;
-
-                object pool = poolField.GetValue(terrain);
-                if (pool == null)
-                    return;
-
-                MethodInfo miAdd = AccessTools.Method(pool.GetType(), "Add", new Type[] { typeof(int) });
-                MethodInfo miDrain = AccessTools.Method(pool.GetType(), "Drain", Type.EmptyTypes);
-
-                if (miAdd == null || miDrain == null)
-                    return;
-
-                // Queue all chunk indices (the ring is always 24x24 = 576).
-                for (int i = 0; i < 576; i++)
+                try
                 {
-                    try { miAdd.Invoke(pool, new object[] { i }); }
-                    catch { /* ignore */ }
-                }
+                    Array values = Enum.GetValues(typeof(BlockTypeEnum));
 
-                // Drain the work so it applies right away.
-                try { miDrain.Invoke(pool, null); } catch { }
+                    for (int i = 0; i < values.Length; i++)
+                    {
+                        BlockTypeEnum e = (BlockTypeEnum)values.GetValue(i);
+
+                        // Some enum values can be aliases or invalid/unused entries;
+                        // guard each individual lookup so one bad value does not break the full pass.
+                        try
+                        {
+                            BlockType bt = BlockType.GetType(e);
+
+                            if (bt != null)
+                                bt.DrawFullBright = true;
+                        }
+                        catch
+                        {
+                            // Ignore bad/unused enum entries.
+                        }
+                    }
+                }
+                catch
+                {
+                    // As a fallback, the postfix keeps future BlockType.GetType fetches fullbright
+                    // while UseFullBrightTiles is enabled.
+                }
+            }
+
+            /// <summary>
+            /// Restores every cached BlockType singleton back to its original vanilla
+            /// DrawFullBright value.
+            /// </summary>
+            /// <remarks>
+            /// This is the important part that fixes Space Goo, loot blocks, light blocks, etc.
+            /// Disabling fullbright should restore vanilla values, not blindly set everything false.
+            /// </remarks>
+            private static void RestoreVanillaFullBright()
+            {
+                foreach (KeyValuePair<BlockTypeEnum, bool> pair in _vanillaDrawFullBright)
+                {
+                    try
+                    {
+                        BlockType bt = BlockType.GetType(pair.Key);
+
+                        if (bt != null)
+                            bt.DrawFullBright = pair.Value;
+                    }
+                    catch
+                    {
+                        // Ignore bad/unused enum entries.
+                    }
+                }
             }
         }
         #endregion
 
         /// <summary>
-        /// Postfix on BlockType.GetType(...) so that every BlockType
-        /// instance fetched gets DrawFullBright = true when enabled.
-        /// This is very cheap and keeps future fetches in-sync.
+        /// Postfix on BlockType.GetType(...) so that every BlockType instance fetched
+        /// gets DrawFullBright = true while fullbright is enabled.
         /// </summary>
+        /// <remarks>
+        /// This keeps future BlockType fetches in-sync after the runtime toggle is enabled.
+        /// 
+        /// Important:
+        /// This patch only forces DrawFullBright to true while fullbright is enabled.
+        /// It does not force DrawFullBright to false when disabled, because vanilla glowing
+        /// blocks need their original values restored by <see cref="FullBrightRuntime.SetEnabled(bool)"/>.
+        /// </remarks>
         [HarmonyPatch(typeof(BlockType))]
         static class BlockType_GetType_Patch
         {
@@ -1059,8 +1253,11 @@ namespace WorldEdit
             [HarmonyPostfix]
             static void Postfix(BlockType __result)
             {
-                if (__result == null) return;
-                if (!FullBrightRuntime.UseFullBrightTiles) return;
+                if (__result == null)
+                    return;
+
+                if (!FullBrightRuntime.UseFullBrightTiles)
+                    return;
 
                 __result.DrawFullBright = true;
             }

@@ -2496,66 +2496,200 @@ namespace CastleWallsMk2
 
         /// <summary>
         /// Turn fullbright on/off now:
-        /// - Flips the global flag,
-        /// - Updates every BlockType singleton's DrawFullBright,
+        /// - Captures the vanilla DrawFullBright state once,
+        /// - Flips the global runtime flag,
+        /// - When enabled, forces every BlockType singleton's DrawFullBright to true,
+        /// - When disabled, restores each BlockType singleton back to its original vanilla DrawFullBright value,
         /// - Requeues geometry for all loaded chunks so visuals update immediately.
         /// </summary>
+        /// <remarks>
+        /// Important:
+        /// Do not simply set DrawFullBright = false when disabling fullbright.
+        /// Some vanilla blocks are supposed to stay fullbright/glowing, such as:
+        /// - Space Goo / Slime-style blocks,
+        /// - Loot blocks,
+        /// - Lucky loot blocks,
+        /// - Lava-style blocks,
+        /// - Other vanilla emissive/fullbright blocks.
+        ///
+        /// This helper preserves those original vanilla values so turning fullbright off
+        /// does not permanently break glowing blocks until the game is restarted.
+        /// </remarks>
         public static class FullBrightRuntime
         {
             /// <summary>
-            /// Global toggle you can flip at runtime (e.g. a chat command).
-            /// Call <see cref="FullBrightRuntime.SetEnabled(bool)"/> to apply immediately.
+            /// Original vanilla DrawFullBright values captured from each BlockType singleton.
+            /// These are used when disabling fullbright so vanilla glowing blocks are restored correctly.
+            /// </summary>
+            private static readonly Dictionary<BlockTypeEnum, bool> _vanillaDrawFullBright =
+                new Dictionary<BlockTypeEnum, bool>();
+
+            /// <summary>
+            /// Prevents recapturing vanilla values after the mod has already modified them.
+            /// This must remain false until the first call to <see cref="CaptureVanillaDefaults"/>.
+            /// </summary>
+            private static bool _capturedVanillaDefaults;
+
+            /// <summary>
+            /// Global toggle you can check at runtime.
+            /// Call <see cref="FullBrightRuntime.SetEnabled(bool)"/> to apply the visual state immediately.
             /// </summary>
             public static bool UseFullBrightTiles { get; private set; } = false;
 
-            /// <summary>Public entrypoint you can call from a UI / chat command.</summary>
+            /// <summary>
+            /// Public entrypoint you can call from a UI, config reload, remembered toggle, or chat command.
+            /// </summary>
+            /// <param name="enabled">
+            /// True to force all blocks to render fullbright.
+            /// False to restore the original vanilla fullbright/glow state.
+            /// </param>
             public static void SetEnabled(bool enabled)
             {
+                // 1) Capture vanilla values before changing the global flag.
+                // This prevents the BlockType.GetType postfix from forcing values to true
+                // while we are trying to record the original vanilla state.
+                CaptureVanillaDefaults();
+
+                // 2) Flip the global runtime flag.
                 UseFullBrightTiles = enabled;
 
-                // 1) Touch all BlockType singletons so their flag matches right now.
-                TouchAllBlockTypes(enabled);
+                // 3) Touch all BlockType singletons so their flag matches right now.
+                if (enabled)
+                    ForceAllBlockTypesFullBright();
+                else
+                    RestoreVanillaFullBright();
 
-                // 2) Force geometry rebuild on all loaded chunks.
+                // 4) Force geometry rebuild on all loaded chunks.
                 ChunkGeometryRefresher.RebuildVisible(all: true);
             }
 
             /// <summary>
-            /// Safely iterate the BlockType enum and set DrawFullBright
-            /// on each real BlockType instance.
+            /// Captures the original vanilla DrawFullBright state for every real BlockType singleton.
             /// </summary>
-            private static void TouchAllBlockTypes(bool enabled)
+            /// <remarks>
+            /// This is intentionally only done once.
+            /// If we recaptured after enabling fullbright, every block would appear to have
+            /// DrawFullBright = true, and we would lose the real vanilla glow settings.
+            /// </remarks>
+            private static void CaptureVanillaDefaults()
             {
+                if (_capturedVanillaDefaults)
+                    return;
+
+                _capturedVanillaDefaults = true;
+
                 try
                 {
                     Array values = Enum.GetValues(typeof(BlockTypeEnum));
+
+                    // Some enum values can be aliases. Track raw integer IDs so we only cache each
+                    // underlying BlockType value once.
+                    HashSet<int> seen = new HashSet<int>();
+
                     for (int i = 0; i < values.Length; i++)
                     {
-                        var e = (BlockTypeEnum)values.GetValue(i);
-                        // Some enum values can be aliases; just guard with try/catch.
+                        BlockTypeEnum e = (BlockTypeEnum)values.GetValue(i);
+                        int key = (int)e;
+
+                        if (!seen.Add(key))
+                            continue;
+
                         try
                         {
                             BlockType bt = BlockType.GetType(e);
+
                             if (bt != null)
-                                bt.DrawFullBright = enabled;
+                                _vanillaDrawFullBright[e] = bt.DrawFullBright;
                         }
-                        catch { /* ignore bad/unused enum entries */ }
+                        catch
+                        {
+                            // Ignore bad/unused enum entries.
+                        }
                     }
                 }
                 catch
                 {
-                    // As a fallback, touching only common types is still fine;
-                    // the postfix keeps future fetches consistent.
+                    // If this fails, the postfix still keeps future fullbright fetches consistent.
+                    // Disabling fullbright just may not be able to restore every vanilla value.
+                }
+            }
+
+            /// <summary>
+            /// Safely iterates the BlockType enum and forces DrawFullBright = true
+            /// on each real BlockType instance.
+            /// </summary>
+            private static void ForceAllBlockTypesFullBright()
+            {
+                try
+                {
+                    Array values = Enum.GetValues(typeof(BlockTypeEnum));
+
+                    for (int i = 0; i < values.Length; i++)
+                    {
+                        BlockTypeEnum e = (BlockTypeEnum)values.GetValue(i);
+
+                        // Some enum values can be aliases or invalid/unused entries;
+                        // guard each individual lookup so one bad value does not break the full pass.
+                        try
+                        {
+                            BlockType bt = BlockType.GetType(e);
+
+                            if (bt != null)
+                                bt.DrawFullBright = true;
+                        }
+                        catch
+                        {
+                            // Ignore bad/unused enum entries.
+                        }
+                    }
+                }
+                catch
+                {
+                    // As a fallback, the postfix keeps future BlockType.GetType fetches fullbright
+                    // while UseFullBrightTiles is enabled.
+                }
+            }
+
+            /// <summary>
+            /// Restores every cached BlockType singleton back to its original vanilla
+            /// DrawFullBright value.
+            /// </summary>
+            /// <remarks>
+            /// This is the important part that fixes Space Goo, loot blocks, light blocks, etc.
+            /// Disabling fullbright should restore vanilla values, not blindly set everything false.
+            /// </remarks>
+            private static void RestoreVanillaFullBright()
+            {
+                foreach (KeyValuePair<BlockTypeEnum, bool> pair in _vanillaDrawFullBright)
+                {
+                    try
+                    {
+                        BlockType bt = BlockType.GetType(pair.Key);
+
+                        if (bt != null)
+                            bt.DrawFullBright = pair.Value;
+                    }
+                    catch
+                    {
+                        // Ignore bad/unused enum entries.
+                    }
                 }
             }
         }
         #endregion
 
         /// <summary>
-        /// Postfix on BlockType.GetType(...) so that every BlockType
-        /// instance fetched gets DrawFullBright = true when enabled.
-        /// This is very cheap and keeps future fetches in-sync.
+        /// Postfix on BlockType.GetType(...) so that every BlockType instance fetched
+        /// gets DrawFullBright = true while fullbright is enabled.
         /// </summary>
+        /// <remarks>
+        /// This keeps future BlockType fetches in-sync after the runtime toggle is enabled.
+        /// 
+        /// Important:
+        /// This patch only forces DrawFullBright to true while fullbright is enabled.
+        /// It does not force DrawFullBright to false when disabled, because vanilla glowing
+        /// blocks need their original values restored by <see cref="FullBrightRuntime.SetEnabled(bool)"/>.
+        /// </remarks>
         [HarmonyPatch(typeof(BlockType))]
         static class BlockType_GetType_Patch
         {
@@ -2563,8 +2697,11 @@ namespace CastleWallsMk2
             [HarmonyPostfix]
             static void Postfix(BlockType __result)
             {
-                if (__result == null) return;
-                if (!FullBrightRuntime.UseFullBrightTiles) return;
+                if (__result == null)
+                    return;
+
+                if (!FullBrightRuntime.UseFullBrightTiles)
+                    return;
 
                 __result.DrawFullBright = true;
             }
