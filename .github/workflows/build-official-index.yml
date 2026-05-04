@@ -476,6 +476,59 @@ jobs:
                   return servers_release_ctx
               return mods_release_ctx
 
+          def expected_release_asset_names(project_name: str, assembly: str, tag: str):
+              if not tag:
+                  return []
+
+              names = []
+
+              # Core release assets are packaged with the CastleForge- prefix.
+              if project_name == 'ModLoaderExtensions':
+                  names.append(f'CastleForge-ModLoaderExtensions-{tag}.zip')
+
+              # Dedicated server releases use the project/server folder name.
+              if project_name in {'CMZDedicatedLidgrenServer', 'CMZDedicatedSteamServer'}:
+                  names.append(f'{project_name}-{tag}.zip')
+
+              # Normal mod releases usually use the mod/project name.
+              names.append(f'{project_name}-{tag}.zip')
+
+              # Fallback for projects where AssemblyName differs from folder name.
+              names.append(f'{assembly}-{tag}.zip')
+
+              # Deduplicate while preserving order.
+              deduped = []
+              for name in names:
+                  if name not in deduped:
+                      deduped.append(name)
+
+              return deduped
+
+
+          def release_asset_url(ctx: dict, project_name: str, assembly: str):
+              tag = ctx.get('tag', '')
+              assets = ctx.get('assets', {}) or {}
+
+              for asset_name in expected_release_asset_names(project_name, assembly, tag):
+                  url = assets.get(asset_name, '')
+                  if url:
+                      return url
+
+              # Case-insensitive fallback, useful if asset casing ever changes.
+              assets_by_lower = {name.lower(): url for name, url in assets.items()}
+              for asset_name in expected_release_asset_names(project_name, assembly, tag):
+                  url = assets_by_lower.get(asset_name.lower(), '')
+                  if url:
+                      return url
+
+              print(
+                  f"Warning: no release asset found for {project_name}. "
+                  f"Expected one of: {expected_release_asset_names(project_name, assembly, tag)}. "
+                  f"Available assets: {sorted(assets.keys())}"
+              )
+
+              return ''
+
           def build_entry(project_dir: Path):
               csproj = find_csproj(project_dir)
               if csproj is None:
@@ -504,10 +557,7 @@ jobs:
               deps = [d for d in deps if d not in EXCLUDED_DEPENDENCIES]
 
               ctx = release_context_for(project_name)
-              asset_name = f"{assembly}-{ctx['tag']}.zip" if ctx['tag'] else ''
-              release_url = ctx['assets'].get(asset_name, '') if asset_name else ''
-              if not release_url:
-                  release_url = ctx['html_url']
+              release_url = release_asset_url(ctx, project_name, assembly)
 
               entry = {
                   'name': override.get('name') or heading or project_name,
