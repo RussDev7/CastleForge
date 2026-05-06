@@ -594,12 +594,39 @@ namespace CastleWallsMk2
 
             /// === [Selected Player] ===
 
-            #region Kill Selected Player
+            #region TP Player Here
 
-            Callbacks.OnKillSelectedPlayer = gamer =>
+            Callbacks.OnTpPlayerHere = gamer =>
             {
-                try { KillSelectedPlayer(gamer); } catch { }
-                SendLog($"Killed Selected Player: '{gamer.Gamertag}'");
+                try
+                {
+                    if (PlayerTeleportRuntime.TryTeleportHere(gamer, out string result))
+                        SendLog(result);
+                    else
+                        SendLog("[NonHostTP] " + result);
+                }
+                catch (Exception ex)
+                {
+                    SendLog($"[NonHostTP] Failed: {ex.Message}");
+                }
+            };
+            #endregion
+
+            #region Move Players Spawn
+
+            Callbacks.OnMovePlayersSpawn = gamer =>
+            {
+                try
+                {
+                    if (PlayerTeleportRuntime.TryMovePlayerSpawnHere(gamer, out string result))
+                        SendLog($"[Move Spawn] {result}");
+                    else
+                        SendLog($"[Move Spawn] ERROR: {result}");
+                }
+                catch (Exception ex)
+                {
+                    SendLog($"[Move Spawn] Failed: {ex.Message}");
+                }
             };
             #endregion
 
@@ -609,6 +636,15 @@ namespace CastleWallsMk2
             {
                 try { TpToSelectedPlayer(gamer); } catch { }
                 SendLog($"Teleported To Player: '{gamer.Gamertag}'");
+            };
+            #endregion
+
+            #region Kill Selected Player
+
+            Callbacks.OnKillSelectedPlayer = gamer =>
+            {
+                try { KillSelectedPlayer(gamer); } catch { }
+                SendLog($"Killed Selected Player: '{gamer.Gamertag}'");
             };
             #endregion
 
@@ -719,7 +755,7 @@ namespace CastleWallsMk2
                         loc.Z     - eps);
 
                     // Send 1000x private grenades.
-                    for (int i = 0; i < 10; i++)
+                    for (int i = 0; i < 20; i++)
                         SpawnPrivateGrenade(CastleMinerZGame.Instance.MyNetworkGamer, gamer, desiredPos, Vector3.Down, GrenadeTypeEnum.HE, float.MaxValue);
                 }
                 catch { }
@@ -980,6 +1016,74 @@ namespace CastleWallsMk2
             #endregion
 
             /// === [All Players] ===
+
+            #region TP All Players Here
+
+            Callbacks.OnTpAllHere = () =>
+            {
+                // In-game "Are you sure?" with OK/Cancel.
+                CMZDialogBridge.ShowConfirm(
+                    title:        $"WARNING: TP All Players Here?",
+                    body:         $"This will teleport 'all players' here\n\n" +
+                                  $"Continue?",
+                    onOK:         () => { _teleportAllHere(); },
+                    onCancel:     () => { return; },
+                    showCancel:   true,
+                    preferInGame: true
+                );
+
+                // Close ImGui overlay.
+                ImGuiXnaRenderer.Visible = false;
+
+                void _teleportAllHere()
+                {
+                    try
+                    {
+                        int count = PlayerTeleportRuntime.TeleportAllHere(out string result);
+                        SendLog($"[NonHostTP] {result}");
+                    }
+                    catch (Exception ex)
+                    {
+                        SendLog($"[NonHostTP] Teleport all failed: {ex.Message}");
+                    }
+                }
+            };
+            #endregion
+
+            #region Move World Spawn
+
+            Callbacks.OnMoveWorldSpawn = () =>
+            {
+                // In-game "Are you sure?" with OK/Cancel.
+                CMZDialogBridge.ShowConfirm(
+                    title:        $"WARNING: Move World Spawn?",
+                    body:         $"This will move the spawn for 'all players'\n\n" +
+                                  $"Continue?",
+                    onOK:         () => { _moveWorldSpawn(); },
+                    onCancel:     () => { return; },
+                    showCancel:   true,
+                    preferInGame: true
+                );
+
+                // Close ImGui overlay.
+                ImGuiXnaRenderer.Visible = false;
+
+                void _moveWorldSpawn()
+                {
+                    try
+                    {
+                        if (PlayerTeleportRuntime.TryMoveWorldSpawnHere(out string result))
+                            SendLog($"[Move World Spawn] {result}");
+                        else
+                            SendLog($"[Move World Spawn] ERROR: {result}");
+                    }
+                    catch (Exception ex)
+                    {
+                        SendLog($"[Move World Spawn] Failed: {ex.Message}");
+                    }
+                }
+            };
+            #endregion
 
             #region Kill All Players
 
@@ -3864,6 +3968,10 @@ namespace CastleWallsMk2
                 return;
             }
 
+            // Process pending vanilla teleport inventory restores.
+            // Required for host-safe "Teleport Player Here" / "Teleport All Here".
+            try { PlayerTeleportRuntime.Tick(); } catch { }
+
             // If in-game, update the enum dropdown comboxes.
             if (inGame && !RememberedToggleStore.RememberCombosEnabled)
             {
@@ -5976,7 +6084,7 @@ namespace CastleWallsMk2
                                 InGameHUD.Instance.KillPlayer();
                             }
                             else                                                                                                       // Send damage packet.
-                                for (int i = 0; i < 10; i++)
+                                for (int i = 0; i < 20; i++)
                                     SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);
                         break;
                     }
@@ -5987,7 +6095,7 @@ namespace CastleWallsMk2
             foreach (NetworkGamer networkGamer in CastleMinerZGame.Instance.CurrentNetworkSession.AllGamers)            // Iterate through all network gamers.
                 if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
                     if (((Player)networkGamer.Tag).ValidLivingGamer)                                                    // Ensure the gamer is alive.
-                        for (int i = 0; i < 10; i++)                                                                    // Send damage packet.
+                        for (int i = 0; i < 20; i++)                                                                    // Send damage packet.
                             SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);
             // if (!_godEnabled) InGameHUD.Instance.KillPlayer();
         }
@@ -6245,7 +6353,7 @@ namespace CastleWallsMk2
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { TpToSelectedPlayer    (gamer);                                                                                                            } catch { } // Teleport to player.
             try { await Task.Delay(500);                                                                                                                    } catch { } // Small delay.
-            try { for (int i = 0; i < 10; i++)
+            try { for (int i = 0; i < 20; i++)
                     SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)gamer.Tag).Gamer, DragonTypeEnum.SKELETON);                } catch { } // Send damage packet.
             try { await Task.Delay(10);                                                                                                                     } catch { } // Small delay.
             try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)gamer.Tag, yMinWorld: -64, yMaxWorld: 64, to: gamer);    } catch { } // Corrupt existing position.
@@ -6298,7 +6406,7 @@ namespace CastleWallsMk2
                             try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                             try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
                             try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                            try { for (int i = 0; i < 10; i++)
+                            try { for (int i = 0; i < 20; i++)
                                     SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
                             try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                             try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.
@@ -6316,7 +6424,7 @@ namespace CastleWallsMk2
                             try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                             try { TpToSelectedPlayer(networkGamer);                                                                                                  } catch { } // Teleport to player.
                             try { await Task.Delay(500);                                                                                                             } catch { } // Small delay.
-                            try { for (int i = 0; i < 10; i++)
+                            try { for (int i = 0; i < 20; i++)
                                     SendFireballDamagePrivate(CastleMinerZGame.Instance.MyNetworkGamer, ((Player)networkGamer.Tag).Gamer, DragonTypeEnum.SKELETON);  } catch { } // Send damage packet.
                             try { await Task.Delay(10);                                                                                                              } catch { } // Small delay.
                             try { PlaceFootprintAirTubes(CastleMinerZGame.Instance.MyNetworkGamer, player: (Player)networkGamer.Tag, yMinWorld: -64, yMaxWorld: 64); } catch { } // Corrupt existing position.

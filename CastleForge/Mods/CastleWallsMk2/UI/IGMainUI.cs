@@ -975,6 +975,10 @@ namespace CastleWallsMk2
             public static Action                                              OnKillAllPlayers;
             public static Action                                              OnKillAllMobs;
             public static Action<NetworkGamer>                                OnTpToPlayer;
+            public static Action<NetworkGamer>                                OnTpPlayerHere;
+            public static Action<NetworkGamer>                                OnMovePlayersSpawn;
+            public static Action                                              OnTpAllHere;
+            public static Action                                              OnMoveWorldSpawn;
             public static Action<NetworkGamer>                                OnViewSteamAccount;
             public static Action<NetworkGamer>                                OnRestartSelectedPlayer;
             public static Action                                              OnRestartAllPlayers;
@@ -2246,8 +2250,11 @@ namespace CastleWallsMk2
 
                     ActionSection("Selected Player", disabled: false, draw: CellButton =>
                     {
-                        CellButton("Kill Selected",        () => Callbacks.OnKillSelectedPlayer?.Invoke(SelectedGamer));
+                        CellButton("Teleport Player Here", () => Callbacks.OnTpPlayerHere?.Invoke(SelectedGamer));
+                        CellButton("Move Players Spawn",   () => Callbacks.OnMovePlayersSpawn?.Invoke(SelectedGamer));
+
                         CellButton("Teleport To Player",   () => Callbacks.OnTpToPlayer?.Invoke(SelectedGamer));
+                        CellButton("Kill Selected",        () => Callbacks.OnKillSelectedPlayer?.Invoke(SelectedGamer));
 
                         CellButton("View Steam Account",   () => Callbacks.OnViewSteamAccount?.Invoke(SelectedGamer));
                         CellButton("Give Rand Lootboxes",  () => Callbacks.OnLootboxSelectedPlayer?.Invoke(SelectedGamer));
@@ -2273,8 +2280,11 @@ namespace CastleWallsMk2
 
                     ActionSection("All Players", disabled: false, draw: CellButton =>
                     {
-                        CellButton("Kill All Players",     () => Callbacks.OnKillAllPlayers?.Invoke());
                         CellButton("Restart All Players",  () => Callbacks.OnRestartAllPlayers?.Invoke());
+                        CellButton("Move Players Spawn",   () => Callbacks.OnMoveWorldSpawn?.Invoke());
+
+                        CellButton("Teleport All Here",    () => Callbacks.OnTpAllHere?.Invoke());
+                        CellButton("Kill All Players",     () => Callbacks.OnKillAllPlayers?.Invoke());
 
                         CellButton("Kick All Players",     () => Callbacks.OnKickAllPlayers?.Invoke());
                         CellButton("Freeze All Players",   () => Callbacks.OnFreezeAllPlayers?.Invoke());

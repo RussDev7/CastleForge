@@ -445,8 +445,10 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 
 #### Selected Player
 
-- Kill Selected
+- Teleport Player Here
+- Move Players Spawn
 - Teleport To Player
+- Kill Selected
 - View Steam Account
 - Give Rand Lootboxes
 - Restart Selected
@@ -464,8 +466,10 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 
 #### All Players
 
-- Kill All Players
 - Restart All Players
+- Move Players Spawn
+- Teleport All Here
+- Kill All Players
 - Kick All Players
 - Freeze All Players
 - Crash All Players
@@ -982,6 +986,8 @@ If your goal is to showcase the depth of CastleForge as a platform, this is a st
 - The code injector is intentionally powerful and should be treated as an advanced feature.
 - Several destructive world/session actions are guarded by explicit UI flows or SHIFT confirmation.
 - Camera Settings are local/client-side visual controls. Reset buttons restore Camera XYZ offsets to `0 / 0 / 0` and Camera FOV to the vanilla `73°` default.
+- **Teleport Player Here** and **Teleport All Here** use a vanilla-compatible temporary-spawn + forced-respawn fallback so unmodded clients can be moved. Host mode restores inventories after respawn.
+- **Move Players Spawn** and **Move World Spawn** only update spawn locations and do not kill, respawn, or immediately teleport players.
 
 ---
 
