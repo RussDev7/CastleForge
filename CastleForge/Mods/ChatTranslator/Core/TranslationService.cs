@@ -5,7 +5,6 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Text;
 using System.Net;
 using System.Web;
@@ -17,19 +16,23 @@ using static ModLoader.LogSystem;
 namespace ChatTranslator
 {
     /// <summary>
-    /// Very small wrapper around the Google Translate endpoint.
-    /// Uses a worker Task with a timeout, so the calling thread will block
-    /// at most TranslationTimeoutMs and then fall back to the original text.
+    /// Small wrapper around the Google Translate endpoint.
+    ///
+    /// Important design note:
+    /// ChatTranslationState already calls this service from a worker thread for normal
+    /// incoming/outgoing chat. Do not wrap the HTTP request in another Task and abandon
+    /// it on timeout, because the abandoned request can fail later and spam first-chance
+    /// System.Net / TlsStream exceptions.
     /// </summary>
     internal static class TranslationService
     {
         #region Settings
 
         /// <summary>
-        /// Max time we'll wait for Google to answer (milliseconds).
-        /// If exceeded, we just return the original text.
+        /// Max time the worker thread waits for Google to answer.
+        /// 1000ms was too aggressive and caused frequent fallback/original-text sends.
         /// </summary>
-        public const int TranslationTimeoutMs = 1000;
+        public const int TranslationTimeoutMs = 3500;
 
         /// <summary>
         /// Translation cache size (best-effort). Helps keep repeated chat lines snappy.
@@ -42,12 +45,40 @@ namespace ChatTranslator
         /// </summary>
         public const int NonBlockingWaitBudgetMs = 0;
 
+        /// <summary>
+        /// Prevents a dead/unreachable endpoint from printing the same warning every chat line.
+        /// </summary>
+        private const int NetworkWarningThrottleSeconds = 30;
+
+        private static readonly object _networkWarningLock = new object();
+        private static DateTime _lastNetworkWarningUtc = DateTime.MinValue;
+
+        #endregion
+
+        #region Construction
+
+        static TranslationService()
+        {
+            try
+            {
+                // CastleMiner Z is a .NET Framework game; be explicit so HTTPS works reliably.
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                ServicePointManager.Expect100Continue = false;
+
+                if (ServicePointManager.DefaultConnectionLimit < 8)
+                    ServicePointManager.DefaultConnectionLimit = 8;
+            }
+            catch
+            {
+                // Best-effort only. Translation will still fall back safely if setup fails.
+            }
+        }
         #endregion
 
         #region Public API
 
         /// <summary>
-        /// Simple "known source -> target" translation. Does NOT auto-detect;
+        /// Simple known-source to target translation. Does NOT auto-detect;
         /// use TranslateWithDetection for that.
         /// </summary>
         public static string Translate(string text, string fromLang, string toLang)
@@ -63,18 +94,13 @@ namespace ChatTranslator
 
             try
             {
-                // Run the HTTP call on a background Task and wait with a timeout.
-                var task = Task.Run(() =>
-                    DoTranslate(text, fromLang, toLang));
-
-                if (!task.Wait(TranslationTimeoutMs))
-                {
-                    task.ContinueWith(t => { var _ = t.Exception; },
-                        TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted);
-                    return text; // Timed out - fall back to original.
-                }
-
-                return string.IsNullOrEmpty(task.Result) ? text : task.Result;
+                string result = DoTranslate(text, fromLang, toLang);
+                return string.IsNullOrEmpty(result) ? text : result;
+            }
+            catch (Exception ex) when (IsExpectedNetworkException(ex))
+            {
+                LogNetworkWarning("Translate", ex);
+                return text;
             }
             catch (Exception ex)
             {
@@ -99,21 +125,18 @@ namespace ChatTranslator
 
             try
             {
-                var task = System.Threading.Tasks.Task.Run(() =>
-                    DoTranslateWithDetection(text, targetLang));
-
-                if (!task.Wait(TranslationTimeoutMs))
-                {
-                    task.ContinueWith(t => { var _ = t.Exception; },
-                        TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted);
-                    return text; // Timed out - fall back to original.
-                }
-
-                var result = task.Result;
+                DetectionResult result = DoTranslateWithDetection(text, targetLang);
                 detectedSourceLang = result.SourceLanguage;
+
                 return string.IsNullOrEmpty(result.TranslatedText)
                     ? text
                     : result.TranslatedText;
+            }
+            catch (Exception ex) when (IsExpectedNetworkException(ex))
+            {
+                LogNetworkWarning("TranslateWithDetection", ex);
+                detectedSourceLang = null;
+                return text;
             }
             catch (Exception ex)
             {
@@ -127,27 +150,39 @@ namespace ChatTranslator
         #region Internal HTTP Helpers
 
         /// <summary>
-        /// Simple HTTP GET helper with a hard timeout (ms) so background requests
-        /// can't hang forever and accumulate.
+        /// Simple HTTP GET helper with a hard timeout.
+        /// Returns null on expected transport failures so callers can safely fall back.
         /// </summary>
         private static string DownloadStringWithTimeout(string url)
         {
-            var req = (HttpWebRequest)WebRequest.Create(url);
-            req.Method = "GET";
-            req.Timeout = TranslationTimeoutMs;
-            req.ReadWriteTimeout = TranslationTimeoutMs;
+            HttpWebRequest req;
 
-            using (var resp = (HttpWebResponse)req.GetResponse())
-            using (var stream = resp.GetResponseStream())
-            using (var reader = new StreamReader(stream, Encoding.UTF8))
+            try
             {
-                return reader.ReadToEnd();
+                req = (HttpWebRequest)WebRequest.Create(url);
+                req.Method = "GET";
+                req.Timeout = TranslationTimeoutMs;
+                req.ReadWriteTimeout = TranslationTimeoutMs;
+                req.KeepAlive = false; // Avoid stale pooled TLS connections / disposed TlsStream reuse.
+                req.UserAgent = "CastleForge-ChatTranslator/1.0";
+
+                using (var resp = (HttpWebResponse)req.GetResponse())
+                using (var stream = resp.GetResponseStream())
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+            catch (Exception ex) when (IsExpectedNetworkException(ex))
+            {
+                LogNetworkWarning("Translation HTTP", ex);
+                return null;
             }
         }
 
         /// <summary>
         /// Synchronous worker that performs the actual HTTP GET and parsing.
-        /// Called from a background Task.
+        /// Called from ChatTranslationState's background worker thread during normal chat.
         /// </summary>
         private static string DoTranslate(string text, string fromLang, string toLang)
         {
@@ -180,7 +215,7 @@ namespace ChatTranslator
 
         /// <summary>
         /// Synchronous worker that performs auto-detect + translation.
-        /// Called from a background Task.
+        /// Called from ChatTranslationState's background worker thread during normal chat.
         /// </summary>
         private static DetectionResult DoTranslateWithDetection(string text, string targetLang)
         {
@@ -220,9 +255,58 @@ namespace ChatTranslator
                 SourceLanguage = detected
             };
         }
+        #endregion
+
+        #region Network Failure Handling
 
         /// <summary>
-        /// Very small JSON "string token" extractor for the translate.googleapis result.
+        /// True for expected transient web/TLS/socket failures from the translation endpoint.
+        /// These should fall back to original text instead of looking like mod/game crashes.
+        /// </summary>
+        private static bool IsExpectedNetworkException(Exception ex)
+        {
+            if (ex == null)
+                return false;
+
+            if (ex is WebException)
+                return true;
+
+            if (ex is IOException)
+                return true;
+
+            if (ex is ObjectDisposedException)
+                return true;
+
+            // SocketException lives in System.dll for .NET Framework, but keeping this generic
+            // avoids adding another using and still catches nested socket failures.
+            if (ex.GetType().FullName == "System.Net.Sockets.SocketException")
+                return true;
+
+            return IsExpectedNetworkException(ex.InnerException);
+        }
+
+        /// <summary>
+        /// Logs one compact network warning at most every few seconds.
+        /// </summary>
+        private static void LogNetworkWarning(string operation, Exception ex)
+        {
+            lock (_networkWarningLock)
+            {
+                DateTime now = DateTime.UtcNow;
+                if ((now - _lastNetworkWarningUtc).TotalSeconds < NetworkWarningThrottleSeconds)
+                    return;
+
+                _lastNetworkWarningUtc = now;
+            }
+
+            Log($"ChatTranslator: {operation} timed out or failed; using original text. ({ex.GetType().Name}: {ex.Message})");
+        }
+        #endregion
+
+        #region JSON Helpers
+
+        /// <summary>
+        /// Very small JSON string-token extractor for the translate.googleapis result.
         /// We just walk the response and collect all unescaped "..." sequences.
         /// </summary>
         private static List<string> ExtractStringTokens(string json)
