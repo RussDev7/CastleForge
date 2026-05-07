@@ -2281,7 +2281,7 @@ namespace CastleWallsMk2
                     ActionSection("All Players", disabled: false, draw: CellButton =>
                     {
                         CellButton("Restart All Players",  () => Callbacks.OnRestartAllPlayers?.Invoke());
-                        CellButton("Move Players Spawn",   () => Callbacks.OnMoveWorldSpawn?.Invoke());
+                        CellButton("Move World Spawn",     () => Callbacks.OnMoveWorldSpawn?.Invoke());
 
                         CellButton("Teleport All Here",    () => Callbacks.OnTpAllHere?.Invoke());
                         CellButton("Kill All Players",     () => Callbacks.OnKillAllPlayers?.Invoke());
