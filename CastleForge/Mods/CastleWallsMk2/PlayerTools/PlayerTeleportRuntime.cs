@@ -119,6 +119,26 @@ namespace CastleWallsMk2
 
         #endregion
 
+        #region Local Spawn Restore State
+
+        /// <summary>
+        /// True after this runtime changes the local player's spawn/world spawn
+        /// and needs to restore it when leaving the session.
+        /// </summary>
+        private static bool _restoreLocalSpawnOnLeave;
+
+        /// <summary>
+        /// Original local/static world default spawn captured before Move World Spawn changes it.
+        /// </summary>
+        private static Vector3 _originalWorldDefaultStartLocation;
+
+        /// <summary>
+        /// Original local personal spawn item captured before Move World Spawn changes it.
+        /// </summary>
+        private static BlockInventoryItem _originalLocalSpawnItem;
+
+        #endregion
+
         #region Host Restore State
 
         /// <summary>
@@ -326,22 +346,24 @@ namespace CastleWallsMk2
                 return true;
             }
 
-            // Non-host/test fallback.
-            PlayerInventory destructiveTempPayload =
-                BuildEmptyTeleportInventoryPayload(targetPlayer, destination);
+            // Non-host/test fallback:
+            // Non-hosts cannot read the real remote inventory, so use a clean vanilla starter payload
+            // instead of copying the local player's inventory.
+            PlayerInventory defaultTempPayload =
+                BuildDefaultInventoryPayloadWithSpawn(targetPlayer, destination);
 
-            if (destructiveTempPayload == null)
+            if (defaultTempPayload == null)
             {
-                result = "Failed to build temporary teleport payload.";
+                result = "Failed to build default temporary teleport payload.";
                 return false;
             }
 
-            SendInventoryRetrieveDirect(from, target, destructiveTempPayload, target.Id);
+            SendInventoryRetrieveDirect(from, target, defaultTempPayload, target.Id);
 
             // Silent-style forced death/respawn.
             SendPrivateFireballDamageBurst(from, target, DragonTypeEnum.SKELETON);
 
-            result = $"Started non-host teleport for {target.Gamertag}. WARNING: target inventory is not preserved.";
+            result = $"Started non-host teleport for {target.Gamertag}. WARNING: target inventory is replaced with the default starter inventory.";
             return true;
         }
         #endregion
@@ -421,18 +443,24 @@ namespace CastleWallsMk2
 
             bool localPlayerIsHost = IsLocalHost(game);
 
-            PlayerInventory sourceInventory = localPlayerIsHost
-                ? targetPlayer.PlayerInventory
-                : me.PlayerInventory;
+            PlayerInventory payload;
 
-            if (sourceInventory == null)
+            if (localPlayerIsHost)
             {
-                result = "Source inventory is not available.";
-                return false;
+                // Host can preserve the target's real inventory and only replace the spawn point.
+                payload = BuildInventoryPayloadWithSpawn(
+                    targetPlayer,
+                    targetPlayer.PlayerInventory,
+                    destination);
             }
-
-            PlayerInventory payload =
-                BuildInventoryPayloadWithSpawn(targetPlayer, sourceInventory, destination);
+            else
+            {
+                // Non-host cannot read the target inventory.
+                // Use vanilla starter inventory instead of sending our own inventory.
+                payload = BuildDefaultInventoryPayloadWithSpawn(
+                    targetPlayer,
+                    destination);
+            }
 
             if (payload == null)
             {
@@ -444,7 +472,7 @@ namespace CastleWallsMk2
 
             result = localPlayerIsHost
                 ? $"Moved {target.Gamertag}'s personal spawn. Inventory preserved."
-                : $"Moved {target.Gamertag}'s personal spawn. WARNING: non-host path cannot preserve inventory.";
+                : $"Moved {target.Gamertag}'s personal spawn. WARNING: target inventory is replaced with the default starter inventory.";
 
             return true;
         }
@@ -506,6 +534,10 @@ namespace CastleWallsMk2
                 return false;
 
             Vector3 destination = me.LocalPosition + HereOffset;
+
+            // Save local world/default spawn and local personal spawn before changing them.
+            // This prevents Move World Spawn from leaking into future worlds/sessions.
+            CaptureLocalSpawnRestoreStateIfNeeded(me);
 
             // This updates the local/static default spawn used by this game instance.
             // Vanilla remote clients will not automatically receive this static value,
@@ -679,6 +711,56 @@ namespace CastleWallsMk2
 
             payload.DiscoverRecipies();
             return payload;
+        }
+
+        /// <summary>
+        /// Builds a default starter inventory payload with a replaced personal spawn point.
+        /// </summary>
+        /// <param name="owner">Player object that owns the created inventory payload.</param>
+        /// <param name="destination">Personal spawn destination to assign.</param>
+        /// <returns>A default starter inventory payload, or null if creation failed.</returns>
+        /// <remarks>
+        /// Used by non-host fallback paths.
+        /// Non-hosts cannot read remote inventories, so this avoids sending the local player's inventory
+        /// and instead sends the vanilla-style starter loadout:
+        /// - Stone Pickaxe
+        /// - Compass
+        /// - Pistol
+        /// - Knife
+        /// - 200 Bullets
+        /// - 16 Torches
+        /// </remarks>
+        private static PlayerInventory BuildDefaultInventoryPayloadWithSpawn(Player owner, Vector3 destination)
+        {
+            if (owner == null)
+                return null;
+
+            PlayerInventory payload = new PlayerInventory(owner, false);
+
+            ClearInventoryLayout(payload);
+            AddDefaultStarterInventory(payload);
+
+            payload.InventorySpawnPointTeleport = CreateSpawnPointItem(destination);
+
+            payload.DiscoverRecipies();
+            return payload;
+        }
+
+        /// <summary>
+        /// Adds the vanilla starter inventory items to an inventory payload.
+        /// </summary>
+        /// <param name="inventory">Inventory payload to receive starter items.</param>
+        private static void AddDefaultStarterInventory(PlayerInventory inventory)
+        {
+            if (inventory == null)
+                return;
+
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.StonePickAxe, 1), false);
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.Compass, 1), false);
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.Pistol, 1), false);
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.Knife, 1), false);
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.Bullets, 200), false);
+            inventory.AddInventoryItem(InventoryItem.CreateItem(InventoryItemIDs.Torch, 16), false);
         }
 
         /// <summary>
@@ -1055,6 +1137,63 @@ namespace CastleWallsMk2
             return game != null &&
                    game.MyNetworkGamer != null &&
                    game.MyNetworkGamer.IsHost;
+        }
+
+        /// <summary>
+        /// Captures the local player's spawn state once before changing world/player spawn.
+        /// </summary>
+        private static void CaptureLocalSpawnRestoreStateIfNeeded(Player localPlayer)
+        {
+            if (_restoreLocalSpawnOnLeave)
+                return;
+
+            _originalWorldDefaultStartLocation = WorldInfo.DefaultStartLocation;
+
+            if (localPlayer != null &&
+                localPlayer.PlayerInventory != null)
+            {
+                _originalLocalSpawnItem =
+                    CloneItem(localPlayer.PlayerInventory.InventorySpawnPointTeleport) as BlockInventoryItem;
+            }
+            else
+            {
+                _originalLocalSpawnItem = null;
+            }
+
+            _restoreLocalSpawnOnLeave = true;
+        }
+
+        /// <summary>
+        /// Restores local spawn state when leaving/disconnecting from a world.
+        /// </summary>
+        public static void RestoreLocalSpawnStateOnLeave()
+        {
+            if (!_restoreLocalSpawnOnLeave)
+                return;
+
+            try
+            {
+                WorldInfo.DefaultStartLocation = _originalWorldDefaultStartLocation;
+
+                CastleMinerZGame game = CastleMinerZGame.Instance;
+                Player localPlayer = game != null ? game.LocalPlayer : null;
+
+                if (localPlayer != null &&
+                    localPlayer.PlayerInventory != null)
+                {
+                    localPlayer.PlayerInventory.InventorySpawnPointTeleport =
+                        CloneItem(_originalLocalSpawnItem) as BlockInventoryItem;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                _restoreLocalSpawnOnLeave = false;
+                _originalWorldDefaultStartLocation = Vector3.Zero;
+                _originalLocalSpawnItem = null;
+            }
         }
         #endregion
     }

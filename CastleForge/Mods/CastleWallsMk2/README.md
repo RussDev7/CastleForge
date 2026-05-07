@@ -986,8 +986,10 @@ If your goal is to showcase the depth of CastleForge as a platform, this is a st
 - The code injector is intentionally powerful and should be treated as an advanced feature.
 - Several destructive world/session actions are guarded by explicit UI flows or SHIFT confirmation.
 - Camera Settings are local/client-side visual controls. Reset buttons restore Camera XYZ offsets to `0 / 0 / 0` and Camera FOV to the vanilla `73°` default.
-- **Teleport Player Here** and **Teleport All Here** use a vanilla-compatible temporary-spawn + forced-respawn fallback so unmodded clients can be moved. Host mode restores inventories after respawn.
-- **Move Players Spawn** and **Move World Spawn** only update spawn locations and do not kill, respawn, or immediately teleport players.
+- **Teleport Player Here** and **Teleport All Here** use a vanilla-compatible temporary-spawn + silent forced-respawn fallback so unmodded clients can be moved. Host mode snapshots and restores inventories after respawn.
+- When used as a **non-host**, teleport/spawn fallback tools cannot read remote inventories. Instead of copying your inventory to the target, the fallback sends a default starter inventory: stone pickaxe, compass, pistol, knife, 200 bullets, and 16 torches.
+- **Move Players Spawn** and **Move World Spawn** only update spawn locations and do not kill, damage, respawn, or immediately teleport players.
+- **Move World Spawn** also updates your local world/default spawn for the current session, but CastleWallsMk2 restores your previous local spawn state when you leave or disconnect so it does not leak across worlds.
 
 ---
 

@@ -3861,6 +3861,9 @@ namespace CastleWallsMk2
             // One-time transition: Just LEFT the game -> clean up & disable features.
             if (!inGame && _wasInGame)
             {
+                // Restore local spawn/world-spawn state changed by Move World Spawn.
+                try { PlayerTeleportRuntime.RestoreLocalSpawnStateOnLeave(); } catch { }
+
                 // Always tear down session-local live hooks.
                 try { WeaponExtensions.SetRapidFire(false);     } catch { }
                 try { WeaponExtensions.SetSuperGunStats(false); } catch { }
