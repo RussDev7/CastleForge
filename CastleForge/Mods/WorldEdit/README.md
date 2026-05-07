@@ -996,27 +996,27 @@ After conversion, use this mod's normal schematic flow:
 <summary><strong>Region editing</strong></summary>
 
 | Command | Example | What it does |
-|---|---|---|
-| `/set [block(,array)] (hollow)` | `/set rock` | Sets every block in the selection to a pattern. |
-| `/break (mask block(,array))` | `/break glass` | Breaks matching blocks and drops items. |
-| `/line [block(,array)] (thickness)` | `/line ironwall 2` | Draws a line between selection points. |
-| `/replace [source] [to]` <br> Aliases: `/rep`, `/re` | `/replace dirt grass` | Replaces matching blocks in the selection. |
-| `/allexcept [source] (to)` <br> Alias: `/allex` | `/allexcept bedrock rock` | Replaces everything except the excluded pattern. |
-| `/overlay [replace block(,array)]` | `/overlay snow` | Places a block on top of surfaces in the selection. |
-| `/naturalize` <br> Alias: `/natur` | `/naturalize` | Applies dirt-over-stone naturalization. |
-| `/walls [block(,array)]` | `/walls ironwall` | Builds the four sides of the selection. |
-| `/smooth (iterations)` | `/smooth 2` | Smooths terrain/elevation in the selection. |
-| `/move [amount] (direction)` | `/move 8 posz` | Moves the contents of the selection. |
-| `/stack (amount) (direction) (useAir)` | `/stack 4 posx false` | Repeats the selection contents multiple times. |
-| `/regen (seed)` | `/regen` | Regenerates the contents of the current selection. |
-| `/stretch (amount) (direction) (useAir)` <br> Alias: `/str` | `/stretch 2 up false` | Stretches the selection contents. |
-| `/spell [text\|/paste] [block(,array)] (flip) (rotate)` | `/spell "HELLO" glassstrong false 90` | Builds block text relative to position 1. Can read from clipboard text. |
-| `/hollow (block(,array)) (thickness)` | `/hollow air 1` | Hollows out the selected object/volume. |
-| `/shapefill [block(,array)]` | `/shapefill rock` | Fills inner-most blocks of a shape/object. |
-| `/wrap [replace] (wrap directions) (exclude directions)` | `/wrap glass all down` | Wraps the outer air surface of a shape/object. |
-| `/matrix [radius] [spacing] (snow) (default(,array))` | `/matrix 3 10` | Places your clipboard repeatedly on a matrix/grid. |
-| `/forest [density] (max height) (snow_radius)` | `/forest 20 12` | Generates a forest in the region or around pos1 depending on context. |
-| `/tree (max_height)` | `/tree 10` | Generates a tree at position 1. |
+|-------------------------------------------------------------|---------------------------------------|-------------------------------------------------------------------------|
+| `/set [block(,array)] (hollow)`                             | `/set rock`                           | Sets every block in the selection to a pattern.                         |
+| `/break (mask block(,array))`                               | `/break glass`                        | Breaks matching blocks and drops items.                                 |
+| `/line [block(,array)] (thickness)`                         | `/line ironwall 2`                    | Draws a line between selection points.                                  |
+| `/replace [source] [to]` <br> Aliases: `/rep`, `/re`        | `/replace dirt grass`                 | Replaces matching blocks in the selection.                              |
+| `/allexcept [source] (to)` <br> Alias: `/allex`             | `/allexcept bedrock rock`             | Replaces everything except the excluded pattern.                        |
+| `/overlay [replace block(,array)]`                          | `/overlay snow`                       | Places a block on top of surfaces in the selection.                     |
+| `/naturalize` <br> Alias: `/natur`                          | `/naturalize`                         | Applies dirt-over-stone naturalization.                                 |
+| `/walls [block(,array)]`                                    | `/walls ironwall`                     | Builds the four sides of the selection.                                 |
+| `/smooth (iterations)`                                      | `/smooth 2`                           | Smooths terrain/elevation in the selection.                             |
+| `/move [amount] (direction)`                                | `/move 8 posz`                        | Moves the contents of the selection.                                    |
+| `/stack (amount) (direction) (useAir)`                      | `/stack 4 posx false`                 | Repeats the selection contents multiple times.                          |
+| `/regen (seed)`                                             | `/regen`                              | Regenerates the contents of the current selection.                      |
+| `/stretch (amount) (direction) (useAir)` <br> Alias: `/str` | `/stretch 2 up false`                 | Stretches the selection contents.                                       |
+| `/spell [text\|/paste] [block(,array)] (flip) (rotate)`     | `/spell "HELLO" glassstrong false 90` | Builds block text relative to position 1. Can read from clipboard text. |
+| `/hollow (block(,array)) (thickness)`                       | `/hollow air 1`                       | Hollows out the selected object/volume.                                 |
+| `/shapefill [block(,array)]`                                | `/shapefill rock`                     | Fills inner-most blocks of a shape/object.                              |
+| `/wrap [replace] (wrap directions) (exclude directions)`    | `/wrap glass all down`                | Wraps the outer air surface of a shape/object.                          |
+| `/matrix [radius] [spacing] (snow) (default(,array))`       | `/matrix 3 10`                        | Places your clipboard repeatedly on a matrix/grid.                      |
+| `/forest [density] (max height) (snow_radius)`              | `/forest 20 12`                       | Generates a forest in the region or around pos1 depending on context.   |
+| `/tree (max_height)`                                        | `/tree 10`                            | Generates a tree at position 1.                                         |
 
 ---
 
@@ -1088,10 +1088,11 @@ After conversion, use this mod's normal schematic flow:
 | **/stack**                                                                                                                            | |
 |---------------------------------------------------------------------------------------------------------------------------------------|-|
 | **Description**                | Repeat the contents of the selection.                                                                  |
-| **Usage**                      | `/stack (amount) (direction) (useAir)`                                                                 |
+| **Usage**                      | `/stack (amount) (direction) (useAir) (mask block(,array))`                                            |
 | `(amount)`                     | # of copies to stack.                                                                                  |
 | `(direction)`                  | Direction to stack.                                                                                    |
 | `(useAir)`                     | Retain all air blocks from within the region (_true_ by default).                                      |
+| `(mask block(,array))`         | Optional source-block mask. When provided, only matching blocks from the selection are stacked.        |
 | `Valid Directions:`            | ``[posX\|negX\|posZ\|negZ\|Up\|Down]``                                                                 |
 
 | **/regen**                                                                                                                            | |

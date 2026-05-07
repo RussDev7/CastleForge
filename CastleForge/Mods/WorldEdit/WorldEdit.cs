@@ -237,7 +237,7 @@ namespace WorldEdit
             ("smooth (iterations)",                                                          "Smooth the elevation in the selection."),
             ("move [amount] (direction)",                                                    "Move the contents of the selection."),
             ("regen (seed)",                                                                 "Regenerates the contents of the selection."),
-            ("stack (amount) (direction) (useAir)",                                          "Repeat the contents of the selection."),
+            ("stack (amount) (direction) (useAir) (mask block(,array))",                     "Repeat the contents of the selection."),
             ("stretch (amount) (direction) (useAir)",                                        "Stretch the contents of the selection."),
             ("spell [(\")words(\")(@linebreak)/(/paste)] [block(,array)] (flip) (rotate)",   "Draws a text made of blocks relative to position 1."),
             ("hollow (block(,array)) (thickness)",                                           "Hollows out the object contained in this selection."),
@@ -2792,6 +2792,8 @@ namespace WorldEdit
                 bool useAir = true; // Enabled by default.
                 int stackCount = args.Length > 0 && int.TryParse(args[0], out int s) ? s : 1;
                 Direction stackDirection = Direction.posX;
+                HashSet<int> stackMask = null; // Optional source-block filter: /stack 10 up false goldenwall,diamondwall.
+                string stackMaskPattern = null;
 
                 // If only the amount is provided, use the cursor location to determine the direction.
                 if (args.Length == 1)
@@ -2836,11 +2838,24 @@ namespace WorldEdit
                     }
                 }
 
+                // Optional fourth argument limits what source blocks are stacked.
+                // Example: /stack 10 up false goldwall,diamondwall
+                if (args.Length >= 4 && !string.IsNullOrWhiteSpace(args[3]))
+                {
+                    stackMaskPattern = args[3];
+
+                    int[] stackMaskNumbers = GetClosestEnumValues<DNA.CastleMinerZ.Terrain.BlockTypeEnum>(stackMaskPattern, BlockIDValues);
+                    if (stackMaskNumbers.Length == 0)
+                        return;
+
+                    stackMask = new HashSet<int>(stackMaskNumbers);
+                }
+
                 // Define location data.
                 Region definedRegion = new Region(_pointToLocation1, _pointToLocation2);
 
-                // StackRegion(Region region, Direction facingDirection, int stackCount, bool useAir = true).
-                var stackedBlocks = await StackRegion(definedRegion, stackDirection, stackCount, useAir);
+                // StackRegion(Region region, Direction facingDirection, int stackCount, bool useAir = true, blockMask = null).
+                var stackedBlocks = await StackRegion(definedRegion, stackDirection, stackCount, useAir, stackMask);
 
                 // Save the existing region and clear the upcoming redo.
                 // Extract and save only the vector locations for the initial save.
@@ -2876,12 +2891,13 @@ namespace WorldEdit
 
                 // Stack crate inventories too (container blocks keep their contents).
                 // NOTE: This preserves the user's clipboard (/copy) sidecar.
-                StackCrateContents(definedRegion, stackDirection, stackCount, overwriteExisting: true);
+                StackCrateContents(definedRegion, stackDirection, stackCount, overwriteExisting: true, blockMask: stackMask);
 
                 // Save the builder to new redo.
                 await SaveUndo(redoBuilder);
 
-                SendFeedback($"{stackedBlocks.Count} blocks have been replaced!");
+                string maskText = stackMask == null ? "" : $" matching [{stackMaskPattern}]";
+                Console.WriteLine($"{stackedBlocks.Count} blocks{maskText} have been stacked!");
             }
             catch (Exception ex)
             {
