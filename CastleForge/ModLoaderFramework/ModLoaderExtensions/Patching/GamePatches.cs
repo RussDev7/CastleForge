@@ -3054,12 +3054,503 @@ namespace ModLoaderExt
                     string name = player?.Gamer?.Gamertag ?? "<unknown>";
 
                     // Example:
-                    // SendFeedback($"[NET][DROP] Rejected PlayerUpdateMessage from {name}: invalid {fieldName} = {value}.");
+                    Log($"[NET][DROP] Rejected PlayerUpdateMessage from {name}: Invalid {fieldName} = {value}.");
                 }
                 catch
                 {
                 }
             }
+        }
+        #endregion
+
+        #region BoundsGuard: LocalNetworkGamer Inbound Packet Slice Validation
+
+        /// <summary>
+        /// SUMMARY
+        /// -------
+        /// Guards the lowest-level inbound queueing path used by LocalNetworkGamer so malformed
+        /// packet slices cannot crash the game before higher-level handling gets a chance to run.
+        ///
+        /// Why this exists:
+        /// - Vanilla's slice overload:
+        ///       AppendNewDataPacket(byte[] data, int offset, int length, NetworkGamer sender)
+        ///   ultimately performs a Buffer.BlockCopy using the provided offset/length.
+        /// - If a remote peer supplies an invalid slice (null buffer, negative length, or
+        ///   a declared length that extends past the end of the array), vanilla can throw:
+        ///       System.ArgumentException: Offset and length were out of bounds...
+        ///
+        /// Goal:
+        /// - Drop malformed inbound packet slices safely instead of letting the original
+        ///   BlockCopy path throw on the main networking path.
+        ///
+        /// DESIGN NOTES
+        /// ------------
+        /// • We hook BOTH AppendNewDataPacket overloads:
+        ///     1) AppendNewDataPacket(byte[] data, NetworkGamer sender)
+        ///     2) AppendNewDataPacket(byte[] data, int offset, int length, NetworkGamer sender)
+        ///
+        /// • The full-buffer overload only needs a null check.
+        /// • The slice overload validates:
+        ///     - data != null
+        ///     - offset >= 0
+        ///     - length >= 0
+        ///     - offset <= data.Length
+        ///     - length <= (data.Length - offset)
+        ///
+        /// • On failure:
+        ///     - We log a throttled warning (best-effort, no spam flood).
+        ///     - We return false to skip the original method entirely.
+        ///
+        /// • HarmonyPriority(Priority.First):
+        ///     - This patch should run before other AppendNewDataPacket prefixes so malformed
+        ///       packets are rejected as early as possible.
+        ///
+        /// IMPORTANT
+        /// ---------
+        /// This does NOT replace FloodGuard.
+        /// - BoundsGuard = "Is this packet slice structurally valid?"
+        /// - FloodGuard  = "Is this sender spamming too many packets?"
+        ///
+        /// They complement each other and are intentionally kept separate for clarity.
+        /// </summary>
+        [HarmonyPatch(typeof(LocalNetworkGamer))]
+        internal static class Patch_LocalNetworkGamer_BoundsGuard
+        {
+            #region BoundsGuard - Timing + Validation Helpers
+
+            private static long _lastBadSliceLogTick;
+
+            private static long Now() => Stopwatch.GetTimestamp();
+            private static long SecToTicks(double sec) => (long)(sec * Stopwatch.Frequency);
+
+            /// <summary>
+            /// Returns true only if the provided byte-array slice is safe to copy/read.
+            /// </summary>
+            private static bool IsValidPacketSlice(byte[] data, int offset, int length)
+            {
+                if (data == null)
+                    return false;
+
+                if (offset < 0 || length < 0)
+                    return false;
+
+                if (offset > data.Length)
+                    return false;
+
+                return length <= (data.Length - offset);
+            }
+
+            /// <summary>
+            /// Throttled warning logger for malformed inbound packet slices.
+            /// Logging must never break networking.
+            /// </summary>
+            private static void LogDroppedMalformedPacket(NetworkGamer sender, byte[] data, int offset, int length, string overloadName)
+            {
+                try
+                {
+                    long now = Now();
+
+                    // Throttle to at most ~1 line/sec so a broken sender does not spam logs.
+                    if (now - _lastBadSliceLogTick < SecToTicks(1.0))
+                        return;
+
+                    _lastBadSliceLogTick = now;
+
+                    string gamerTag = sender != null ? sender.Gamertag : "<null>";
+                    string senderId = sender != null ? sender.Id.ToString() : "?";
+                    int dataLen = data != null ? data.Length : -1;
+
+                    Log(
+                        "[NetSliceGuard] Dropped malformed inbound packet slice. " +
+                        $"Overload={overloadName}, " +
+                        $"Sender='{gamerTag}', SenderId={senderId}, " +
+                        $"DataLen={dataLen}, Offset={offset}, Length={length}."
+                    );
+                }
+                catch
+                {
+                    // Never let diagnostics interfere with packet handling.
+                }
+            }
+            #endregion
+
+            #region BoundsGuard - Prefixes
+
+            /// <summary>
+            /// Guards the full-buffer overload.
+            /// This path is structurally simple; only null needs to be rejected.
+            /// </summary>
+            [HarmonyPrefix]
+            [HarmonyPriority(ModLoader.Priority.First)]
+            [HarmonyPatch("AppendNewDataPacket", new[] { typeof(byte[]), typeof(NetworkGamer) })]
+            private static bool Prefix_Append1(byte[] data, NetworkGamer sender)
+            {
+                if (data != null)
+                    return true;
+
+                LogDroppedMalformedPacket(
+                    sender,
+                    data,
+                    0,
+                    -1,
+                    "AppendNewDataPacket(byte[], NetworkGamer)"
+                );
+
+                return false;
+            }
+
+            /// <summary>
+            /// Guards the slice overload used by several forwarding/network-provider paths.
+            /// This is the critical path for preventing Buffer.BlockCopy bounds exceptions.
+            /// </summary>
+            [HarmonyPrefix]
+            [HarmonyPriority(ModLoader.Priority.First)]
+            [HarmonyPatch("AppendNewDataPacket", new[] { typeof(byte[]), typeof(int), typeof(int), typeof(NetworkGamer) })]
+            private static bool Prefix_Append2(byte[] data, int offset, int length, NetworkGamer sender)
+            {
+                if (IsValidPacketSlice(data, offset, length))
+                    return true;
+
+                LogDroppedMalformedPacket(
+                    sender,
+                    data,
+                    offset,
+                    length,
+                    "AppendNewDataPacket(byte[], int, int, NetworkGamer)"
+                );
+
+                return false;
+            }
+            #endregion
+        }
+        #endregion
+
+        #region BoundsGuard: Steam Host-System Payload Validation
+
+        /// <summary>
+        /// SUMMARY
+        /// -------
+        /// Replaces SteamNetworkSessionProvider.HandleHostSystemMessages with a bounds-safe version
+        /// of the vanilla host-system forwarding logic.
+        ///
+        /// Why this exists:
+        /// - LocalNetworkGamer BoundsGuard protects:
+        ///       host.AppendNewDataPacket(data, offset, length, sender)
+        ///
+        /// - However, vanilla Steam host forwarding can still crash BEFORE/AFTER that path when it
+        ///   tries to relay a malformed embedded byte array to other peers:
+        ///       omsg2.Write(data, offset, dataSize)
+        ///
+        /// - If dataSize is larger than the remaining bytes in the inbound SteamNetBuffer, vanilla
+        ///   can throw from:
+        ///       DNA.Net.Lidgren.NetBitWriter.WriteBytes(...)
+        ///
+        /// Goal:
+        /// - Validate the embedded host-system byte-array payload before:
+        ///     1) appending it to the local host gamer, and
+        ///     2) forwarding it to any remote peers.
+        ///
+        /// DESIGN NOTES
+        /// ------------
+        /// • This patch replaces the whole private HandleHostSystemMessages method with a prefix.
+        ///
+        /// • We preserve the vanilla wire behavior:
+        ///     - Opcode 3 = direct peer relay.
+        ///     - Opcode 4 = broadcast-style host relay.
+        ///     - Packet payloads are still encoded as:
+        ///           [int length][length bytes]
+        ///
+        /// • We intentionally copy the payload into a clean byte[] before forwarding.
+        ///   This avoids carrying around unsafe aligned offsets from the inbound buffer.
+        ///
+        /// • We use WriteArray(data) when forwarding.
+        ///   This keeps the declared length tied to the actual byte[] length.
+        ///
+        /// • Invalid packets are dropped, not clamped.
+        ///   Clamping would create truncated gameplay messages and could cause desyncs.
+        ///
+        /// IMPORTANT
+        /// ---------
+        /// This complements the LocalNetworkGamer BoundsGuard:
+        /// - SteamHostSystem BoundsGuard = validates Steam opcode 3/4 embedded payloads before relay.
+        /// - LocalNetworkGamer BoundsGuard = final safety net for packet queueing.
+        /// - FloodGuard = rate-limits structurally valid packets.
+        /// </summary>
+        [HarmonyPatch(typeof(SteamNetworkSessionProvider), "HandleHostSystemMessages")]
+        internal static class Patch_SteamNetworkSessionProvider_HostSystemBoundsGuard
+        {
+            #region HostSystemBoundsGuard - Reflected Fields + Logging State
+
+            private static readonly FieldInfo F_steamAPI =
+                AccessTools.Field(typeof(SteamNetworkSessionProvider), "_steamAPI");
+
+            private static long _lastDropLogTick;
+
+            private static long Now() => Stopwatch.GetTimestamp();
+            private static long SecToTicks(double sec) => (long)(sec * Stopwatch.Frequency);
+
+            #endregion
+
+            #region HostSystemBoundsGuard - Prefix Replacement
+
+            /// <summary>
+            /// Fully handles SteamNetworkSessionProvider.HandleHostSystemMessages.
+            /// Returning false skips the original vanilla method.
+            /// </summary>
+            [HarmonyPrefix]
+            [HarmonyPriority(ModLoader.Priority.First)]
+            private static bool Prefix(SteamNetworkSessionProvider __instance, SteamNetBuffer msg, ref bool __result)
+            {
+                __result = true;
+
+                if (__instance == null || msg == null)
+                    return false;
+
+                if (!(F_steamAPI?.GetValue(__instance) is SteamWorks steamAPI))
+                    return false;
+
+                if (!TryReadByteSafe(msg, out byte opcode))
+                    return false;
+
+                switch (opcode)
+                {
+                    case 3:
+                        HandleOpcode3_DirectRelay(__instance, steamAPI, msg);
+                        return false;
+
+                    case 4:
+                        HandleOpcode4_BroadcastRelay(__instance, steamAPI, msg);
+                        return false;
+
+                    default:
+                        // Vanilla returns true even for unknown host-system opcodes.
+                        return false;
+                }
+            }
+            #endregion
+
+            #region HostSystemBoundsGuard - Opcode Handlers
+
+            /// <summary>
+            /// Opcode 3:
+            ///     [recipientId][deliveryFlags][senderId][int payloadLength][payload]
+            ///
+            /// Vanilla forwards this packet to one target peer.
+            /// </summary>
+            private static void HandleOpcode3_DirectRelay(SteamNetworkSessionProvider provider, SteamWorks steamAPI, SteamNetBuffer msg)
+            {
+
+                if (!TryReadByteSafe(msg, out byte recipientId))
+                    return;
+
+                if (!TryReadByteSafe(msg, out byte flagsByte))
+                    return;
+
+                NetDeliveryMethod flags = (NetDeliveryMethod)flagsByte;
+                NetworkGamer recipient = provider.FindGamerById(recipientId);
+
+                // Preserve vanilla behavior: if the recipient does not exist, do not consume/relay more.
+                if (recipient == null)
+                    return;
+
+                if (!TryReadByteSafe(msg, out byte senderId))
+                    return;
+
+                if (!TryReadPacketPayload(msg, out byte[] data, "opcode=3 direct relay", senderId))
+                    return;
+
+                if (recipient.AlternateAddress == 0UL)
+                    return;
+
+                SteamNetBuffer omsg = steamAPI.AllocSteamNetBuffer();
+
+                omsg.Write(recipientId);
+                omsg.Write(senderId);
+                omsg.WriteArray(data);
+
+                TrySendPacket(steamAPI, omsg, recipient.AlternateAddress, flags, 0);
+            }
+
+            /// <summary>
+            /// Opcode 4:
+            ///     [deliveryFlags][senderId][int payloadLength][payload]
+            ///
+            /// Vanilla appends the packet to the local host gamer and forwards it to all remote
+            /// gamers except the original sender.
+            /// </summary>
+            private static void HandleOpcode4_BroadcastRelay(SteamNetworkSessionProvider provider, SteamWorks steamAPI, SteamNetBuffer msg)
+            {
+                if (!TryReadByteSafe(msg, out byte flagsByte))
+                    return;
+
+                if (!TryReadByteSafe(msg, out byte senderId))
+                    return;
+
+                NetDeliveryMethod flags = (NetDeliveryMethod)flagsByte;
+
+                if (!TryReadPacketPayload(msg, out byte[] data, "opcode=4 broadcast relay", senderId))
+                    return;
+
+                if (!(provider.FindGamerById(0) is LocalNetworkGamer host))
+                    return;
+
+                NetworkGamer sender = provider.FindGamerById(senderId);
+
+                // Use the full-buffer overload so the host never receives an unsafe aligned slice.
+                host.AppendNewDataPacket(data, sender);
+
+                GamerCollection<NetworkGamer> remoteGamers = provider.RemoteGamers;
+                if (remoteGamers == null)
+                    return;
+
+                for (int i = 0; i < remoteGamers.Count; i++)
+                {
+                    NetworkGamer remote = remoteGamers[i];
+                    if (remote == null)
+                        continue;
+
+                    if (remote.Id == senderId)
+                        continue;
+
+                    ulong address = remote.AlternateAddress;
+                    if (address == 0UL)
+                        continue;
+
+                    SteamNetBuffer omsg = steamAPI.AllocSteamNetBuffer();
+
+                    omsg.Write(remote.Id);
+                    omsg.Write(senderId);
+                    omsg.WriteArray(data);
+
+                    TrySendPacket(steamAPI, omsg, address, flags, 0);
+                }
+            }
+            #endregion
+
+            #region HostSystemBoundsGuard - Safe Read / Send Helpers
+
+            /// <summary>
+            /// Safe byte read wrapper.
+            /// </summary>
+            private static bool TryReadByteSafe(SteamNetBuffer msg, out byte value)
+            {
+                value = 0;
+
+                if (msg == null)
+                    return false;
+
+                return msg.ReadByte(out value);
+            }
+
+            /// <summary>
+            /// Reads a vanilla byte-array payload:
+            ///     [int length][payload bytes]
+            ///
+            /// Rejects malformed lengths before any copy or forwarding happens.
+            /// </summary>
+            private static bool TryReadPacketPayload(SteamNetBuffer msg, out byte[] data, string context, byte senderId)
+            {
+                data = null;
+
+                if (msg == null)
+                    return false;
+
+                if (!msg.ReadInt32(out int dataSize))
+                {
+                    LogDroppedMalformedHostPayload(context, senderId, msg, dataSize: 0, reason: "missing length");
+                    return false;
+                }
+
+                if (dataSize < 0)
+                {
+                    LogDroppedMalformedHostPayload(context, senderId, msg, dataSize, "negative length");
+                    return false;
+                }
+
+                int remaining = msg.LengthBytes - msg.PositionInBytes;
+
+                if (dataSize > remaining)
+                {
+                    LogDroppedMalformedHostPayload(context, senderId, msg, dataSize, "declared length exceeds remaining bytes");
+                    return false;
+                }
+
+                if (dataSize == 0)
+                {
+                    data = new byte[0];
+                    return true;
+                }
+
+                if (!msg.ReadBytes(dataSize, out data))
+                {
+                    LogDroppedMalformedHostPayload(context, senderId, msg, dataSize, "ReadBytes failed");
+                    return false;
+                }
+
+                return data != null;
+            }
+
+            /// <summary>
+            /// Sends a SteamNetBuffer without allowing send failures to crash the host update loop.
+            /// SteamWorks.SendPacket owns/recycles the allocated buffer in the vanilla 32-bit path.
+            /// </summary>
+            private static void TrySendPacket(SteamWorks steamAPI, SteamNetBuffer packet, ulong destination, NetDeliveryMethod flags, int channel)
+            {
+                try
+                {
+                    if (steamAPI == null || packet == null || destination == 0UL)
+                        return;
+
+                    steamAPI.SendPacket(packet, destination, flags, channel);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        Log("[SteamPktGuard] SendPacket failed: " + ex.GetType().Name + ": " + ex.Message + ".");
+                    }
+                    catch
+                    {
+                        // Logging must never break networking.
+                    }
+                }
+            }
+            #endregion
+
+            #region HostSystemBoundsGuard - Throttled Diagnostics
+
+            /// <summary>
+            /// Throttled warning logger for malformed Steam host-system byte-array payloads.
+            /// </summary>
+            private static void LogDroppedMalformedHostPayload(string context, byte senderId, SteamNetBuffer msg, int dataSize, string reason)
+            {
+                try
+                {
+                    long now = Now();
+
+                    // Throttle to at most ~1 line/sec.
+                    if (now - _lastDropLogTick < SecToTicks(1.0))
+                        return;
+
+                    _lastDropLogTick = now;
+
+                    int lengthBytes = msg != null ? msg.LengthBytes : -1;
+                    int positionInBytes = msg != null ? msg.PositionInBytes : -1;
+                    int remaining = msg != null ? (msg.LengthBytes - msg.PositionInBytes) : -1;
+
+                    Log(
+                        "[SteamPktGuard] Dropped malformed host-system payload. " +
+                        $"Context={context}, SenderId={senderId}, Reason={reason}, " +
+                        $"DeclaredLength={dataSize}, Remaining={remaining}, " +
+                        $"Position={positionInBytes}, LengthBytes={lengthBytes}."
+                    );
+                }
+                catch
+                {
+                    // Never let diagnostics interfere with packet handling.
+                }
+            }
+            #endregion
         }
         #endregion
 
