@@ -184,6 +184,18 @@ namespace ModLoaderExt
     }
     #endregion
 
+    #region Terrain Rendering
+
+    /// <summary>
+    /// Runtime knobs for terrain render stability patches.
+    /// </summary>
+    internal static class TerrainRenderingConfig
+    {
+        // [TerrainRendering].
+        public static volatile bool StabilizeSelfIlluminatingFancyBlocks = true;
+    }
+    #endregion
+
     #endregion
 
     /// <summary>
@@ -241,6 +253,9 @@ namespace ModLoaderExt
         public bool GenerateSpawnerBlocks  = true;
         public bool AllowSpawnerActivation = true;
         public bool GenerateLootBlocks     = true;
+
+        // [TerrainRendering].
+        public bool StabilizeSelfIlluminatingFancyBlocks = true;
 
         // [Hotkeys].
         // Hotkey to reload this config at runtime.
@@ -338,6 +353,11 @@ namespace ModLoaderExt
                     "; GenerateLootBlocks=false prevents NEW LootBlock / LuckyLootBlock blocks from being placed during terrain generation.",
                     "GenerateLootBlocks     = true",
                     "",
+                    "[TerrainRendering]",
+                    "; Adds normal terrain fallback geometry for self-illuminating fancy blocks",
+                    "; such as Lantern / FixedLantern, without disabling vanilla fancy lighting.",
+                    "StabilizeSelfIlluminatingFancyBlocks = true",
+                    "",
                     "[Hotkeys]",
                     "; Reload this config while in-game:",
                     "ReloadConfig       = Ctrl+Shift+R",
@@ -346,6 +366,7 @@ namespace ModLoaderExt
 
             EnsureMenuItemsDefaults();
             EnsureVanillaSpawnerDefaults();
+            EnsureTerrainRenderingDefaults();
             var ini = SimpleIni.Load(ConfigPath);
 
             var cfg = new MLEConfig
@@ -394,6 +415,9 @@ namespace ModLoaderExt
                 GenerateSpawnerBlocks  = ini.GetBool("VanillaSpawners", "GenerateSpawnerBlocks", true),
                 AllowSpawnerActivation = ini.GetBool("VanillaSpawners", "AllowSpawnerActivation", true),
                 GenerateLootBlocks     = ini.GetBool("VanillaSpawners", "GenerateLootBlocks", true),
+
+                // [TerrainRendering].
+                StabilizeSelfIlluminatingFancyBlocks = ini.GetBool("TerrainRendering", "StabilizeSelfIlluminatingFancyBlocks", true),
 
                 // [Hotkeys].
                 ReloadConfigHotkey = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R"),
@@ -470,6 +494,10 @@ namespace ModLoaderExt
             // [EntityLimits].
             EntityLimiterSystem.LimitEntities     = LimitEntities;
             EntityLimiterSystem.MaxGlobalEntities = MaxGlobalEntities;
+
+            // [TerrainRendering].
+            TerrainRenderingConfig.StabilizeSelfIlluminatingFancyBlocks = StabilizeSelfIlluminatingFancyBlocks;
+            GamePatches.TerrainLightBlockRenderStability.Apply(StabilizeSelfIlluminatingFancyBlocks);
         }
 
         /// <summary>
@@ -558,6 +586,32 @@ namespace ModLoaderExt
                 EnsureIniKeyDefault(lines, "VanillaSpawners", "GenerateSpawnerBlocks", "true", 26);
                 EnsureIniKeyDefault(lines, "VanillaSpawners", "AllowSpawnerActivation", "true", 26);
                 EnsureIniKeyDefault(lines, "VanillaSpawners", "GenerateLootBlocks", "true", 26);
+
+                File.WriteAllLines(ConfigPath, lines.ToArray());
+            }
+            catch
+            {
+                // Do not block config loading if optional default insertion fails.
+            }
+        }
+
+        /// <summary>
+        /// Ensures older ModLoaderExtensions config files include the TerrainRendering section
+        /// and its default render-stability options.
+        /// </summary>
+        private static void EnsureTerrainRenderingDefaults()
+        {
+            try
+            {
+                var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+                EnsureIniKeyDefault(
+                    lines,
+                    "TerrainRendering",
+                    "StabilizeSelfIlluminatingFancyBlocks",
+                    "true",
+                    42
+                );
 
                 File.WriteAllLines(ConfigPath, lines.ToArray());
             }

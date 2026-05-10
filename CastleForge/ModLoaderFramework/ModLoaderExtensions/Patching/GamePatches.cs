@@ -2029,6 +2029,244 @@ namespace ModLoaderExt
 
         #endregion
 
+        #region Terrain Light Block Render Stability
+
+        /// <summary>
+        /// Stabilizes terrain rendering for large WorldEdit-style builds made from self-illuminating
+        /// fancy-lit blocks such as Lantern / FixedLantern.
+        /// 
+        /// Important:
+        /// - This does NOT disable NeedsFancyLighting.
+        /// - Lanterns keep their vanilla fancy/specular appearance.
+        /// - The patch adds a normal opaque fallback face behind self-lit fancy terrain.
+        /// 
+        /// Why:
+        /// Vanilla stores fancy-lit terrain faces in a separate vertex-buffer path. Large bulk edits
+        /// made mostly from lanterns can produce chunks that visually disappear when the fancy path
+        /// fails or becomes stale. Duplicating those faces into the normal terrain path gives the
+        /// renderer a safe opaque fallback without changing the block's intended material settings.
+        /// </summary>
+        internal static class TerrainLightBlockRenderStability
+        {
+            private static bool _loggedFallbackError;
+
+            /// <summary>
+            /// Config apply hook. The Harmony patch reads the config dynamically, so this only logs
+            /// state and requeues visible terrain after reloads.
+            /// </summary>
+            public static void Apply(bool enabled)
+            {
+                TerrainRenderingConfig.StabilizeSelfIlluminatingFancyBlocks = enabled;
+
+                TryRebuildVisibleTerrain();
+
+                Log($"[TerrainRenderStability] Self-illuminating fancy-block fallback is {(enabled ? "enabled" : "disabled")}.");
+            }
+
+            /// <summary>
+            /// Returns true for opaque, self-illuminating terrain blocks that vanilla renders through
+            /// the fancy/specular terrain pass.
+            /// </summary>
+            public static bool ShouldAddNormalFallback(BlockType type)
+            {
+                if (!TerrainRenderingConfig.StabilizeSelfIlluminatingFancyBlocks)
+                    return false;
+
+                if (type == null)
+                    return false;
+
+                // Keep vanilla fancy rendering enabled. This patch only adds a backup normal mesh.
+                if (!type.NeedsFancyLighting)
+                    return false;
+
+                // Only target light-emitting blocks. This avoids duplicating all normal shiny ores/walls.
+                if (type.SelfIllumination <= 0)
+                    return false;
+
+                // The x-ray issue is with opaque terrain. Do not duplicate true alpha/translucent blocks.
+                if (type.LightTransmission != 0 || type.HasAlpha)
+                    return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Adds the same face to the normal vertex path while leaving the original fancy face intact.
+            /// </summary>
+            public static void AddNormalFallbackFace(
+                RenderChunk chunk,
+                IntVector3 chunkLocal,
+                IntVector3 local,
+                BlockFace face,
+                BlockType type,
+                BlockBuildData buildData,
+                int block)
+            {
+                try
+                {
+                    int aoface = 0;
+
+                    BlockTerrain.Instance.FillFaceLightTable(local, face, ref buildData._sun, ref buildData._torch);
+
+                    if (type.LightAsTranslucent)
+                    {
+                        float sl = Block.GetSunLightLevel(block);
+                        float tl = Block.GetTorchLightLevel(block);
+
+                        for (int i = 0; i < 9; i++)
+                        {
+                            buildData._sun[i] = Math.Max(buildData._sun[i], sl);
+                            buildData._torch[i] = Math.Max(buildData._torch[i], tl);
+                        }
+                    }
+
+                    for (int j = 0; j < 9; j++)
+                    {
+                        if (buildData._sun[j] < 0f)
+                        {
+                            if (j < 4)
+                            {
+                                aoface |= 1 << j;
+                            }
+                            else if (j > 4)
+                            {
+                                aoface |= 1 << (j - 1);
+                            }
+                        }
+                    }
+
+                    chunk.FillFaceColors(
+                        ref buildData._vxsun,
+                        ref buildData._vxtorch,
+                        ref buildData._sun,
+                        ref buildData._torch
+                    );
+
+                    for (int k = 0; k < 4; k++)
+                    {
+                        // false = normal/non-fancy terrain vertex buffer.
+                        buildData.AddVertex(
+                            new BlockVertex(
+                                chunkLocal,
+                                face,
+                                k,
+                                type,
+                                buildData._vxsun[k],
+                                buildData._vxtorch[k],
+                                aoface
+                            ),
+                            false
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (!_loggedFallbackError)
+                    {
+                        _loggedFallbackError = true;
+                        LogException(ex, "TerrainLightBlockRenderStability.AddNormalFallbackFace");
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Best-effort visible chunk rebuild so config reloads take effect without requiring a reconnect.
+            /// If called before a world is loaded, this safely does nothing.
+            /// </summary>
+            private static void TryRebuildVisibleTerrain()
+            {
+                try
+                {
+                    BlockTerrain terrain = BlockTerrain.Instance;
+                    if (terrain == null || !terrain.IsReady)
+                        return;
+
+                    FieldInfo poolField = AccessTools.Field(typeof(BlockTerrain), "_computeGeometryPool");
+                    object pool = poolField?.GetValue(terrain);
+                    if (pool == null)
+                        return;
+
+                    MethodInfo addMethod = AccessTools.Method(pool.GetType(), "Add", new[] { typeof(int) });
+                    MethodInfo drainMethod = AccessTools.Method(pool.GetType(), "Drain", Type.EmptyTypes);
+                    if (addMethod == null || drainMethod == null)
+                        return;
+
+                    IntVector3[] offsets = terrain._radiusOrderOffsets;
+                    if (offsets == null || offsets.Length == 0)
+                        return;
+
+                    int eyeChunkIndex = terrain._currentEyeChunkIndex;
+                    IntVector3 baseChunk = new IntVector3(eyeChunkIndex % 24, 0, eyeChunkIndex / 24);
+
+                    bool[] queued = new bool[576];
+
+                    for (int i = 0; i < offsets.Length; i++)
+                    {
+                        IntVector3 chunk = new IntVector3(
+                            baseChunk.X + offsets[i].X,
+                            0,
+                            baseChunk.Z + offsets[i].Z
+                        );
+
+                        if (chunk.X < 0 || chunk.X >= 24 || chunk.Z < 0 || chunk.Z >= 24)
+                            continue;
+
+                        int idx = chunk.X + chunk.Z * 24;
+                        if (queued[idx])
+                            continue;
+
+                        if (terrain._chunks[idx]._action == BlockTerrain.NextChunkAction.WAITING_TO_LOAD)
+                            continue;
+
+                        queued[idx] = true;
+
+                        terrain._chunks[idx]._numUsers.Increment();
+                        addMethod.Invoke(pool, new object[] { idx });
+                    }
+
+                    drainMethod.Invoke(pool, null);
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, "TerrainLightBlockRenderStability.TryRebuildVisibleTerrain");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds normal fallback geometry for self-illuminating fancy terrain faces while preserving
+        /// the original vanilla fancy/specular geometry.
+        /// </summary>
+        [HarmonyPatch(typeof(RenderChunk), nameof(RenderChunk.MakeFace))]
+        [HarmonySilent]
+        internal static class RenderChunk_MakeFace_SelfIlluminatingFancyFallback
+        {
+            private static void Postfix(
+                RenderChunk __instance,
+                IntVector3 iv,
+                IntVector3 chunkLocal,
+                IntVector3 local,
+                BlockFace face,
+                BlockType t,
+                BlockBuildData bd,
+                int block)
+            {
+                if (!TerrainLightBlockRenderStability.ShouldAddNormalFallback(t))
+                    return;
+
+                TerrainLightBlockRenderStability.AddNormalFallbackFace(
+                    __instance,
+                    chunkLocal,
+                    local,
+                    face,
+                    t,
+                    bd,
+                    block
+                );
+            }
+        }
+        #endregion
+
         #region Defensive Hardening & Noise Reduction (Non-Fatal)
 
         /// <summary>

@@ -1015,6 +1015,7 @@ After conversion, use this mod's normal schematic flow:
 | `/shapefill [block(,array)]`                                | `/shapefill rock`                     | Fills inner-most blocks of a shape/object.                              |
 | `/wrap [replace] (wrap directions) (exclude directions)`    | `/wrap glass all down`                | Wraps the outer air surface of a shape/object.                          |
 | `/matrix [radius] [spacing] (snow) (default(,array))`       | `/matrix 3 10`                        | Places your clipboard repeatedly on a matrix/grid.                      |
+| `/maze [block(,array)] (space) (multiFloor)`                | `/maze rock 2 true`                   | Generates a maze inside the selected region.                            |
 | `/forest [density] (max height) (snow_radius)`              | `/forest 20 12`                       | Generates a forest in the region or around pos1 depending on context.   |
 | `/tree (max_height)`                                        | `/tree 10`                            | Generates a tree at position 1.                                         |
 
@@ -1088,11 +1089,10 @@ After conversion, use this mod's normal schematic flow:
 | **/stack**                                                                                                                            | |
 |---------------------------------------------------------------------------------------------------------------------------------------|-|
 | **Description**                | Repeat the contents of the selection.                                                                  |
-| **Usage**                      | `/stack (amount) (direction) (useAir) (mask block(,array))`                                            |
+| **Usage**                      | `/stack (amount) (direction) (useAir)`                                                                 |
 | `(amount)`                     | # of copies to stack.                                                                                  |
 | `(direction)`                  | Direction to stack.                                                                                    |
 | `(useAir)`                     | Retain all air blocks from within the region (_true_ by default).                                      |
-| `(mask block(,array))`         | Optional source-block mask. When provided, only matching blocks from the selection are stacked.        |
 | `Valid Directions:`            | ``[posX\|negX\|posZ\|negZ\|Up\|Down]``                                                                 |
 
 | **/regen**                                                                                                                            | |
@@ -1151,12 +1151,20 @@ After conversion, use this mod's normal schematic flow:
 | `(snow)`                       | Place the clipboard on ground level.                                                                   |
 | `(default(,array))`            | The pattern of blocks to replace the clipboard with.                                                   |
 
+| **/maze**                                                                                                                             | |
+|---------------------------------------------------------------------------------------------------------------------------------------|-|
+| **Description**                | Generates a maze inside the selected region. Supports single-floor and multi-floor maze layouts.       |
+| **Usage**                      | `/maze [block(,array)] (space) (multiFloor)`                                                           |
+| `[block(,array)]`              | The wall pattern to build the maze from.                                                               |
+| `(space)`                      | Corridor width. Defaults to `1`. Larger values make wider paths and use fewer maze cells.              |
+| `(multiFloor)`                 | `true` / `false`. If `true`, builds stacked maze floors when the selected region is tall enough.       |
+
 | **/forest**                                                                                                                           | |
 |---------------------------------------------------------------------------------------------------------------------------------------|-|
 | **Description**                | Make a forest within the region, or in a circle around pos1.                                           |
 | **Usage**                      | `/forest [density] (max height) (snow_radius)`                                                         |
 | `[density]`                    | The density of the forest.                                                                             |
-| `(max height)`                 | The max tree height _(default: 8)_.                                                                       |
+| `(max height)`                 | The max tree height _(default: 8)_.                                                                    |
 | `(snow_radius)`                | Places trees in a circular radius around position 1 instead of using a region.                         |
 
 | **/tree**                                                                                                                             | |

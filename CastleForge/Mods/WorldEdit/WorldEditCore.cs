@@ -3057,6 +3057,7 @@ namespace WorldEdit
         /// 'FloodFill'
         /// 'Wrap'
         /// 'Matrix'
+        /// 'Maze'
         /// 'Forest'
         /// 'Tree'
         ///
@@ -5224,6 +5225,404 @@ namespace WorldEdit
                 }
             }
             return WorldHeights.MinY; // Return the lowest world level.
+        }
+        #endregion
+
+        #region Maze
+
+        /// <summary>
+        /// Builds a maze edit plan inside the selected region.
+        /// 
+        /// Behavior:
+        /// - Fills the selected region with the chosen wall block pattern.
+        /// - Carves maze paths back to AirID.
+        /// - Uses as many full maze cells as the X/Z region allows.
+        /// - If multiFloor is true, stacks maze floors vertically and connects them with air shafts.
+        /// 
+        /// Notes:
+        /// - "space" means corridor width.
+        /// - Single-floor mode uses the full selected Y height as wall height.
+        /// - Multi-floor mode uses 1 block for floor/ceiling and 3 blocks of walkable height per floor.
+        /// </summary>
+        public static Task<HashSet<Tuple<Vector3, int>>> MakeMazeRegion(
+            Region region,
+            int[] wallPattern,
+            int space = 1,
+            bool multiFloor = false,
+            CancellationToken ct = default)
+        {
+            return Task.Run(() =>
+            {
+                Dictionary<Vector3, int> edits = new Dictionary<Vector3, int>();
+
+                if (wallPattern == null || wallPattern.Length == 0)
+                    return new HashSet<Tuple<Vector3, int>>();
+
+                int minX = (int)region.Position1.X;
+                int minY = Math.Max((int)region.Position1.Y, WorldHeights.MinY);
+                int minZ = (int)region.Position1.Z;
+
+                int maxX = (int)region.Position2.X;
+                int maxY = Math.Min((int)region.Position2.Y, WorldHeights.MaxY);
+                int maxZ = (int)region.Position2.Z;
+
+                if (minY > maxY)
+                    return new HashSet<Tuple<Vector3, int>>();
+
+                int sizeX = maxX - minX + 1;
+                int sizeY = maxY - minY + 1;
+                int sizeZ = maxZ - minZ + 1;
+
+                // Need at least boundary-wall, path, boundary-wall.
+                if (sizeX < 3 || sizeZ < 3)
+                    return new HashSet<Tuple<Vector3, int>>();
+
+                // Clamp path width so at least one maze cell can fit.
+                int pathWidth = Math.Max(1, space);
+                int maxPathWidth = Math.Max(1, Math.Min(sizeX, sizeZ) - 2);
+                pathWidth = Math.Min(pathWidth, maxPathWidth);
+
+                // Maze formula:
+                // totalUsed = cells * pathWidth + internalWalls + boundaryWalls
+                //           = cells * pathWidth + (cells - 1) + 2
+                //           = cells * (pathWidth + 1) + 1
+                int cellsX = Math.Max(1, (sizeX - 1) / (pathWidth + 1));
+                int cellsZ = Math.Max(1, (sizeZ - 1) / (pathWidth + 1));
+
+                int usedX = cellsX * (pathWidth + 1) + 1;
+                int usedZ = cellsZ * (pathWidth + 1) + 1;
+
+                // Center the usable maze footprint inside the selected region.
+                // Without this, any leftover space is pushed to maxX/maxZ,
+                // which makes the far/top side look cut off when the region size
+                // does not perfectly match the maze grid formula.
+                int offsetX = (sizeX - usedX) / 2;
+                int offsetZ = (sizeZ - usedZ) / 2;
+
+                int mazeMinX = minX + offsetX;
+                int mazeMinZ = minZ + offsetZ;
+
+                int mazeMaxX = mazeMinX + usedX - 1;
+                int mazeMaxZ = mazeMinZ + usedZ - 1;
+
+                // Multi-floor settings.
+                // Layout per full floor:
+                // - 1 solid floor layer
+                // - 3 walkable air layers
+                // The final maze also reserves 1 extra solid roof layer.
+                const int walkHeight = 3;
+                const int floorThickness = 1;
+                const int roofThickness = 1;
+
+                // Distance from one floor layer to the next floor layer.
+                // Example: floor at Y0, air Y1-Y3, next floor at Y4.
+                const int floorSpan = walkHeight + floorThickness;
+
+                int floorCount = 1;
+
+                // These are the only Y levels the maze is allowed to modify.
+                // Any leftover top height that cannot fit another complete roofed floor is ignored.
+                int usedMinY = minY;
+                int usedMaxY = maxY;
+
+                if (multiFloor)
+                {
+                    int minimumRoofedFloorHeight = floorSpan + roofThickness;
+
+                    if (sizeY >= minimumRoofedFloorHeight)
+                    {
+                        // Reserve one final roof block, then use as many complete floor spans as fit.
+                        //
+                        // Example:
+                        // sizeY=8  -> 1 floor + roof, 3 top blocks untouched.
+                        // sizeY=9  -> 2 floors + roof.
+                        // sizeY=10 -> 2 floors + roof, 1 top block untouched.
+                        floorCount = Math.Max(1, (sizeY - roofThickness) / floorSpan);
+
+                        // Inclusive top Y of the used maze.
+                        // This lands on the final roof layer.
+                        usedMaxY = minY + (floorCount * floorSpan);
+                    }
+                    else
+                    {
+                        // Region is too short for a full 3-high floor plus roof.
+                        // Build one shorter roofed floor using only the selected height.
+                        floorCount = 1;
+                        usedMaxY = maxY;
+                    }
+                }
+
+                // Local setter keeps only the final state for each block position.
+                void SetEdit(int x, int y, int z, int blockId)
+                {
+                    if (y < WorldHeights.MinY || y > WorldHeights.MaxY)
+                        return;
+
+                    edits[new Vector3(x, y, z)] = blockId;
+                }
+
+                // Fill only the actual maze footprint.
+                // This prevents unused X/Z buffer space and leftover top Y space from being modified.
+                for (int y = usedMinY; y <= usedMaxY; y++)
+                {
+                    for (int x = mazeMinX; x <= mazeMaxX; x++)
+                    {
+                        for (int z = mazeMinZ; z <= mazeMaxZ; z++)
+                        {
+                            SetEdit(x, y, z, WorldUtils.GetRandomBlockFromPattern(wallPattern));
+                        }
+                    }
+                }
+
+                // Build each floor.
+                for (int floor = 0; floor < floorCount; floor++)
+                {
+                    bool[,] openMap = BuildMazeOpenMap(cellsX, cellsZ, pathWidth, usedX, usedZ, floor);
+
+                    int airStartY;
+                    int airEndY;
+
+                    if (multiFloor)
+                    {
+                        int floorY = minY + (floor * floorSpan);
+
+                        // floorY stays solid.
+                        // The final roof layer also stays solid, so never carve through usedMaxY.
+                        airStartY = floorY + floorThickness;
+                        airEndY = Math.Min(floorY + walkHeight, usedMaxY - roofThickness);
+                    }
+                    else
+                    {
+                        // Single-floor mode carves the whole selected height.
+                        airStartY = minY;
+                        airEndY = maxY;
+                    }
+
+                    for (int y = airStartY; y <= airEndY; y++)
+                    {
+                        for (int localX = 0; localX < usedX; localX++)
+                        {
+                            for (int localZ = 0; localZ < usedZ; localZ++)
+                            {
+                                if (!openMap[localX, localZ])
+                                    continue;
+
+                                SetEdit(mazeMinX + localX, y, mazeMinZ + localZ, AirID);
+                            }
+                        }
+                    }
+
+                    // Entrance on the first floor.
+                    if (floor == 0)
+                    {
+                        int entranceX = 1;
+                        int entranceZ = 0;
+
+                        for (int y = airStartY; y <= airEndY; y++)
+                        {
+                            for (int dx = 0; dx < pathWidth; dx++)
+                            {
+                                SetEdit(mazeMinX + entranceX + dx, y, mazeMinZ + entranceZ, AirID);
+                            }
+                        }
+                    }
+
+                    // Exit on the last floor.
+                    if (floor == floorCount - 1)
+                    {
+                        int exitCellX = cellsX - 1;
+                        int exitCellZ = cellsZ - 1;
+
+                        int exitX = 1 + exitCellX * (pathWidth + 1);
+                        int exitZ = usedZ - 1;
+
+                        for (int y = airStartY; y <= airEndY; y++)
+                        {
+                            for (int dx = 0; dx < pathWidth; dx++)
+                            {
+                                SetEdit(mazeMinX + exitX + dx, y, mazeMinZ + exitZ, AirID);
+                            }
+                        }
+                    }
+                }
+
+                // Connect multi-floor mazes with vertical shafts.
+                if (multiFloor && floorCount > 1)
+                {
+                    for (int floor = 0; floor < floorCount - 1; floor++)
+                    {
+                        // Alternate shaft corners so floors are not connected in the same exact spot every time.
+                        int shaftCellX = (floor % 2 == 0) ? cellsX - 1 : 0;
+                        int shaftCellZ = (floor % 2 == 0) ? cellsZ - 1 : 0;
+
+                        int shaftLocalX = 1 + shaftCellX * (pathWidth + 1);
+                        int shaftLocalZ = 1 + shaftCellZ * (pathWidth + 1);
+
+                        int shaftStartY = minY + (floor * floorSpan) + floorThickness;
+                        int shaftEndY = Math.Min(minY + ((floor + 1) * floorSpan) + walkHeight, usedMaxY - roofThickness);
+
+                        for (int y = shaftStartY; y <= shaftEndY; y++)
+                        {
+                            for (int dx = 0; dx < pathWidth; dx++)
+                            {
+                                for (int dz = 0; dz < pathWidth; dz++)
+                                {
+                                    SetEdit(mazeMinX + shaftLocalX + dx, y, mazeMinZ + shaftLocalZ + dz, AirID);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HashSet<Tuple<Vector3, int>> result = new HashSet<Tuple<Vector3, int>>();
+
+                foreach (KeyValuePair<Vector3, int> edit in edits)
+                {
+                    result.Add(new Tuple<Vector3, int>(edit.Key, edit.Value));
+                }
+
+                return result;
+            }, ct);
+        }
+
+        /// <summary>
+        /// Creates a 2D X/Z open-path map for one maze floor.
+        /// False = wall.
+        /// True  = open path.
+        /// </summary>
+        private static bool[,] BuildMazeOpenMap(
+            int cellsX,
+            int cellsZ,
+            int pathWidth,
+            int usedX,
+            int usedZ,
+            int floorSeedOffset)
+        {
+            bool[,] visited = new bool[cellsX, cellsZ];
+
+            // Passage from cell to +X neighbor.
+            bool[,] eastOpen = new bool[cellsX, cellsZ];
+
+            // Passage from cell to +Z neighbor.
+            bool[,] southOpen = new bool[cellsX, cellsZ];
+
+            Random rng = new Random(unchecked(Environment.TickCount + floorSeedOffset * 7919 + cellsX * 397 + cellsZ * 101));
+
+            Stack<Tuple<int, int>> stack = new Stack<Tuple<int, int>>();
+            visited[0, 0] = true;
+            stack.Push(new Tuple<int, int>(0, 0));
+
+            while (stack.Count > 0)
+            {
+                Tuple<int, int> current = stack.Peek();
+
+                int cx = current.Item1;
+                int cz = current.Item2;
+
+                List<int> directions = new List<int> { 0, 1, 2, 3 };
+                ShuffleMazeDirections(directions, rng);
+
+                bool moved = false;
+
+                foreach (int direction in directions)
+                {
+                    int nx = cx;
+                    int nz = cz;
+
+                    switch (direction)
+                    {
+                        case 0: nx = cx + 1; break; // East.
+                        case 1: nx = cx - 1; break; // West.
+                        case 2: nz = cz + 1; break; // South.
+                        case 3: nz = cz - 1; break; // North.
+                    }
+
+                    if (nx < 0 || nx >= cellsX || nz < 0 || nz >= cellsZ)
+                        continue;
+
+                    if (visited[nx, nz])
+                        continue;
+
+                    // Open wall between current and neighbor.
+                    if (nx == cx + 1)
+                        eastOpen[cx, cz] = true;
+                    else if (nx == cx - 1)
+                        eastOpen[nx, nz] = true;
+                    else if (nz == cz + 1)
+                        southOpen[cx, cz] = true;
+                    else if (nz == cz - 1)
+                        southOpen[nx, nz] = true;
+
+                    visited[nx, nz] = true;
+                    stack.Push(new Tuple<int, int>(nx, nz));
+                    moved = true;
+                    break;
+                }
+
+                if (!moved)
+                    stack.Pop();
+            }
+
+            bool[,] openMap = new bool[usedX, usedZ];
+
+            for (int cellX = 0; cellX < cellsX; cellX++)
+            {
+                for (int cellZ = 0; cellZ < cellsZ; cellZ++)
+                {
+                    int pathX = 1 + cellX * (pathWidth + 1);
+                    int pathZ = 1 + cellZ * (pathWidth + 1);
+
+                    // Open the cell body.
+                    MarkMazeRect(openMap, pathX, pathZ, pathWidth, pathWidth);
+
+                    // Open passage to +X neighbor.
+                    if (eastOpen[cellX, cellZ])
+                    {
+                        MarkMazeRect(openMap, pathX + pathWidth, pathZ, 1, pathWidth);
+                    }
+
+                    // Open passage to +Z neighbor.
+                    if (southOpen[cellX, cellZ])
+                    {
+                        MarkMazeRect(openMap, pathX, pathZ + pathWidth, pathWidth, 1);
+                    }
+                }
+            }
+
+            return openMap;
+        }
+
+        /// <summary>
+        /// Marks a rectangle in the 2D maze map as open path.
+        /// </summary>
+        private static void MarkMazeRect(bool[,] openMap, int startX, int startZ, int width, int depth)
+        {
+            int maxX = openMap.GetLength(0);
+            int maxZ = openMap.GetLength(1);
+
+            for (int x = startX; x < startX + width; x++)
+            {
+                for (int z = startZ; z < startZ + depth; z++)
+                {
+                    if (x < 0 || x >= maxX || z < 0 || z >= maxZ)
+                        continue;
+
+                    openMap[x, z] = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fisher-Yates shuffle for maze neighbor order.
+        /// </summary>
+        private static void ShuffleMazeDirections(List<int> directions, Random rng)
+        {
+            for (int i = directions.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+
+                (directions[j], directions[i]) = (directions[i], directions[j]);
+            }
         }
         #endregion
 

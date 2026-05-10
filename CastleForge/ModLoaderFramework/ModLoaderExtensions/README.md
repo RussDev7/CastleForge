@@ -26,6 +26,7 @@ On top of that, ModLoaderExtensions also improves the game’s foundation with:
 - safer networking behavior
 - stronger chat and gamertag protections
 - fullscreen recovery improvements
+- terrain rendering stability for large self-illuminating light-block builds
 - cleaner in-game text input behavior
 - developer helpers for embedded dependencies and resource extraction
 - defensive crash resistance around fragile vanilla code paths
@@ -80,15 +81,16 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 <summary><strong>Frame-loop, fullscreen, and rendering recovery</strong></summary>
 
 | Area | Patch / system | Type | What it changes |
-|----------------------|--------------------------------------------------------------|-----|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Frame-loop stability | Update / HUD draw / terrain draw finalizers                  | Fix | Adds non-fatal guards around `CastleMinerZGame.Update`, `InGameHUD.OnDraw`, and `BlockTerrain.Draw` so unexpected exceptions do not kill the frame loop. |
-| Fullscreen recovery  | Defer terrain vertex-buffer builds while inactive fullscreen | Fix | Prevents fragile terrain buffer rebuilds from firing while the game is inactive in exclusive fullscreen.                                                 |
-| Fullscreen recovery  | Focus-regain terrain rebuild pass                            | Fix | Performs a visible-ring terrain recovery pass when focus returns so alt-tabbed fullscreen sessions do not come back with invisible or stale chunks.      |
-| Fullscreen recovery  | Defer kick teardown while inactive fullscreen                | Fix | Holds kick-message teardown until focus is restored so hidden fullscreen transitions are less brittle.                                                   |
-| Fullscreen recovery  | Defer / finalize session-ended teardown on focus regain      | Fix | Delays session-end teardown while inactive fullscreen, then safely completes it after the game regains focus.                                            |
-| Defensive hardening  | Safe player profile callback                                 | Fix | Guards fragile profile callback logic so callback-side nulls or edge-case failures do not cascade into bigger crashes.                                   |
-| Defensive hardening  | Safe particle draw                                           | Fix | Swallows known non-fatal particle draw null-reference failures instead of letting them kill rendering.                                                   |
-| Rendering stability  | Safe inventory icon atlas recovery                           | Fix | Rebuilds disposed/stale `RenderTarget2D` item atlases during `InventoryItem.FinishInitialization` instead of reusing broken render targets.              |
+|----------------------|--------------------------------------------------------------|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Frame-loop stability | Update / HUD draw / terrain draw finalizers                  | Fix | Adds non-fatal guards around `CastleMinerZGame.Update`, `InGameHUD.OnDraw`, and `BlockTerrain.Draw` so unexpected exceptions do not kill the frame loop.     |
+| Fullscreen recovery  | Defer terrain vertex-buffer builds while inactive fullscreen | Fix | Prevents fragile terrain buffer rebuilds from firing while the game is inactive in exclusive fullscreen.                                                     |
+| Fullscreen recovery  | Focus-regain terrain rebuild pass                            | Fix | Performs a visible-ring terrain recovery pass when focus returns so alt-tabbed fullscreen sessions do not come back with invisible or stale chunks.          |
+| Fullscreen recovery  | Defer kick teardown while inactive fullscreen                | Fix | Holds kick-message teardown until focus is restored so hidden fullscreen transitions are less brittle.                                                       |
+| Fullscreen recovery  | Defer / finalize session-ended teardown on focus regain      | Fix | Delays session-end teardown while inactive fullscreen, then safely completes it after the game regains focus.                                                |
+| Rendering stability  | Self-illuminating fancy-block fallback                       | Fix | Adds normal terrain fallback geometry for opaque self-illuminating fancy blocks such as Lantern / FixedLantern while keeping vanilla fancy lighting enabled. |
+| Defensive hardening  | Safe player profile callback                                 | Fix | Guards fragile profile callback logic so callback-side nulls or edge-case failures do not cascade into bigger crashes.                                       |
+| Defensive hardening  | Safe particle draw                                           | Fix | Swallows known non-fatal particle draw null-reference failures instead of letting them kill rendering.                                                       |
+| Rendering stability  | Safe inventory icon atlas recovery                           | Fix | Rebuilds disposed/stale `RenderTarget2D` item atlases during `InventoryItem.FinishInitialization` instead of reusing broken render targets.                  |
 
 </details>
 
@@ -180,6 +182,7 @@ That makes it one of the most important "always-on" core mods in the CastleForge
 - safer handling around certain send/receive/network exceptions
 - guarded message decode and dispatch paths
 - fullscreen alt-tab terrain recovery
+- normal terrain fallback geometry for large self-illuminating fancy-block builds, such as lantern mazes
 - deferred fullscreen session-end / kick teardown so hidden fullscreen transitions are less brittle
 - protection against stale inventory icon atlas render targets
 - non-fatal guards around fragile particle draw and profile callback paths
@@ -365,7 +368,36 @@ This directly targets the frustrating class of bugs where fullscreen focus chang
 </details>
 
 <details>
-<summary><strong>5) Defensive hardening for fragile vanilla paths</strong></summary>
+<summary><strong>5) Terrain rendering stability for light blocks</strong></summary>
+
+### What it does
+
+ModLoaderExtensions adds a render-stability fallback for opaque self-illuminating fancy blocks, such as `Lantern` and `FixedLantern`.
+
+### Included protection
+
+- keeps vanilla fancy lighting enabled
+- adds normal terrain fallback geometry behind affected light-block faces
+- reduces invisible or x-ray-like chunk sections caused by large bulk edits made from light blocks
+- can be toggled through `[TerrainRendering]`
+
+### Why it matters
+
+Some vanilla light-emitting terrain blocks use a special fancy/specular terrain path. In normal gameplay this is fine, but very large edits made mostly from those blocks can expose fragile chunk-rendering behavior and make sections of the build appear fully transparent.
+
+This fallback keeps the normal lantern appearance while giving the renderer a safer opaque backup path.
+
+### Config
+
+```ini
+[TerrainRendering]
+StabilizeSelfIlluminatingFancyBlocks = true
+```
+
+</details>
+
+<details>
+<summary><strong>6) Defensive hardening for fragile vanilla paths</strong></summary>
 
 ### Included protections
 
@@ -380,7 +412,7 @@ These are the kinds of annoying low-level issues that can produce rare crashes, 
 </details>
 
 <details>
-<summary><strong>6) Network flood control and packet hardening</strong></summary>
+<summary><strong>7) Network flood control and packet hardening</strong></summary>
 
 ### Included protections
 
@@ -405,7 +437,7 @@ This is the "defensive shell" portion of the mod. It helps the game survive malf
 </details>
 
 <details>
-<summary><strong>7) Vanilla world generation controls</strong></summary>
+<summary><strong>8) Vanilla world generation controls</strong></summary>
 
 ### What it does
 
@@ -444,7 +476,7 @@ GenerateLootBlocks     = false
 </details>
 
 <details>
-<summary><strong>8) Steam host compatibility and migration guardrails</strong></summary>
+<summary><strong>9) Steam host compatibility and migration guardrails</strong></summary>
 
 ### Included protections
 
@@ -463,7 +495,7 @@ This is one of the most interesting parts of the mod. It targets broken or modde
 </details>
 
 <details>
-<summary><strong>9) Gamertag integrity and chat sanitization</strong></summary>
+<summary><strong>10) Gamertag integrity and chat sanitization</strong></summary>
 
 ### Included protections
 
@@ -484,7 +516,7 @@ This is not just censorship. It is readability and trust protection. It keeps th
 </details>
 
 <details>
-<summary><strong>10) Menu and text-input quality-of-life</strong></summary>
+<summary><strong>11) Menu and text-input quality-of-life</strong></summary>
 
 ### Included improvements
 
@@ -540,16 +572,17 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 ### Default config sections
 
 | Section | Purpose |
-|-------------------------|--------------------------------------------------------------|
-| `[Ads]`                 | Main menu ad visibility behavior.                            |
-| `[MenuItems]`           | Main menu bottom-left button visibility behavior.            |
-| `[FloodGuard]`          | Inbound packet rate limiting and blackhole behavior.         |
-| `[FloodGuardAllowlist]` | Allowed message types and allowlist packet rate limits.      |
-| `[PickupThrottle]`      | Local pickup request throttling.                             |
-| `[ChatProtections]`     | Gamertag sanitization, anti-impersonation, newline handling. |
-| `[EntityLimits]`        | Global entity limiting.                                      |
-| `[VanillaSpawners]`     | Vanilla spawner and random loot block generation behavior.   |
-| `[Hotkeys]`             | Runtime config reload hotkey.                                |
+|-------------------------|-----------------------------------------------------------------|
+| `[Ads]`                 | Main menu ad visibility behavior.                               |
+| `[MenuItems]`           | Main menu bottom-left button visibility behavior.               |
+| `[FloodGuard]`          | Inbound packet rate limiting and blackhole behavior.            |
+| `[FloodGuardAllowlist]` | Allowed message types and allowlist packet rate limits.         |
+| `[PickupThrottle]`      | Local pickup request throttling.                                |
+| `[ChatProtections]`     | Gamertag sanitization, anti-impersonation, newline handling.    |
+| `[EntityLimits]`        | Global entity limiting.                                         |
+| `[VanillaSpawners]`     | Vanilla spawner and random loot block generation behavior.      |
+| `[TerrainRendering]`    | Terrain rendering stability for self-illuminating fancy blocks. |
+| `[Hotkeys]`             | Runtime config reload hotkey.                                   |
 
 ### Config reference
 
@@ -580,6 +613,7 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.                        |
 | `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.                      |
 | `GenerateLootBlocks` in `[VanillaSpawners]`       | `true`                                      | Allows newly generated terrain to place vanilla `LootBlock` / `LuckyLootBlock` blocks. |
+| `StabilizeSelfIlluminatingFancyBlocks`            | `true`                                      | Adds normal terrain fallback geometry for opaque self-illuminating fancy blocks.       |
 | `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                                    |
 
 ### Default config template
@@ -671,6 +705,11 @@ AllowSpawnerActivation = true
 ; false prevents NEW random loot blocks from being placed during terrain generation.
 ; Existing chunks and saves are not modified.
 GenerateLootBlocks     = true
+
+[TerrainRendering]
+; Adds normal terrain fallback geometry for self-illuminating fancy blocks
+; such as Lantern / FixedLantern, without disabling vanilla fancy lighting.
+StabilizeSelfIlluminatingFancyBlocks = true
 
 [Hotkeys]
 ; Reload this config while in-game:
@@ -814,6 +853,24 @@ That usually means the loaded mods have not registered their command lists into 
 </details>
 
 <details>
+<summary><strong>Large lantern or light-block builds look transparent / x-ray-like</strong></summary>
+
+This can happen when very large bulk edits use self-illuminating fancy blocks as normal terrain, such as building a maze entirely from `Lantern` / `FixedLantern`.
+
+ModLoaderExtensions includes a fallback for this:
+
+```ini
+[TerrainRendering]
+StabilizeSelfIlluminatingFancyBlocks = true
+```
+
+This keeps vanilla fancy lighting enabled, but adds normal terrain fallback geometry so affected chunks are less likely to appear invisible.
+
+If lanterns look visually wrong, make sure you are using the fallback geometry patch and not an older patch that globally disabled `NeedsFancyLighting`.
+
+</details>
+
+<details>
 <summary><strong>Why use this if it is not a flashy gameplay mod?</strong></summary>
 
 Because this is the kind of framework mod that improves everything around it: stability, command support, chat hygiene, menu polish, network resilience, and shared tooling for the rest of the mod ecosystem.
@@ -852,6 +909,7 @@ It brings together:
 - hot-reloadable config
 - exception capture support
 - fullscreen recovery safeguards
+- terrain rendering fallback for large self-illuminating light-block builds
 - network flood and malformed-packet hardening
 - gamertag and chat integrity protections
 - menu and text input polish
