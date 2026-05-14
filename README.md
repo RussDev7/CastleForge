@@ -504,6 +504,29 @@ If you are new to the repo, this is a good flow:
 
 ---
 
+## Requirements
+
+### Running CastleForge
+
+- [CastleMiner Z on Steam](https://store.steampowered.com/app/253430/CastleMiner_Z/)
+- Windows 10 or Windows 11
+- [.NET Framework 4.8.1 Runtime](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net481)
+
+### Building From Source
+
+- [Visual Studio 2022 or later](https://visualstudio.microsoft.com/downloads/)  
+  Community or Build Tools are supported.
+- Required workloads/components:
+  - **.NET desktop build tools** workload
+  - **MSBuild**
+  - **NuGet targets and build tasks**
+  - **.NET SDK**
+  - **.NET Framework 4.8.1 targeting pack**
+
+> Visual Studio is only required if compiling the project yourself. If you do not need the full IDE, install [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022).
+
+---
+
 ## Still need help?
 
 If something still is not working, or you are not sure what to do next, you can reach out here:
