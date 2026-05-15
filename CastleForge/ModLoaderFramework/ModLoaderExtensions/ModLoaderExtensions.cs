@@ -28,10 +28,12 @@ namespace ModLoaderExt
         /// </summary>
         #region Mod Initiation
 
-        private readonly CommandDispatcher _dispatcher; // Dispatcher that routes incoming "/commands" to attributed methods.
+        private readonly CommandDispatcher _dispatcher;                           // Dispatcher that routes incoming "/commands" to attributed methods.
+
+        internal static readonly Version CurrentVersion = new Version("0.1.0.0"); // Shared installed version used by the mod base class and update checker.
 
         // Mod constructor: Invoked by the ModLoader when instantiating your mod.
-        public ModLoaderExtensions() : base("ModLoaderExtensions", new Version("0.1.0"))
+        public ModLoaderExtensions() : base("ModLoaderExtensions", CurrentVersion)
         {
             EmbeddedResolver.Init();                    // Load any native & managed DLLs embedded as resources (e.g., Harmony, cimgui, other libs).
             _dispatcher = new CommandDispatcher(this);  // Create the command dispatcher, pointing it at this instance so it can find [Command]-annotated methods.
@@ -74,6 +76,11 @@ namespace ModLoaderExt
             // Load or create config.
             // Apply persisted defaults for the in-game entity limiter.
             MLEConfig.LoadApply();
+
+            // Start the optional GitHub update check.
+            // Runs once in the background and only affects the main-menu update icon.
+            if (UpdateCheckConfig.Enabled)
+                MLEUpdateChecker.Start(CurrentVersion);
 
             // Install the shared chat interceptor once.
             // This patches the game's BroadcastTextMessage.Send method so

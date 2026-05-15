@@ -26,7 +26,7 @@ namespace BruteForceJoin
         #region Mod Initiation
 
         // Mod constructor: Invoked by the ModLoader when instantiating your mod.
-        public BruteForceJoin() : base("BruteForceJoin", new Version("0.1.0"))
+        public BruteForceJoin() : base("BruteForceJoin", new Version("0.1.0.0"))
         {
             EmbeddedResolver.Init();              // Load any native & managed DLLs embedded as resources (e.g., Harmony, cimgui, other libs).
 

@@ -29,7 +29,7 @@ namespace VeinMiner
         // private object                  _world;         // Holds the reference to the game's world object once it becomes available.
 
         // Mod constructor: Invoked by the ModLoader when instantiating your mod.
-        public VeinMiner() : base("VeinMiner", new Version("0.0.1"))
+        public VeinMiner() : base("VeinMiner", new Version("0.0.1.0"))
         {
             EmbeddedResolver.Init();                       // Load any native & managed DLLs embedded as resources (e.g., Harmony, cimgui, other libs).
             // _dispatcher = new CommandDispatcher(this);  // Create the command dispatcher, pointing it at this instance so it can find [Command]-annotated methods.

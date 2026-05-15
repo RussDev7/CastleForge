@@ -55,7 +55,7 @@ namespace Restore360Water
         /// Creates the mod instance, initializes embedded dependency resolution,
         /// prepares the command dispatcher, and hooks game shutdown when available.
         /// </summary>
-        public Restore360Water() : base("Restore360Water", new Version("0.3.2"))
+        public Restore360Water() : base("Restore360Water", new Version("0.3.2.0"))
         {
             EmbeddedResolver.Init();
             _dispatcher = new CommandDispatcher(this);

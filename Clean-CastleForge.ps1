@@ -293,12 +293,12 @@ function Invoke-CastleForgeClean {
     }
 
     if ($RemoveVSCache) {
-        Write-Section "Removing Visual Studio cache"
-        Remove-DirectorySafe -Path (Join-Path $RootDir ".vs") -Reason "Visual Studio cache"
+        Write-Section "Removing Visual Studio cache folders"
+        Remove-NamedIntermediateFolders -FolderName ".vs" -Reason "Visual Studio cache"
     }
     else {
         Write-Section "Skipping Visual Studio cache"
-        Write-Host "Use -RemoveVSCache to remove the .vs folder."
+        Write-Host "Use -RemoveVSCache to remove .vs folders."
     }
 
     if ($ArtifactsOnly) {

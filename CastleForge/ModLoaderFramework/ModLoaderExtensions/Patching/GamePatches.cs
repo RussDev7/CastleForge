@@ -2060,7 +2060,7 @@ namespace ModLoaderExt
 
                 TryRebuildVisibleTerrain();
 
-                Log($"[TerrainRenderStability] Self-illuminating fancy-block fallback is {(enabled ? "enabled" : "disabled")}.");
+                Log($"Self-illuminating fancy-block fallback is {(enabled ? "enabled" : "disabled")}.");
             }
 
             /// <summary>
@@ -6616,6 +6616,326 @@ namespace ModLoaderExt
         }
         #endregion
 
+        #region MainMenu: Dynamic Menu Item Scaling
+
+        /// <summary>
+        /// Dynamically scales the vanilla MainMenu text entries so extra menu items can fit
+        /// without converting the menu to a ListBox or moving buttons elsewhere.
+        /// </summary>
+        /// <remarks>
+        /// Vanilla MenuScreen draws menu items using Screen.Adjuster.ScaleFactor.Y directly.
+        /// This patch replaces only the MainMenu drawing path with the same layout logic,
+        /// but multiplies the draw scale down when the visible menu item stack would exceed
+        /// the available menu area.
+        ///
+        /// Important:
+        /// - This only affects DNA.CastleMinerZ.UI.MainMenu.
+        /// - Hit testing still works because this patch updates MenuScreen._itemLocations.
+        /// - Other menus continue using the vanilla MenuScreen renderer.
+        /// </remarks>
+        [HarmonyPatch(typeof(MenuScreen), "OnDraw")]
+        internal static class Patch_MainMenu_DynamicMenuItemScaling
+        {
+            /// <summary>
+            /// Lowest allowed menu text scale before readability becomes poor.
+            /// 0.60 means the menu can shrink to 60% of the normal vanilla menu size.
+            /// </summary>
+            private const float MinimumMenuScale = 0.60f;
+
+            /// <summary>
+            /// Extra bottom padding reserved inside the MainMenu draw area.
+            /// </summary>
+            private const float BottomPadding = 12f;
+
+            private static readonly FieldInfo FI_ItemLocations =
+                AccessTools.Field(typeof(MenuScreen), "_itemLocations");
+
+            private static readonly FieldInfo FI_FlashTimer =
+                AccessTools.Field(typeof(MenuScreen), "_flashTimer");
+
+            private static readonly FieldInfo FI_FlashDir =
+                AccessTools.Field(typeof(MenuScreen), "_flashDir");
+
+            [HarmonyPrefix]
+            private static bool Prefix(
+                MenuScreen __instance,
+                GraphicsDevice device,
+                SpriteBatch spriteBatch,
+                GameTime gameTime)
+            {
+                // Only replace the vanilla renderer for the main title menu.
+                if (!(__instance is MainMenu))
+                    return true;
+
+                try
+                {
+                    DrawScaledMainMenu(__instance, spriteBatch, gameTime);
+                    return false;
+                }
+                catch
+                {
+                    // If anything fails, fall back to vanilla drawing instead of breaking the menu.
+                    return true;
+                }
+            }
+
+            /// <summary>
+            /// Draws the MainMenu using vanilla MenuScreen behavior, but with an auto-fit text scale.
+            /// </summary>
+            private static void DrawScaledMainMenu(MenuScreen menu, SpriteBatch spriteBatch, GameTime gameTime)
+            {
+                List<MenuItemElement> items = menu.MenuItems;
+
+                if (items == null || items.Count == 0)
+                    return;
+
+                Rectangle[] itemLocations = GetOrCreateItemLocations(menu, items.Count);
+
+                UpdateFlash(menu, gameTime);
+                EnsureSelectedIndex(menu);
+
+                Rectangle drawArea = menu.DrawArea ?? Screen.Adjuster.ScreenRect;
+
+                float baseScale = Screen.Adjuster.ScaleFactor.Y;
+                if (baseScale <= 0f)
+                    baseScale = 1f;
+
+                float menuScale = CalculateMenuScale(menu, drawArea, baseScale);
+                float finalScale = baseScale * menuScale;
+
+                float spacing = 0f;
+                if (menu.LineSpacing != null)
+                    spacing = menu.LineSpacing.Value * finalScale;
+
+                float totalHeight = MeasureTotalMenuHeight(menu, finalScale, spacing);
+
+                float yloc = ((float)drawArea.Height - totalHeight) / 2f + drawArea.Y;
+
+                if (menu.VerticalAlignment == MenuScreen.VerticalAlignmentTypes.Top)
+                    yloc = drawArea.Top;
+                else if (menu.VerticalAlignment == MenuScreen.VerticalAlignmentTypes.Bottom)
+                    yloc = drawArea.Bottom - totalHeight;
+
+                spriteBatch.Begin();
+
+                for (int i = 0; i < items.Count; i++)
+                {
+                    MenuItemElement item = items[i];
+
+                    if (item == null || !item.Visible)
+                    {
+                        itemLocations[i] = Rectangle.Empty;
+                        continue;
+                    }
+
+                    SpriteFont font = GetItemFont(menu, item);
+                    if (font == null)
+                    {
+                        itemLocations[i] = Rectangle.Empty;
+                        continue;
+                    }
+
+                    Color textColor = item.TextColor ?? menu.TextColor;
+                    Color outlineColor = item.OutlineColor ?? menu.OutlineColor;
+                    int outlineWidth = item.OnlineWidth ?? menu.OutlineWidth;
+
+                    Vector2 size = font.MeasureString(item.Text) * finalScale;
+                    Vector2 loc = new Vector2(drawArea.Left, yloc);
+
+                    if (menu.HorizontalAlignment == MenuScreen.HorizontalAlignmentTypes.Center)
+                    {
+                        loc.X = drawArea.X + (((float)drawArea.Width - size.X) / 2f);
+                    }
+                    else if (menu.HorizontalAlignment == MenuScreen.HorizontalAlignmentTypes.Right)
+                    {
+                        loc.X = drawArea.Right - size.X;
+                    }
+
+                    yloc += size.Y + spacing;
+
+                    Color drawColor = textColor;
+
+                    if (i == menu.SelectedIndex)
+                    {
+                        Color selectedColor = item.SelectedColor ?? menu.SelectedColor;
+                        float blend = GetFlashBlend(menu);
+                        drawColor = Color.Lerp(textColor, selectedColor, blend);
+                    }
+
+                    itemLocations[i] = new Rectangle(
+                        (int)loc.X,
+                        (int)loc.Y,
+                        Math.Max(1, (int)Math.Ceiling(size.X)),
+                        Math.Max(1, (int)Math.Ceiling(size.Y)));
+
+                    spriteBatch.DrawOutlinedText(
+                        font,
+                        item.Text,
+                        loc,
+                        drawColor,
+                        outlineColor,
+                        Math.Max(1, (int)Math.Ceiling(outlineWidth * finalScale)),
+                        finalScale,
+                        0f,
+                        Vector2.Zero);
+                }
+
+                spriteBatch.End();
+
+                FI_ItemLocations.SetValue(menu, itemLocations);
+            }
+
+            /// <summary>
+            /// Calculates a scale multiplier from 1.0 down to MinimumMenuScale
+            /// based on the visible menu height and available draw area.
+            /// </summary>
+            private static float CalculateMenuScale(MenuScreen menu, Rectangle drawArea, float baseScale)
+            {
+                float spacing = 0f;
+
+                if (menu.LineSpacing != null)
+                    spacing = menu.LineSpacing.Value * baseScale;
+
+                float normalHeight = MeasureTotalMenuHeight(menu, baseScale, spacing);
+
+                float availableHeight = drawArea.Height - (BottomPadding * baseScale);
+
+                if (availableHeight <= 0f || normalHeight <= 0f)
+                    return 1f;
+
+                if (normalHeight <= availableHeight)
+                    return 1f;
+
+                float neededScale = availableHeight / normalHeight;
+
+                if (neededScale < MinimumMenuScale)
+                    neededScale = MinimumMenuScale;
+
+                if (neededScale > 1f)
+                    neededScale = 1f;
+
+                return neededScale;
+            }
+
+            /// <summary>
+            /// Measures total visible menu height using the provided final text scale and spacing.
+            /// </summary>
+            private static float MeasureTotalMenuHeight(MenuScreen menu, float finalScale, float spacing)
+            {
+                float totalHeight = 0f;
+                int visibleCount = 0;
+
+                foreach (MenuItemElement item in menu.MenuItems)
+                {
+                    if (item == null || !item.Visible)
+                        continue;
+
+                    SpriteFont font = GetItemFont(menu, item);
+                    if (font == null)
+                        continue;
+
+                    totalHeight += font.MeasureString(item.Text).Y * finalScale;
+                    visibleCount++;
+                }
+
+                if (visibleCount > 1)
+                    totalHeight += spacing * (visibleCount - 1);
+
+                return Math.Max(0f, totalHeight);
+            }
+
+            /// <summary>
+            /// Gets the item-specific font if present, otherwise the menu's default font.
+            /// </summary>
+            private static SpriteFont GetItemFont(MenuScreen menu, MenuItemElement item)
+            {
+                return item.Font ?? menu.Font;
+            }
+
+            /// <summary>
+            /// Creates or resizes MenuScreen._itemLocations so vanilla HitTest still works.
+            /// </summary>
+            private static Rectangle[] GetOrCreateItemLocations(MenuScreen menu, int count)
+            {
+                if (!(FI_ItemLocations.GetValue(menu) is Rectangle[] current) || current.Length != count)
+                    current = new Rectangle[count];
+
+                return current;
+            }
+
+            /// <summary>
+            /// Keeps the selected menu index on a visible item.
+            /// </summary>
+            private static void EnsureSelectedIndex(MenuScreen menu)
+            {
+                if (menu.MenuItems == null || menu.MenuItems.Count == 0)
+                    return;
+
+                int count = menu.MenuItems.Count;
+                int selected = menu.SelectedIndex;
+
+                if (selected < 0 || selected >= count)
+                    selected = 0;
+
+                for (int i = 0; i < count; i++)
+                {
+                    int index = (selected + i) % count;
+
+                    if (menu.MenuItems[index] != null && menu.MenuItems[index].Visible)
+                    {
+                        menu.SelectedIndex = index;
+                        return;
+                    }
+                }
+
+                menu.SelectedIndex = 0;
+            }
+
+            /// <summary>
+            /// Updates the vanilla MenuScreen flash timer used by selected menu text.
+            /// </summary>
+            private static void UpdateFlash(MenuScreen menu, GameTime gameTime)
+            {
+                if (!(FI_FlashTimer.GetValue(menu) is OneShotTimer flashTimer))
+                    return;
+
+                flashTimer.Update(gameTime.ElapsedGameTime);
+
+                if (flashTimer.Expired)
+                {
+                    flashTimer.Reset();
+
+                    bool flashDir = false;
+
+                    object value = FI_FlashDir.GetValue(menu);
+                    if (value is bool v)
+                        flashDir = v;
+
+                    FI_FlashDir.SetValue(menu, !flashDir);
+                }
+            }
+
+            /// <summary>
+            /// Gets the vanilla flash blend value for the selected menu item.
+            /// </summary>
+            private static float GetFlashBlend(MenuScreen menu)
+            {
+                if (!(FI_FlashTimer.GetValue(menu) is OneShotTimer flashTimer))
+                    return 1f;
+
+                bool flashDir = false;
+
+                object value = FI_FlashDir.GetValue(menu);
+                if (value is bool v)
+                    flashDir = v;
+
+                return flashDir
+                    ? flashTimer.PercentComplete
+                    : 1f - flashTimer.PercentComplete;
+            }
+        }
+        #endregion
+
         #region MainMenu: Bottom-Left Menu-Icon Buttons
 
         /// <summary>
@@ -6639,6 +6959,11 @@ namespace ModLoaderExt
                     SupportCastleForgeButton.Draw(device, slot++);
                 else
                     SupportCastleForgeButton.ClearInteractionState();
+
+                if (UpdateCheckConfig.Enabled && MLEUpdateChecker.IsUpdateAvailable)
+                    ModLoaderUpdateButton.Draw(device, slot++);
+                else
+                    ModLoaderUpdateButton.ClearInteractionState();
 
                 // Future buttons:
                 //
@@ -6668,8 +6993,244 @@ namespace ModLoaderExt
                     SupportCastleForgeButton.HandleInput(input);
                 else
                     SupportCastleForgeButton.ClearInteractionState();
+
+                if (UpdateCheckConfig.Enabled && MLEUpdateChecker.IsUpdateAvailable)
+                    ModLoaderUpdateButton.HandleInput(input);
+                else
+                    ModLoaderUpdateButton.ClearInteractionState();
             }
         }
+
+        #region Button: Update
+
+        /// <summary>
+        /// ModLoaderExtensions update button in its assigned bottom-left menu icon slot.
+        /// While hovered, also draws a small text hint beside the button.
+        /// </summary>
+        /// <remarks>
+        /// This button is positioned by the shared bottom-left menu icon slot layout.
+        /// </remarks>
+        internal static class ModLoaderUpdateButton
+        {
+            /// <summary>CastleForge releases page opened when the update button is clicked.</summary>
+            private const string UpdateUrl = "https://github.com/RussDev7/CastleForge/releases";
+
+            /// <summary>
+            /// Embedded manifest resource name for the normal button texture.
+            /// This must match the assembly/root namespace + folder + file name.
+            /// </summary>
+            private const string ResourceName_Normal = "ModLoaderExtensions.Embedded.MenuIcons.UpdateButton.png";
+
+            /// <summary>
+            /// Embedded manifest resource name for the hover button texture.
+            /// This must match the assembly/root namespace + folder + file name.
+            /// </summary>
+            private const string ResourceName_Hover = "ModLoaderExtensions.Embedded.MenuIcons.UpdateButton_Hover.png";
+
+            /// <summary>Cached texture used while the cursor is not hovering the button.</summary>
+            private static Texture2D _textureNormal;
+
+            /// <summary>Cached texture used while the cursor is hovering the button.</summary>
+            private static Texture2D _textureHover;
+
+            /// <summary>Private sprite batch used only for this menu overlay.</summary>
+            private static SpriteBatch _spriteBatch;
+
+            /// <summary>
+            /// Current on-screen clickable bounds of the button.
+            /// This is rebuilt during draw so input always matches the visible position.
+            /// </summary>
+            private static Rectangle _buttonRect = Rectangle.Empty;
+
+            /// <summary>Tracks whether the mouse is currently inside the button bounds.</summary>
+            private static bool _hovered;
+
+            /// <summary>
+            /// Press latch used so the update page only opens when the click starts on the button
+            /// and is released on the button.
+            /// </summary>
+            private static bool _pressed;
+
+            /// <summary>Small hover text shown while the cursor is over the button.</summary>
+            private const string HoverText = "ModLoaderExtensions update available";
+
+            /// <summary>Base scale used for the hover text.</summary>
+            private const float HoverTextScale = 0.75f;
+
+            /// <summary>
+            /// Lazy-loads the embedded normal and hover textures the first time they are needed,
+            /// and recreates them if the graphics device ever disposes them.
+            /// </summary>
+            /// <param name="gd">Active graphics device used to create the textures.</param>
+            private static void EnsureTextures(GraphicsDevice gd)
+            {
+                if (gd == null)
+                    return;
+
+                if (_spriteBatch == null)
+                    _spriteBatch = new SpriteBatch(gd);
+
+                if (_textureNormal == null || _textureNormal.IsDisposed)
+                {
+                    var asm = typeof(SupportCastleForgeButton).Assembly;
+
+                    using (Stream s = asm.GetManifestResourceStream(ResourceName_Normal))
+                    {
+                        if (s != null)
+                            _textureNormal = Texture2D.FromStream(gd, s);
+                    }
+                }
+
+                if (_textureHover == null || _textureHover.IsDisposed)
+                {
+                    var asm = typeof(SupportCastleForgeButton).Assembly;
+
+                    using (Stream s = asm.GetManifestResourceStream(ResourceName_Hover))
+                    {
+                        if (s != null)
+                            _textureHover = Texture2D.FromStream(gd, s);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Draws the update button in the requested bottom-left menu icon slot.
+            /// While hovered, also draws a small text hint beside the button.
+            /// </summary>
+            /// <param name="device">Graphics device used for texture creation and drawing.</param>
+            public static void Draw(GraphicsDevice device, int slotIndex)
+            {
+                try
+                {
+                    EnsureTextures(device);
+
+                    if (_spriteBatch == null || _textureNormal == null || _textureNormal.IsDisposed)
+                        return;
+
+                    Rectangle screen = Screen.Adjuster.ScreenRect;
+                    float scale = Screen.Adjuster.ScaleFactor.Y;
+
+                    _buttonRect = MainMenuIconButtonLayout.GetSlotRect(slotIndex);
+
+                    // Prefer the hover texture while hovered. Fall back to the normal texture
+                    // if the hover texture is missing for any reason.
+                    Texture2D drawTexture = (_hovered && _textureHover != null && !_textureHover.IsDisposed)
+                        ? _textureHover
+                        : _textureNormal;
+
+                    _spriteBatch.Begin(
+                        SpriteSortMode.Deferred,
+                        BlendState.NonPremultiplied,
+                        SamplerState.LinearClamp,
+                        DepthStencilState.None,
+                        RasterizerState.CullNone);
+
+                    _spriteBatch.Draw(drawTexture, _buttonRect, Color.White);
+
+                    // Draw a small hover label beside the icon for discoverability.
+                    if (_hovered && CastleMinerZGame.Instance != null && CastleMinerZGame.Instance.DebugFont != null)
+                    {
+                        SpriteFont font = CastleMinerZGame.Instance.DebugFont;
+                        float textScale = HoverTextScale * Math.Max(scale, 1f);
+
+                        Vector2 textSize = font.MeasureString(HoverText) * textScale;
+
+                        float textX = _buttonRect.Right + (8f * scale);
+                        float textY = _buttonRect.Center.Y - (textSize.Y * 0.5f);
+
+                        // If the label would run off the right edge, move it above the button instead.
+                        if (textX + textSize.X > screen.Right - (8f * scale))
+                        {
+                            textX = _buttonRect.Center.X - (textSize.X * 0.5f);
+                            textY = _buttonRect.Top - textSize.Y - (6f * scale);
+                        }
+
+                        Vector2 textPos = new Vector2(textX, textY);
+
+                        _spriteBatch.DrawOutlinedText(
+                            font,
+                            HoverText,
+                            textPos,
+                            Color.White,
+                            Color.Black,
+                            2,
+                            textScale,
+                            0f,
+                            Vector2.Zero);
+                    }
+
+                    _spriteBatch.End();
+                }
+                catch
+                {
+                    // Never let menu overlay rendering crash the main menu.
+                }
+            }
+
+            /// <summary>
+            /// Clears the current hover/click state and removes the clickable rectangle.
+            /// Summary: Used when the button is disabled by config so hidden buttons cannot be clicked.
+            /// </summary>
+            public static void ClearInteractionState()
+            {
+                _buttonRect = Rectangle.Empty;
+                _hovered = false;
+                _pressed = false;
+            }
+
+            /// <summary>
+            /// Handles hover / press / release logic for the button.
+            /// Opens the support page only when the cursor is inside the button and the click completes there.
+            /// </summary>
+            /// <param name="input">Current input manager for mouse state checks.</param>
+            public static void HandleInput(InputManager input)
+            {
+                try
+                {
+                    if (input == null)
+                        return;
+
+                    bool inside = _buttonRect.Contains(input.Mouse.Position);
+                    _hovered = inside;
+
+                    // Latch the press only if it began on the button.
+                    if (inside && input.Mouse.LeftButtonPressed)
+                        _pressed = true;
+
+                    // Only open if the cursor is still on the button when released.
+                    if (inside && _pressed && input.Mouse.LeftButtonReleased)
+                        OpenUpdatePage();
+
+                    // Clear the latch once the mouse is no longer held.
+                    if (!input.Mouse.LeftButtonDown)
+                        _pressed = false;
+                }
+                catch
+                {
+                    // Never let menu input handling break the main menu.
+                }
+            }
+
+            /// <summary>
+            /// Opens the CastleForge support page using the user's default shell/browser.
+            /// </summary>
+            private static void OpenUpdatePage()
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = UpdateUrl,
+                        UseShellExecute = true
+                    });
+                }
+                catch
+                {
+                    // Ignore shell-launch failures.
+                }
+            }
+        }
+        #endregion
 
         #region Button: Support
 
@@ -6677,7 +7238,6 @@ namespace ModLoaderExt
         /// Draws the Support button in its assigned bottom-left menu icon slot.
         /// While hovered, also draws a small text hint beside the button.
         /// </summary>
-        /// <remarks>
         /// <remarks>
         /// This button is positioned by the shared bottom-left menu icon slot layout.
         /// </remarks>

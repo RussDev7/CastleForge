@@ -29,7 +29,7 @@ namespace VoiceChat
         // private object                     _world;      // Holds the reference to the game's world object once it becomes available.
 
         // Mod constructor: Invoked by the ModLoader when instantiating your mod.
-        public VoiceChat() : base("VoiceChat", new Version("1.0.0"))
+        public VoiceChat() : base("VoiceChat", new Version("1.0.0.0"))
         {
             EmbeddedResolver.Init();                      // Load any native & managed DLLs embedded as resources (e.g., Harmony, cimgui, other libs).
             // _dispatcher = new CommandDispatcher(this); // Create the command dispatcher, pointing it at this instance so it can find [Command]-annotated methods.

@@ -47,6 +47,24 @@ namespace ModLoaderExt
     }
     #endregion
 
+    #region Update Check
+
+    /// <summary>
+    /// Shared runtime knobs for the optional ModLoaderExtensions GitHub update check.
+    /// Written by MLEConfig.ApplyToStatics(), read by startup and main-menu update UI.
+    /// </summary>
+    internal static class UpdateCheckConfig
+    {
+        // [UpdateCheck].
+
+        /// <summary>
+        /// Enables the one-time GitHub update check for ModLoaderExtensions.
+        /// When disabled, no update check is started and the update icon is hidden.
+        /// </summary>
+        public static volatile bool Enabled = true;
+    }
+    #endregion
+
     #region Network Flood Guard
 
     /// <summary>
@@ -214,6 +232,9 @@ namespace ModLoaderExt
         public bool ShowDiscordButton = true;
         public bool ShowSupportButton = true;
 
+        // [UpdateCheck].
+        public bool UpdateCheckEnabled = true;
+
         // [FloodGuard].
         public bool FloodGuardEnabled         = false;
         public int  PerSenderMaxPacketsPerSec = 512;
@@ -279,13 +300,18 @@ namespace ModLoaderExt
                     "",
                     "[Ads]",
                     "; Hide the CMZ-Resurrection menu ad on the main menu.",
-                    "HideMenuAd                = true",
+                    "HideMenuAd = true",
                     "",
                     "[MenuItems]",
                     "; Main-menu bottom-left icon buttons.",
                     "; These only control visibility/clickability, not embedded resource loading.",
-                    "ShowDiscordButton         = true",
-                    "ShowSupportButton         = true",
+                    "ShowDiscordButton = true",
+                    "ShowSupportButton = true",
+                    "",
+                    "[UpdateCheck]",
+                    "; Checks the CastleForge GitHub source once at startup for a newer ModLoaderExtensions version.",
+                    "; When enabled and an update is found, a small update icon appears on the main menu.",
+                    "Enabled = true",
                     "",
                     "[FloodGuard]",
                     "; Master toggle for inbound flood protection / blackhole logic.",
@@ -360,11 +386,12 @@ namespace ModLoaderExt
                     "",
                     "[Hotkeys]",
                     "; Reload this config while in-game:",
-                    "ReloadConfig       = Ctrl+Shift+R",
+                    "ReloadConfig = Ctrl+Shift+R",
                 });
             }
 
             EnsureMenuItemsDefaults();
+            EnsureUpdateCheckDefaults();
             EnsureVanillaSpawnerDefaults();
             EnsureTerrainRenderingDefaults();
             var ini = SimpleIni.Load(ConfigPath);
@@ -377,6 +404,9 @@ namespace ModLoaderExt
                 // [MenuItems].
                 ShowDiscordButton = ini.GetBool("MenuItems", "ShowDiscordButton", true),
                 ShowSupportButton = ini.GetBool("MenuItems", "ShowSupportButton", true),
+
+                // [UpdateCheck].
+                UpdateCheckEnabled = ini.GetBool("UpdateCheck", "Enabled", true),
 
                 // [FloodGuard].
                 FloodGuardEnabled         = ini.GetBool("FloodGuard", "Enabled", false),
@@ -454,6 +484,9 @@ namespace ModLoaderExt
             // [MenuItems].
             MenuItemsConfig.ShowDiscordButton = ShowDiscordButton;
             MenuItemsConfig.ShowSupportButton = ShowSupportButton;
+
+            // [UpdateCheck].
+            UpdateCheckConfig.Enabled = UpdateCheckEnabled;
 
             // [FloodGuard].
             FloodGuard_Settings.FloodGuardEnabled         = FloodGuardEnabled;
@@ -564,6 +597,26 @@ namespace ModLoaderExt
 
                 EnsureIniKeyDefault(lines, "MenuItems", "ShowDiscordButton", "true", 26);
                 EnsureIniKeyDefault(lines, "MenuItems", "ShowSupportButton", "true", 26);
+
+                File.WriteAllLines(ConfigPath, lines.ToArray());
+            }
+            catch
+            {
+                // Do not block config loading if optional default insertion fails.
+            }
+        }
+
+        /// <summary>
+        /// Ensures older ModLoaderExtensions config files include the UpdateCheck section
+        /// and its default startup update-check toggle.
+        /// </summary>
+        private static void EnsureUpdateCheckDefaults()
+        {
+            try
+            {
+                var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+                EnsureIniKeyDefault(lines, "UpdateCheck", "Enabled", "true", 26);
 
                 File.WriteAllLines(ConfigPath, lines.ToArray());
             }
