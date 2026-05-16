@@ -26,7 +26,7 @@ namespace TreeFeller
         #region Mod Initiation
 
         // private readonly CommandDispatcher _dispatcher; // Dispatcher that routes incoming "/commands" to attributed methods.
-        // private object                  _world;         // Holds the reference to the game's world object once it becomes available.
+        // private object                     _world;      // Holds the reference to the game's world object once it becomes available.
 
         // Mod constructor: Invoked by the ModLoader when instantiating your mod.
         public TreeFeller() : base("TreeFeller", new Version("0.0.1.0"))
