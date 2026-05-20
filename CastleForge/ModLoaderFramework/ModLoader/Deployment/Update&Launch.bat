@@ -61,23 +61,29 @@ IF ERRORLEVEL 8 (
     echo.
 
     REM ------------------------------------------------------------
-    REM 6) Unblock copied files.
+    REM 6) Unblock copied mod binaries only.
     REM ------------------------------------------------------------
     REM Windows may mark downloaded ZIP contents as blocked.
     REM Blocked DLLs can prevent ModLoader from loading mods and may
     REM cause FileLoadException / HRESULT: 0x80131515.
     REM
-    REM This removes the Zone.Identifier mark from files copied into
-    REM the CastleMiner Z folder.
+    REM Only scan:
+    REM   - ModLoader.dll
+    REM   - !Mods\**\*.dll
+    REM   - !Mods\**\*.exe
+    REM
+    REM Other formats like PNG, XNB, JSON, INI, TXT, and MD are data/assets
+    REM and normally do not need to be unblocked.
     echo ============================================================
-    echo Unblocking copied files in "%DEST%"
+    echo Unblocking ModLoader.dll and mod DLL/EXE files only
+    echo Target: "%DEST%"
     echo ============================================================
 
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Get-ChildItem -LiteralPath $env:DEST -Recurse -Force -File -ErrorAction Stop | Unblock-File -ErrorAction Stop; exit 0 } catch { Write-Host $_.Exception.Message; exit 1 }"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $modLoader = Join-Path $env:DEST 'ModLoader.dll'; if (Test-Path -LiteralPath $modLoader) { Get-Item -LiteralPath $modLoader -Force | Unblock-File -ErrorAction Stop }; $mods = Join-Path $env:DEST '!Mods'; if (Test-Path -LiteralPath $mods) { Get-ChildItem -LiteralPath $mods -Recurse -Force -File -ErrorAction Stop | Where-Object { $_.Extension -ieq '.dll' -or $_.Extension -ieq '.exe' } | Unblock-File -ErrorAction Stop }; exit 0 } catch { Write-Host $_.Exception.Message; exit 1 }"
 
     IF ERRORLEVEL 1 (
         echo.
-        echo WARNING: Failed to unblock one or more files.
+        echo WARNING: Failed to unblock one or more mod binaries.
         echo If mods fail to load with FileLoadException / HRESULT: 0x80131515,
         echo right-click the downloaded ZIP, choose Properties, check Unblock,
         echo then extract and copy the files again.
