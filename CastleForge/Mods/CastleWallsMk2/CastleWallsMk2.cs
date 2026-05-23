@@ -3488,6 +3488,15 @@ namespace CastleWallsMk2
             Callbacks.OnChaosMode = enabled =>
             {
                 _chaosModeEnabled = enabled;
+
+                if (!enabled)
+                {
+                    _clockDiscordEnabled = false;
+                    _dragonDiscordEnabled = false;
+                    _clockDiscordPendingRandom = false;
+                    _clockDiscordNextMs = 0;
+                }
+
                 SendLog($"Chaos Mode: {enabled}");
             };
             Callbacks.OnChaosValue = value =>

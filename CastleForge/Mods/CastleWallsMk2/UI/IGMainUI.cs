@@ -1748,10 +1748,14 @@ namespace CastleWallsMk2
 
                     CB_Checkbox    ("Exploding Ores",    ref _explodingOres,          Callbacks.OnExplodingOres);
 
-                    CB_Checkbox    ("Discord:",          ref _chaosMode,              Callbacks.OnChaosMode);
-                    CB_StepSlider  ("##chaosValue",      ref _choasTimerValue,        Callbacks.OnChaosValue, min: 1, max: 5000, enabled: _chaosMode);
-                    CB_Checkbox    (" - Auto Clock",     ref _clockChaos,             Callbacks.OnClockChaos,  enabled: _chaosMode);
-                    CB_Checkbox    (" - Auto Dragon",    ref _dragonChaos,            Callbacks.OnDragonChaos, enabled: _chaosMode);
+                    CB_Checkbox("Discord:", ref _chaosMode, Callbacks.OnChaosMode);
+
+                    if (!_chaosMode)
+                        DisableDiscordChaosChildren();
+
+                    CB_StepSlider("##chaosValue", ref _choasTimerValue, Callbacks.OnChaosValue, min: 1, max: 5000, enabled: _chaosMode);
+                    CB_Checkbox(" - Auto Clock",  ref _clockChaos,      Callbacks.OnClockChaos,  enabled: _chaosMode);
+                    CB_Checkbox(" - Auto Dragon", ref _dragonChaos,     Callbacks.OnDragonChaos, enabled: _chaosMode);
 
                     #endregion
 
@@ -13194,6 +13198,42 @@ namespace CastleWallsMk2
             finally
             {
                 _rememberedComboRestorePending = false;
+            }
+        }
+        #endregion
+
+        #region Helpers: Dependent Toggle Guards
+
+        /// <summary>
+        /// Forces Discord/Chaos child toggles off when the parent Discord toggle is off.
+        /// This keeps UI state, runtime callback state, and remembered-toggle storage in sync.
+        /// </summary>
+        private static void DisableDiscordChaosChildren()
+        {
+            bool changed = false;
+
+            if (_clockChaos)
+            {
+                _clockChaos = false;
+                Callbacks.OnClockChaos?.Invoke(false);
+                changed = true;
+            }
+
+            if (_dragonChaos)
+            {
+                _dragonChaos = false;
+                Callbacks.OnDragonChaos?.Invoke(false);
+                changed = true;
+            }
+
+            if (!changed)
+                return;
+
+            if (RememberedToggleStore.RememberEnabled)
+            {
+                RememberedToggleStore.SetToggle(nameof(_clockChaos), false);
+                RememberedToggleStore.SetToggle(nameof(_dragonChaos), false);
+                RememberedToggleStore.Save();
             }
         }
         #endregion
