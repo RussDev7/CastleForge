@@ -41,6 +41,17 @@ namespace CMZDedicatedLidgrenServer.Commands
         /// </summary>
         public string Prefix { get; private set; } = "!";
 
+        private readonly List<string> _prefixes = ["!"];
+
+        /// <summary>
+        /// All accepted chat prefixes used for server commands.
+        /// Examples: !help, /help
+        /// </summary>
+        public IReadOnlyList<string> Prefixes
+        {
+            get { return _prefixes; }
+        }
+
         /// <summary>
         /// Maximum number of chat lines used by one help page.
         /// </summary>
@@ -256,6 +267,7 @@ namespace CMZDedicatedLidgrenServer.Commands
             sb.AppendLine("[Settings]");
             sb.AppendLine("Enabled=true");
             sb.AppendLine("Prefix=!");
+            sb.AppendLine("Prefixes=!,/");
             sb.AppendLine("HelpMaxLines=5");
             sb.AppendLine();
             sb.AppendLine("[Commands]");
@@ -298,6 +310,7 @@ namespace CMZDedicatedLidgrenServer.Commands
 
             Enabled = true;
             Prefix = "!";
+            SetPrefixesFromConfig("!");
             HelpMaxLines = 5;
 
             string section = string.Empty;
@@ -331,7 +344,11 @@ namespace CMZDedicatedLidgrenServer.Commands
                     }
                     else if (key.Equals("Prefix", StringComparison.OrdinalIgnoreCase))
                     {
-                        Prefix = string.IsNullOrEmpty(value) ? "!" : value;
+                        SetPrefixesFromConfig(string.IsNullOrEmpty(value) ? "!" : value);
+                    }
+                    else if (key.Equals("Prefixes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        SetPrefixesFromConfig(string.IsNullOrEmpty(value) ? "!" : value);
                     }
                     else if (key.Equals("HelpMaxLines", StringComparison.OrdinalIgnoreCase))
                     {
@@ -349,6 +366,36 @@ namespace CMZDedicatedLidgrenServer.Commands
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Parses a comma-separated prefix list from config.
+        /// Example: Prefixes=!,/
+        /// </summary>
+        private void SetPrefixesFromConfig(string value)
+        {
+            _prefixes.Clear();
+
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                string[] parts = value.Split(',');
+
+                foreach (string rawPart in parts)
+                {
+                    string prefix = rawPart.Trim();
+
+                    if (string.IsNullOrEmpty(prefix))
+                        continue;
+
+                    if (!_prefixes.Contains(prefix))
+                        _prefixes.Add(prefix);
+                }
+            }
+
+            if (_prefixes.Count == 0)
+                _prefixes.Add("!");
+
+            Prefix = _prefixes[0];
         }
 
         private void LoadRanks()
@@ -399,6 +446,7 @@ namespace CMZDedicatedLidgrenServer.Commands
             sb.AppendLine("[Settings]");
             sb.AppendLine("Enabled=" + (Enabled ? "true" : "false"));
             sb.AppendLine("Prefix=" + Prefix);
+            sb.AppendLine("Prefixes=" + string.Join(",", _prefixes));
             sb.AppendLine("HelpMaxLines=" + HelpMaxLines);
             sb.AppendLine();
             sb.AppendLine("[Commands]");

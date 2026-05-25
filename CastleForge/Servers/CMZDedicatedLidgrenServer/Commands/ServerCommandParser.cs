@@ -26,32 +26,80 @@ namespace CMZDedicatedLidgrenServer.Commands
         /// </summary>
         public static bool TryParse(string rawText, string prefix, out string commandName, out string[] args)
         {
+            return TryParse(rawText, [prefix], out _, out commandName, out args);
+        }
+
+        /// <summary>
+        /// Parses a raw command string using any accepted command prefix.
+        /// </summary>
+        public static bool TryParse(
+            string rawText,
+            IEnumerable<string> prefixes,
+            out string usedPrefix,
+            out string commandName,
+            out string[] args)
+        {
+            usedPrefix = null;
             commandName = null;
             args = [];
 
             if (string.IsNullOrWhiteSpace(rawText))
                 return false;
 
-            prefix = string.IsNullOrEmpty(prefix) ? "!" : prefix;
-
             string text = rawText.Trim();
 
-            if (!text.StartsWith(prefix, StringComparison.Ordinal))
-                return false;
+            List<string> validPrefixes = NormalizePrefixes(prefixes);
 
-            text = text.Substring(prefix.Length).Trim();
+            foreach (string prefix in validPrefixes)
+            {
+                if (!text.StartsWith(prefix, StringComparison.Ordinal))
+                    continue;
 
-            if (text.Length == 0)
-                return false;
+                usedPrefix = prefix;
+                text = text.Substring(prefix.Length).Trim();
 
-            List<string> tokens = Tokenize(text);
-            if (tokens.Count == 0)
-                return false;
+                if (text.Length == 0)
+                    return false;
 
-            commandName = NormalizeCommandName(tokens[0]);
-            args = [.. tokens.Skip(1)];
+                List<string> tokens = Tokenize(text);
+                if (tokens.Count == 0)
+                    return false;
 
-            return !string.IsNullOrWhiteSpace(commandName);
+                commandName = NormalizeCommandName(tokens[0]);
+                args = [.. tokens.Skip(1)];
+
+                return !string.IsNullOrWhiteSpace(commandName);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Normalizes configured prefixes and checks longer prefixes first.
+        /// This prevents "!" from stealing commands intended for "!!".
+        /// </summary>
+        private static List<string> NormalizePrefixes(IEnumerable<string> prefixes)
+        {
+            List<string> result = [];
+
+            if (prefixes != null)
+            {
+                foreach (string rawPrefix in prefixes)
+                {
+                    string prefix = rawPrefix == null ? string.Empty : rawPrefix.Trim();
+
+                    if (prefix.Length == 0)
+                        continue;
+
+                    if (!result.Contains(prefix))
+                        result.Add(prefix);
+                }
+            }
+
+            if (result.Count == 0)
+                result.Add("!");
+
+            return [.. result.OrderByDescending(prefix => prefix.Length)];
         }
 
         /// <summary>

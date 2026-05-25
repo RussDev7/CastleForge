@@ -77,7 +77,7 @@ namespace CMZDedicatedSteamServer.Commands
         }
 
         /// <summary>
-        /// True when <paramref name="rawText"/> starts with the current configured command prefix.
+        /// True when <paramref name="rawText"/> starts with one of the configured command prefixes.
         /// </summary>
         public bool IsCommand(string rawText)
         {
@@ -87,8 +87,15 @@ namespace CMZDedicatedSteamServer.Commands
             if (!_permissions.Enabled)
                 return false;
 
-            string prefix = string.IsNullOrEmpty(_permissions.Prefix) ? "!" : _permissions.Prefix;
-            return rawText.TrimStart().StartsWith(prefix, StringComparison.Ordinal);
+            string text = rawText.TrimStart();
+
+            foreach (string prefix in _permissions.Prefixes.OrderByDescending(prefix => prefix.Length))
+            {
+                if (text.StartsWith(prefix, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -154,13 +161,22 @@ namespace CMZDedicatedSteamServer.Commands
             if (context == null || !_permissions.Enabled)
                 return false;
 
-
-            if (!ServerCommandParser.TryParse(context.RawText, _permissions.Prefix, out string commandName, out string[] args))
+            if (!ServerCommandParser.TryParse(
+                context.RawText,
+                _permissions.Prefixes,
+                out string usedPrefix,
+                out string commandName,
+                out string[] args))
+            {
                 return false;
+            }
+
+            if (string.IsNullOrEmpty(usedPrefix))
+                usedPrefix = _permissions.Prefix;
 
             if (!_commands.TryGetValue(commandName, out ServerCommandDefinition command))
             {
-                context.SendReply("[Server] Unknown command. Use " + _permissions.Prefix + "help.");
+                context.SendReply("[Server] Unknown command. Use " + usedPrefix + "help.");
 
                 context.WriteLog(
                     "[Commands] Unknown command from " +
@@ -181,7 +197,7 @@ namespace CMZDedicatedSteamServer.Commands
                     "[Server] You need " +
                     ServerCommandRankHelper.ToConfigString(requiredRank) +
                     " to use " +
-                    _permissions.Prefix +
+                    usedPrefix +
                     command.Name +
                     ".");
 
@@ -208,7 +224,7 @@ namespace CMZDedicatedSteamServer.Commands
             catch (Exception ex)
             {
                 context.SendReply("[Server] Command failed: " + ex.Message);
-                context.WriteLog("[Commands] Exception while executing " + _permissions.Prefix + command.Name + ": " + ex);
+                context.WriteLog("[Commands] Exception while executing " + usedPrefix + command.Name + ": " + ex);
             }
 
             return true;
@@ -226,11 +242,11 @@ namespace CMZDedicatedSteamServer.Commands
             string commandText = rawText.Trim();
             string prefix = string.IsNullOrEmpty(_permissions.Prefix) ? "!" : _permissions.Prefix;
 
-            // Console can type either:
+            // Console can type:
             // op Jacob
-            // or:
             // !op Jacob
-            if (!commandText.StartsWith(prefix, StringComparison.Ordinal))
+            // /op Jacob
+            if (!IsCommand(commandText))
                 commandText = prefix + commandText;
 
             return TryExecute(new ServerCommandContext

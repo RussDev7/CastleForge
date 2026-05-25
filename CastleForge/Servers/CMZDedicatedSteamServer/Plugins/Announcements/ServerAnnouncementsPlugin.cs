@@ -103,7 +103,8 @@ namespace CMZDedicatedSteamServer.Plugins.Announcements
             if (string.IsNullOrWhiteSpace(message))
                 return;
 
-            context.SendPrivateMessage(message);
+            foreach (string line in SplitMessageLines(message))
+                context.SendPrivateMessage(line);
         }
 
         /// <summary>
@@ -140,8 +141,8 @@ namespace CMZDedicatedSteamServer.Plugins.Announcements
 
             string message = ApplyTokens(_config.GlobalMessage, null, context.ConnectedPlayers, context.MaxPlayers);
 
-            if (!string.IsNullOrWhiteSpace(message))
-                context.BroadcastMessage(message);
+            foreach (string line in SplitMessageLines(message))
+                context.BroadcastMessage(line);
 
             _nextGlobalMessageUtc = now.AddMinutes(_config.GlobalMessageIntervalMinutes);
         }
@@ -313,6 +314,37 @@ MinimumPlayersForGlobalMessage = 1
                 .Replace("{maxplayers}", maxPlayers.ToString(CultureInfo.InvariantCulture))
                 .Replace("{time}", now)
                 .Replace("{date}", date);
+        }
+
+        /// <summary>
+        /// Splits a configured announcement message into individual chat lines.
+        /// Supports escaped line breaks such as \n and \r\n in the config file.
+        /// </summary>
+        private static string[] SplitMessageLines(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+                return [];
+
+            string normalized = message
+                .Replace("\\r\\n", "\n")
+                .Replace("\\n", "\n")
+                .Replace("\\r", "\n")
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n");
+
+            string[] rawLines = normalized.Split(['\n'], StringSplitOptions.RemoveEmptyEntries);
+
+            var lines = new List<string>();
+
+            foreach (string rawLine in rawLines)
+            {
+                string line = rawLine.Trim();
+
+                if (line.Length > 0)
+                    lines.Add(line);
+            }
+
+            return [.. lines];
         }
         #endregion
 

@@ -1004,7 +1004,7 @@ namespace CastleWallsMk2
                     title:        $"WARNING: Corrupt Selected Player?",
                     body:         $"This will corrupt the world for player '{gamer.Gamertag}'\n\n" +
                                   $"Continue?",
-                    onOK:         () => { CorruptSelectedPlayer(gamer); },
+                    onOK:         () => { CorruptSelectedPlayer(gamer, gamer.IsHost); },
                     onCancel:     () => { return; },
                     showCancel:   true,
                     preferInGame: true
