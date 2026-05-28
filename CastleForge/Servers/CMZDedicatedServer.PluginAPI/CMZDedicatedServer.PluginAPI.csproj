@@ -3,6 +3,14 @@
     <TargetFramework>net481</TargetFramework>
     <AssemblyName>ServerPluginAPI</AssemblyName>
     <RootNamespace>CMZDedicatedServer</RootNamespace>
+
+    <!--
+      Keep PluginAPI build artifacts local to this project.
+      Server projects copy the API DLL beside each dedicated server EXE through ProjectReference.
+    -->
+    <OutputPath>$(MSBuildProjectDirectory)\bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
     <LangVersion>latest</LangVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <DebugSymbols>false</DebugSymbols>

@@ -5,7 +5,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <AssemblyName>CMZDedicatedLidgrenServer</AssemblyName>
     <RootNamespace>CMZDedicatedLidgrenServer</RootNamespace>
-    <OutputPath>$(BuildOutputRoot)CMZDedicatedLidgrenServer\</OutputPath>
+    <OutputPath>$(BuildOutputRoot)$(Configuration)\!Mods\CMZDedicatedLidgrenServer\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <LangVersion>latest</LangVersion>

@@ -11,6 +11,13 @@
     <!-- Used by Shared/Plugins/Directory.Build.targets when copying to server outputs. -->
     <PluginFolderName>Example</PluginFolderName>
 
+    <!--
+      Keep the raw plugin build output local to this project.
+      Shared\Plugins\Directory.Build.targets copies the final DLL into each server's runtime Plugins folder.
+    -->
+    <OutputPath>$(MSBuildProjectDirectory)\bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
     <LangVersion>latest</LangVersion>
 
     <!-- Keep public release plugin output simple. -->
