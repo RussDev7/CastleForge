@@ -4,13 +4,15 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedServer.Plugins;
 using CMZDedicatedSteamServer.Plugins;
-using System.Runtime.CompilerServices;
-using System.Collections.Generic;
-using System.Reflection;
-using System.Text;
-using System.IO;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace CMZDedicatedSteamServer
 {
@@ -4186,6 +4188,7 @@ namespace CMZDedicatedSteamServer
                 TypeName = typeName,
                 SenderId = senderId,
                 SenderName = senderName,
+                RemoteId = TryConvertSenderConnectionToRemoteId(senderConn),
                 Payload = data,
 
                 DeserializeGameMessage = DeserializeGameMessage,
@@ -4242,6 +4245,25 @@ namespace CMZDedicatedSteamServer
             }
 
             return "Player" + senderId;
+        }
+
+        /// <summary>
+        /// Converts the transport sender object into a stable remote id when available.
+        /// Steam passes the sender SteamID64 as the sender connection object.
+        /// </summary>
+        private static ulong TryConvertSenderConnectionToRemoteId(object senderConn)
+        {
+            if (senderConn == null)
+                return 0UL;
+
+            try
+            {
+                return Convert.ToUInt64(senderConn, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return 0UL;
+            }
         }
 
         /// <summary>

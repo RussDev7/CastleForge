@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net481</TargetFramework>
+
+    <!-- Friendly runtime DLL name. -->
+    <AssemblyName>Example</AssemblyName>
+
+    <!-- Public plugin namespace. -->
+    <RootNamespace>CastleForge.ServerPlugins.Example</RootNamespace>
+
+    <!-- Used by Shared/Plugins/Directory.Build.targets when copying to server outputs. -->
+    <PluginFolderName>Example</PluginFolderName>
+
+    <LangVersion>latest</LangVersion>
+
+    <!-- Keep public release plugin output simple. -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+
+    <!-- Optional, but matches the dedicated server runtime better. -->
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\CMZDedicatedServer.PluginAPI\CMZDedicatedServer.PluginAPI.csproj">
+      <!-- The server output already contains CastleForge.ServerPluginAPI.dll. -->
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Dependencies\" />
+  </ItemGroup>
+</Project>

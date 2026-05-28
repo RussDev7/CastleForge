@@ -6,19 +6,14 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using System;
 
-namespace CMZDedicatedLidgrenServer.Plugins
+namespace CMZDedicatedServer.Plugins
 {
     #region Plugin Contracts
 
     /// <summary>
-    /// Defines a server-side world plugin that can inspect and optionally consume host/world messages.
+    /// Base interface for all dedicated server plugins.
     /// </summary>
-    /// <remarks>
-    /// Plugins are called before selected world mutation packets are applied or relayed by the server.
-    /// Returning true from <see cref="BeforeHostMessage(HostMessageContext)"/> means the plugin consumed
-    /// the packet and normal server handling should stop.
-    /// </remarks>
-    internal interface IServerWorldPlugin
+    public interface IServerPlugin
     {
         /// <summary>
         /// Display name used by the plugin manager for logging.
@@ -28,17 +23,17 @@ namespace CMZDedicatedLidgrenServer.Plugins
         /// <summary>
         /// Initializes the plugin with server-provided paths, world identity, and logging services.
         /// </summary>
-        /// <param name="context">Plugin initialization context supplied by the dedicated server.</param>
         void Initialize(ServerPluginContext context);
+    }
 
+    /// <summary>
+    /// Optional server-side world plugin that can inspect and optionally consume host/world messages.
+    /// </summary>
+    public interface IServerWorldPlugin : IServerPlugin
+    {
         /// <summary>
         /// Inspects a host/world message before normal server handling.
         /// </summary>
-        /// <param name="context">Context for the message being processed.</param>
-        /// <returns>
-        /// True to consume/block the packet.
-        /// False to allow normal server handling and relay.
-        /// </returns>
         bool BeforeHostMessage(HostMessageContext context);
     }
     #endregion
@@ -48,7 +43,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Optional plugin interface for player join/leave notifications.
     /// </summary>
-    internal interface IServerPlayerEventPlugin
+    public interface IServerPlayerEventPlugin
     {
         /// <summary>
         /// Called after a player has joined and the server can send messages to them.
@@ -64,7 +59,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Optional plugin interface for periodic server updates.
     /// </summary>
-    internal interface IServerTickPlugin
+    public interface IServerTickPlugin
     {
         /// <summary>
         /// Called once per server update loop.
@@ -72,13 +67,14 @@ namespace CMZDedicatedLidgrenServer.Plugins
         void Update(ServerPluginTickContext context);
     }
 
+    /// <summary>
     /// Optional plugin interface for inspecting every inbound gameplay packet before host handling or relay.
     /// </summary>
     /// <remarks>
     /// This hook runs above the world-message layer, so it can protect both host-directed packets
     /// and peer-relay packets. Returning true consumes/drops the packet.
     /// </remarks>
-    internal interface IServerInboundPacketPlugin
+    public interface IServerInboundPacketPlugin
     {
         /// <summary>
         /// Inspects an inbound packet before the server handles or relays it.
@@ -91,7 +87,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Optional plugin interface for final save/cleanup when the server is stopping.
     /// </summary>
-    internal interface IServerShutdownPlugin
+    public interface IServerShutdownPlugin
     {
         /// <summary>
         /// Called when the server is stopping so file-backed plugins can flush final state.
@@ -105,7 +101,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Context supplied to plugins when a player joins or leaves.
     /// </summary>
-    internal sealed class ServerPlayerEventContext
+    public sealed class ServerPlayerEventContext
     {
         public byte PlayerId { get; set; }
 
@@ -125,7 +121,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Context supplied to plugins during the server update loop.
     /// </summary>
-    internal sealed class ServerPluginTickContext
+    public sealed class ServerPluginTickContext
     {
         public DateTime UtcNow { get; set; }
 
@@ -147,7 +143,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Context supplied to plugins when the server is stopping.
     /// </summary>
-    internal sealed class ServerPluginShutdownContext
+    public sealed class ServerPluginShutdownContext
     {
         public DateTime UtcNow { get; set; }
 
@@ -159,7 +155,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <summary>
     /// Context supplied to packet-level guard plugins before normal packet handling or relay.
     /// </summary>
-    internal sealed class ServerInboundPacketContext
+    public sealed class ServerInboundPacketContext
     {
         /// <summary>
         /// Server-side sender/player id. GID 0 is the host.
@@ -182,7 +178,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
         public byte RecipientId { get; set; }
 
         /// <summary>
-        /// CastleMiner Z packet channel. Channel 0 is normal gameplay; channel 1 is wrapper/internal traffic.
+        /// CastleMiner Z packet channel. Channel 0 is normal gameplay; channel 1 is wrapper/public traffic.
         /// </summary>
         public int Channel { get; set; }
 
@@ -230,7 +226,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// This context is passed once during plugin startup. It should contain stable information
     /// such as the server executable directory and the active world key used for per-world config files.
     /// </remarks>
-    internal sealed class ServerPluginContext
+    public sealed class ServerPluginContext
     {
         /// <summary>
         /// Base server directory used as the root for plugin config/storage folders.
@@ -274,7 +270,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <param name="y">Output Y coordinate.</param>
     /// <param name="z">Output Z coordinate.</param>
     /// <returns>True when the vector was read successfully; otherwise false.</returns>
-    internal delegate bool TryReadIntVector3Delegate(object value, out int x, out int y, out int z);
+    public delegate bool TryReadIntVector3Delegate(object value, out int x, out int y, out int z);
 
     /// <summary>
     /// Attempts to read the server's currently saved block type at a world block position.
@@ -283,7 +279,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// This usually reads from saved chunk delta data. It may return false for natural/procedural
     /// terrain that has not been written into a chunk delta yet.
     /// </remarks>
-    internal delegate bool TryGetSavedBlockTypeDelegate(
+    public delegate bool TryGetSavedBlockTypeDelegate(
         int x,
         int y,
         int z,
@@ -295,7 +291,7 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// <remarks>
     /// This can use saved delta data or a recent DigMessage cache to restore denied mining visuals.
     /// </remarks>
-    internal delegate bool TryGetOriginalBlockTypeDelegate(
+    public delegate bool TryGetOriginalBlockTypeDelegate(
         byte senderId,
         int x,
         int y,
@@ -311,9 +307,9 @@ namespace CMZDedicatedLidgrenServer.Plugins
     /// </summary>
     /// <remarks>
     /// This object is created by the server world handler for each plugin-intercepted message.
-    /// Plugins should use the provided callbacks instead of directly touching server internals.
+    /// Plugins should use the provided callbacks instead of directly touching server publics.
     /// </remarks>
-    internal sealed class HostMessageContext
+    public sealed class HostMessageContext
     {
         #region Message Identity
 
@@ -331,6 +327,12 @@ namespace CMZDedicatedLidgrenServer.Plugins
         /// Best known display name for the sending player.
         /// </summary>
         public string SenderName { get; set; }
+
+        /// <summary>
+        /// Optional transport-level remote identity.
+        /// Steam uses the sender SteamID64; Lidgren leaves this as 0.
+        /// </summary>
+        public ulong RemoteId { get; set; }
 
         /// <summary>
         /// Raw packet payload, including message id and checksum.

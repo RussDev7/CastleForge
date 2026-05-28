@@ -41,6 +41,9 @@ That gives you a cleaner setup for:
 - Includes a built-in **VanillaSpawners** plugin for disabling newly generated vanilla spawner blocks, disabling random vanilla loot blocks, and optionally blocking existing spawner activation.
 - Supports configurable command prefix aliases, allowing commands such as `!help` and `/help` to work side-by-side.
 - Supports escaped multiline announcement messages using `\n` for both private join messages and timed global messages.
+- Supports external server plugin DLLs under the runtime `Plugins` folder.
+- Includes the shared server plugin API assembly for external and shared plugin development.
+- RegionProtect supports SteamID64 allow-lists through `AllowedSteamIds`, allowing protected regions to authorize players by stable Steam identity instead of display name only.
 
 ---
 
@@ -152,11 +155,17 @@ A typical packaged runtime layout looks like:
 ```text
 !Mods\CMZDedicatedSteamServer\
 ├─ CMZDedicatedSteamServer.exe
+├─ CastleForge.ServerPluginAPI.dll
 ├─ RunServer.bat
 ├─ server.properties
 ├─ steam_appid.txt
 ├─ Libs/
 │  └─ 0Harmony.dll
+├─ Plugins/
+│  └─ Example/
+│     ├─ Example.dll
+│     └─ Dependencies/
+│        └─ SomeDependency.dll
 ├─ Game/
 │  └─ README.txt
 ├─ Inventory/
@@ -586,9 +595,14 @@ It is especially useful for:
 
 ## Server Plugins
 
-CastleForge Dedicated Servers now include basic **server-side plugin support** for host-authoritative world protections and future server extensions.
+CastleForge Dedicated Servers include **server-side plugin support** for host-authoritative world protections, server automation, and future server extensions.
 
 Plugins run inside the dedicated server process and can inspect selected host/world packets before the server applies or relays them. This allows the server to enforce rules even when connecting players do **not** have the matching client-side mod installed.
+
+This server supports two plugin styles:
+
+- **Built-in plugins** compiled directly into the dedicated server build and registered by the host at startup.
+- **External plugin DLLs** loaded from the runtime `Plugins` folder.
 
 Current built-in plugin support includes:
 
@@ -604,7 +618,73 @@ Current built-in plugin support includes:
 - crate break protection
 - per-world plugin configuration
 
-> Server plugins are currently compiled into the dedicated server build. External plugin DLL loading may be added later.
+### External plugin DLLs
+
+External plugins are loaded from the server's `Plugins` folder.
+
+Recommended layout:
+
+```text
+CMZDedicatedSteamServer/
+├─ CMZDedicatedSteamServer.exe
+├─ CastleForge.ServerPluginAPI.dll
+└─ Plugins/
+   └─ Example/
+      ├─ Example.dll
+      └─ Dependencies/
+         └─ SomeDependency.dll
+```
+
+The plugin DLL belongs directly under its plugin folder. Optional helper DLLs belong under that plugin's `Dependencies` folder.
+
+If a plugin has no extra DLL dependencies, the `Dependencies` folder is not required.
+
+### Plugin API
+
+External plugins should reference the shared CastleForge server plugin API assembly:
+
+```text
+CastleForge.ServerPluginAPI.dll
+```
+
+The API assembly is expected beside the dedicated server executable, not inside each plugin's `Dependencies` folder.
+
+If your local build still outputs `CMZDedicatedServer.PluginAPI.dll`, either rename the API project `AssemblyName` to `CastleForge.ServerPluginAPI` or use that technical DLL name consistently.
+
+Useful plugin contracts include:
+
+- `IServerPlugin`
+- `IServerWorldPlugin`
+- `IServerInboundPacketPlugin`
+- `IServerPlayerEventPlugin`
+- `IServerTickPlugin`
+- `IServerShutdownPlugin`
+
+Plugins should use the shared context objects and callbacks provided by the server instead of depending directly on Steam-only or Lidgren-only transport internals.
+
+### Plugin load order
+
+The dedicated host registers built-in plugins first, then loads external plugin DLLs, then initializes all registered plugins.
+
+The startup flow is:
+
+```text
+Register built-in plugins
+Load external plugin DLLs
+Initialize all plugins
+```
+
+This keeps the original built-in plugin behavior intact while allowing server owners to add extra plugin DLLs.
+
+### Reload behavior
+
+The server `reload` command can reload runtime-safe config and plugin state, but it does not unload or replace plugin DLLs.
+
+On .NET Framework, assemblies loaded into the default AppDomain cannot be unloaded cleanly. Adding, removing, or replacing plugin DLLs requires a dedicated server restart.
+
+### Trust model
+
+External server plugins run in the same process as the dedicated server. Only install plugins from trusted sources, because a plugin can read files, write files, send network messages, or crash the server process.
 
 ## Announcements Server Plugin
 
@@ -777,16 +857,20 @@ LogDenied              = true
 
 Each world has its own `RegionProtect.Regions.ini` file:
 
+`AllowedPlayers` accepts player display names. On the Steam dedicated server, `AllowedSteamIds` also accepts SteamID64 values for stable identity-based allow-lists.
+
 ```ini
 [SpawnProtection]
-Enabled        = true
-Range          = 64
-AllowedPlayers = RussDev7
+Enabled         = true
+Range           = 64
+AllowedPlayers  = RussDev7
+AllowedSteamIds = 76561198XXXXXXXXX
 
 [Region:SpawnTown]
-Min            = -80,0,-80
-Max            = 80,120,80
-AllowedPlayers = RussDev7,SomeAdmin
+Min             = -80,0,-80
+Max             = 80,120,80
+AllowedPlayers  = RussDev7,SomeAdmin
+AllowedSteamIds = 76561198XXXXXXXXX,76561198XXXXXXXXX
 ```
 
 ### Player warning behavior
@@ -806,6 +890,10 @@ In some cases, the client may briefly show a block as broken or changed. The ser
 * Commands such as `/regionpos` and `/regioncreate` are not currently part of the dedicated server plugin.
 * Regions are currently edited manually through the `.ini` files.
 * Explosion restoration can visually desync on the attacking client, but protected explosion damage is not saved to the server.
+* On the Steam dedicated server, prefer `AllowedSteamIds` for trusted players/admins because SteamID64 is stable across display-name changes.
+* On the Lidgren dedicated server, RegionProtect allow-lists are effectively name-based.
+* Existing `RegionProtect.Regions.ini` files are not automatically rewritten with new keys. Add `AllowedSteamIds =` manually or regenerate the file if you want the new example format.
+* `AllowedSteamIds` expects numeric SteamID64 values, not Steam profile names or vanity URLs.
 
 ## FloodGuard plugin
 

@@ -12,6 +12,7 @@ using CMZDedicatedLidgrenServer.Plugins.FloodGuard;
 using CMZDedicatedLidgrenServer.Commands;
 using CMZDedicatedLidgrenServer.Hosting;
 using CMZDedicatedLidgrenServer.Plugins;
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Net;
@@ -379,6 +380,8 @@ namespace CMZDedicatedLidgrenServer
                 _plugins.Register(new ServerAnnouncementsPlugin());
                 _plugins.Register(new ServerRememberTimePlugin());
                 _plugins.Register(new ServerVanillaSpawnerPlugin());
+
+                _plugins.LoadExternalPlugins(Path.Combine(_saveRoot, "Plugins"));
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {

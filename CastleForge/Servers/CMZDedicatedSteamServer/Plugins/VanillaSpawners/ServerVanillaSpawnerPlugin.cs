@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;

@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7, unknowghost0
 This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICENSE for details.
 */
 
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
@@ -223,6 +224,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
 
             if (!ShouldDenyExplosionArea(
                     context.SenderName,
+                    context.RemoteId,
                     explosionPos,
                     explosiveTypeValue,
                     out string reason))
@@ -280,7 +282,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                 if (!TryReadBlockPosition(context, location, out BlockPos blockPos))
                     continue;
 
-                if (ShouldDeny(context.SenderName, blockPos, ProtectAction.Explosion, out string reason))
+                if (ShouldDeny(context.SenderName, context.RemoteId, blockPos, ProtectAction.UseCrate, out string reason))
                 {
                     denied = true;
                     deniedPositions.Add(blockPos);
@@ -325,7 +327,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                 return false;
             }
 
-            if (!ShouldDeny(context.SenderName, cratePos, ProtectAction.UseCrate, out string reason))
+            if (!ShouldDeny(context.SenderName, context.RemoteId, cratePos, ProtectAction.UseCrate, out string reason))
                 return false;
 
             if (_config.LogDenied)
@@ -366,7 +368,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                 }
             }
 
-            if (!ShouldDeny(context.SenderName, cratePos, ProtectAction.BreakCrate, out string reason))
+            if (!ShouldDeny(context.SenderName, context.RemoteId, cratePos, ProtectAction.UseCrate, out string reason))
                 return false;
 
             if (_config.LogDenied)
@@ -398,7 +400,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
             ProtectAction action,
             int attemptedBlockTypeValue = -1)
         {
-            if (!ShouldDeny(context.SenderName, blockPos, action, out string reason))
+            if (!ShouldDeny(context.SenderName, context.RemoteId, blockPos, ProtectAction.UseCrate, out string reason))
                 return false;
 
             string player = SafePlayer(context.SenderName, context.SenderId);
@@ -573,11 +575,12 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
         /// Checks whether a player action at a block position should be denied by spawn or region protection.
         /// </summary>
         /// <param name="playerName">Player name from the server context.</param>
+        /// <param name="remoteId">Transport-level remote identity. Steam uses SteamID64; Lidgren normally uses 0.</param>
         /// <param name="blockPos">Block position being tested.</param>
         /// <param name="action">Protection action being tested.</param>
         /// <param name="reason">Human-readable denial reason when denied.</param>
         /// <returns>True when the action should be denied; otherwise false.</returns>
-        private bool ShouldDeny(string playerName, BlockPos blockPos, ProtectAction action, out string reason)
+        private bool ShouldDeny(string playerName, ulong remoteId, BlockPos blockPos, ProtectAction action, out string reason)
         {
             reason = null;
 
@@ -585,6 +588,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                 return false;
 
             string player = NormalizePlayer(playerName);
+            string steamId = remoteId == 0UL ? string.Empty : remoteId.ToString(CultureInfo.InvariantCulture);
 
             if (_spawn.Enabled && _spawn.Range > 0)
             {
@@ -594,7 +598,8 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
 
                 if ((dx * dx) + (dz * dz) <= range * range)
                 {
-                    if (!_spawn.AllowedPlayers.Contains(player))
+                    if (!_spawn.AllowedPlayers.Contains(player) &&
+                        !_spawn.AllowedSteamIds.Contains(steamId))
                     {
                         reason = "spawn protection";
                         return true;
@@ -607,7 +612,8 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                 if (!region.Contains(blockPos))
                     continue;
 
-                if (!region.AllowedPlayers.Contains(player))
+                if (!region.AllowedPlayers.Contains(player) &&
+                    !region.AllowedSteamIds.Contains(steamId))
                 {
                     reason = "region '" + region.Name + "'";
                     return true;
@@ -639,12 +645,14 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
         /// Returns true when an explosion center/radius would affect protected blocks.
         /// </summary>
         /// <param name="playerName">Player name from the server context.</param>
+        /// <param name="remoteId">Transport-level remote identity. Steam uses SteamID64; Lidgren normally uses 0.</param>
         /// <param name="center">Explosion center position.</param>
         /// <param name="explosiveTypeValue">Raw explosive type enum value.</param>
         /// <param name="reason">Human-readable denial reason when denied.</param>
         /// <returns>True when any block inside the explosion radius is protected; otherwise false.</returns>
         private bool ShouldDenyExplosionArea(
             string playerName,
+            ulong remoteId,
             BlockPos center,
             int explosiveTypeValue,
             out string reason)
@@ -664,7 +672,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
                     {
                         BlockPos pos = new(x, y, z);
 
-                        if (ShouldDeny(playerName, pos, ProtectAction.Explosion, out reason))
+                        if (ShouldDeny(playerName, remoteId, pos, ProtectAction.Explosion, out reason))
                             return true;
                     }
                 }
@@ -1210,6 +1218,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
             public BlockPos Min;
             public BlockPos Max;
             public HashSet<string> AllowedPlayers = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> AllowedSteamIds = new(StringComparer.OrdinalIgnoreCase);
 
             public bool Contains(BlockPos pos)
             {
@@ -1227,6 +1236,7 @@ namespace CMZDedicatedLidgrenServer.Plugins.RegionProtect
             public bool Enabled;
             public int Range;
             public HashSet<string> AllowedPlayers = new(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> AllowedSteamIds = new(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>

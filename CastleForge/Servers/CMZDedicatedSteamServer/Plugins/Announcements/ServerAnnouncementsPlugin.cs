@@ -4,6 +4,7 @@ Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
 */
 
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;

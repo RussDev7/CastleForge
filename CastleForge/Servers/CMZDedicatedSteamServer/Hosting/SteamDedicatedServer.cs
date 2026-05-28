@@ -14,6 +14,7 @@ using CMZDedicatedSteamServer.Plugins;
 using CMZDedicatedSteamServer.Common;
 using CMZDedicatedSteamServer.Config;
 using CMZDedicatedSteamServer.Steam;
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Collections;
 using System.Reflection;
@@ -288,6 +289,8 @@ namespace CMZDedicatedSteamServer.Hosting
                 _plugins.Register(new ServerAnnouncementsPlugin());
                 _plugins.Register(new ServerRememberTimePlugin());
                 _plugins.Register(new ServerVanillaSpawnerPlugin());
+
+                _plugins.LoadExternalPlugins(Path.Combine(_baseDir, "Plugins"));
 
                 _plugins.InitializeAll(new ServerPluginContext
                 {

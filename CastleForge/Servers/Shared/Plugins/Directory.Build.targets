@@ -1,0 +1,57 @@
+<Project>
+  <Target Name="CopySharedPluginToServerOutputs" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginFolderName Condition="'$(PluginFolderName)' == ''">$(AssemblyName)</PluginFolderName>
+
+      <LidgrenPluginDir>$(BuildOutputRoot)$(Configuration)\!Mods\CMZDedicatedLidgrenServer\Plugins\$(PluginFolderName)\</LidgrenPluginDir>
+      <SteamPluginDir>$(BuildOutputRoot)$(Configuration)\!Mods\CMZDedicatedSteamServer\Plugins\$(PluginFolderName)\</SteamPluginDir>
+
+      <LidgrenPluginDependencyDir>$(LidgrenPluginDir)Dependencies\</LidgrenPluginDependencyDir>
+      <SteamPluginDependencyDir>$(SteamPluginDir)Dependencies\</SteamPluginDependencyDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PluginMainFiles Include="$(TargetPath)" />
+      <PluginMainFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+      <PluginMainFiles Include="$(TargetDir)$(TargetName).xml" Condition="Exists('$(TargetDir)$(TargetName).xml')" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PluginDependencyFiles Include="@(ReferenceCopyLocalPaths)"
+                             Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll'" />
+
+      <PluginDependencyFiles Remove="@(PluginDependencyFiles)"
+                             Condition="'%(Filename)' == 'CastleForge.ServerPluginAPI'" />
+
+      <PluginDependencyFiles Remove="@(PluginDependencyFiles)"
+                             Condition="'%(Filename)' == 'CMZDedicatedServer.PluginAPI'" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(LidgrenPluginDir)" />
+    <MakeDir Directories="$(SteamPluginDir)" />
+
+    <Copy SourceFiles="@(PluginMainFiles)"
+          DestinationFolder="$(LidgrenPluginDir)"
+          SkipUnchangedFiles="true" />
+
+    <Copy SourceFiles="@(PluginMainFiles)"
+          DestinationFolder="$(SteamPluginDir)"
+          SkipUnchangedFiles="true" />
+
+    <MakeDir Directories="$(LidgrenPluginDependencyDir)"
+             Condition="'@(PluginDependencyFiles)' != ''" />
+
+    <MakeDir Directories="$(SteamPluginDependencyDir)"
+             Condition="'@(PluginDependencyFiles)' != ''" />
+
+    <Copy SourceFiles="@(PluginDependencyFiles)"
+          DestinationFolder="$(LidgrenPluginDependencyDir)"
+          SkipUnchangedFiles="true"
+          Condition="'@(PluginDependencyFiles)' != ''" />
+
+    <Copy SourceFiles="@(PluginDependencyFiles)"
+          DestinationFolder="$(SteamPluginDependencyDir)"
+          SkipUnchangedFiles="true"
+          Condition="'@(PluginDependencyFiles)' != ''" />
+  </Target>
+</Project>

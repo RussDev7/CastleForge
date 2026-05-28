@@ -6,6 +6,7 @@ This file is part of https://github.com/RussDev7/CMZDedicatedServers - see LICEN
 
 using CMZDedicatedLidgrenServer.Plugins;
 using System.Runtime.CompilerServices;
+using CMZDedicatedServer.Plugins;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
@@ -4196,6 +4197,7 @@ namespace CMZDedicatedLidgrenServer
                 TypeName = typeName,
                 SenderId = senderId,
                 SenderName = senderName,
+                RemoteId = 0UL,
                 Payload = data,
 
                 DeserializeGameMessage = DeserializeGameMessage,
