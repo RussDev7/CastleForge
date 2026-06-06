@@ -3937,8 +3937,8 @@ namespace CastleWallsMk2
         }
 
         /// <summary>
-        /// Rebuild an InventoryItem from a PL_SlotItem using the same clamping rules
-        /// as the editor (CreateClampedItem + clip clamp).
+        /// Rebuilds an InventoryItem from a saved slot item using the same
+        /// stack, health, and clip clamp rules as the Player editor.
         /// </summary>
         static InventoryItem PL_RebuildItem(PL_SlotItem d)
         {
@@ -3946,11 +3946,13 @@ namespace CastleWallsMk2
                 return null;
 
             var it = CreateClampedItem(d.Id, d.Stack, d.Health);
+
             if (it is GunInventoryItem gi && d.Clip.HasValue)
             {
-                int clipMax = Math.Max(0, gi.GunClass?.ClipCapacity ?? gi.RoundsInClip);
+                int clipMax = EffectiveClipCap(gi);
                 gi.RoundsInClip = Math.Max(0, Math.Min(clipMax, d.Clip.Value));
             }
+
             return it;
         }
 
