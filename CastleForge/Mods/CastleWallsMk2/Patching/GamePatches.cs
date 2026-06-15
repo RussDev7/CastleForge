@@ -7778,6 +7778,112 @@ namespace CastleWallsMk2
         }
         #endregion
 
+        /// <summary>
+        /// GHOST MODE: SUPPRESS OUTBOUND PUBLIC ANNOUNCEMENTS
+        ///
+        /// Blocks this client from broadcasting vanilla public announcement lines while
+        /// Ghost Mode is enabled, but still allows normal player chat.
+        ///
+        /// Examples blocked:
+        /// - "Player Has Killed The Fire Dragon"
+        /// - "Player Has Defeated 10 Zombies"
+        /// - "Player Has Opened 10 Loot Blocks"
+        /// - "Player Has Fallen"
+        /// - "Player Has Respawned"
+        /// - achievement / GPS / spawner / restart style public notices
+        ///
+        /// Examples allowed:
+        /// - "PlayerName: hello"
+        /// - "PlayerName: /help"
+        /// - normal public chat typed by the local player
+        /// </summary>
+        #region Ghost Mode - Suppress Outbound Public Announcements
+
+        [HarmonyPatch(typeof(BroadcastTextMessage), nameof(BroadcastTextMessage.Send))]
+        internal static class Patch_BroadcastTextMessage_Send_GhostModeSuppressAnnouncements
+        {
+            /// <summary>
+            /// Runs before other BroadcastTextMessage.Send patches so normal local chat is
+            /// preserved before any later display-name rewrites, such as Sudo Player.
+            /// </summary>
+            [HarmonyPriority(Priority.First)]
+            [HarmonyPrefix]
+            private static bool Prefix(LocalNetworkGamer from, string message)
+            {
+                try
+                {
+                    if (!CastleWallsMk2._ghostModeEnabled)
+                        return true;
+
+                    var game = CastleMinerZGame.Instance;
+                    if (from == null || game?.MyNetworkGamer == null)
+                        return true;
+
+                    // Only suppress messages sent by our local gamer.
+                    if (!ReferenceEquals(from, game.MyNetworkGamer))
+                        return true;
+
+                    // Keep normal chat working.
+                    if (IsNormalLocalChatLine(from, message))
+                        return true;
+
+                    // Ghost Mode is active and this is not normal chat,
+                    // so block the public announcement before it broadcasts.
+                    return false;
+                }
+                catch
+                {
+                    // Never break chat flow if something unexpected happens.
+                    return true;
+                }
+            }
+
+            /// <summary>
+            /// Vanilla chat is built as:
+            ///     "Gamertag: message"
+            ///
+            /// Public announcements usually use:
+            ///     "Gamertag Has Fallen"
+            ///     "Gamertag Has Killed The Dragon"
+            ///     "Gamertag Has Opened 10 Loot Blocks"
+            ///
+            /// So only messages starting with one of our known local names followed by
+            /// ": " are treated as normal chat.
+            /// </summary>
+            private static bool IsNormalLocalChatLine(LocalNetworkGamer from, string message)
+            {
+                if (string.IsNullOrEmpty(message))
+                    return false;
+
+                if (StartsWithChatPrefix(message, from?.Gamertag))
+                    return true;
+
+                if (StartsWithChatPrefix(message, from?.SignedInGamer?.Gamertag))
+                    return true;
+
+                if (StartsWithChatPrefix(message, CastleMinerZGame.Instance?.LocalPlayer?.Gamer?.Gamertag))
+                    return true;
+
+                if (StartsWithChatPrefix(message, CastleWallsMk2._ghostModeNameBackup))
+                    return true;
+
+                return false;
+            }
+
+            /// <summary>
+            /// Do not use IsNullOrWhiteSpace here because Ghost Mode hide-name may use
+            /// newline-only names, and those can still form a valid hidden chat prefix.
+            /// </summary>
+            private static bool StartsWithChatPrefix(string message, string name)
+            {
+                if (string.IsNullOrEmpty(message) || string.IsNullOrEmpty(name))
+                    return false;
+
+                return message.StartsWith(name + ": ", StringComparison.Ordinal);
+            }
+        }
+        #endregion
+
         #endregion
 
         #region Rapid Place
