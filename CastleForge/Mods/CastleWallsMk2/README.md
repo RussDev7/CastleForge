@@ -192,6 +192,20 @@ These tweaks are not flashy headline features, but they make CastleWallsMk2 smoo
 - the mod can hide or show the overlay automatically on launch
 - the config hot-reload binding makes iteration faster when tuning the UI or capture settings
 
+#### CP1251 name prefix
+
+Custom names may use the optional `cp1251:` prefix to intentionally convert UTF-8 text into CP1251-style mojibake before applying the name.
+
+Example:
+
+```txt
+cp1251:БЕ-Z-ТУНДРЫЧ
+```
+
+This is mainly useful for matching how some Steam names appear in CastleMiner Z.
+
+> This does not add full Cyrillic font support. It only transforms the entered name before CastleWallsMk2 applies it.
+
 ![Installation](_Images/Config.png)
 
 ---

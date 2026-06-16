@@ -403,12 +403,7 @@ namespace CastleWallsMk2
                     var raw = name ?? string.Empty;
 
                     // Decode HTML entities -> Unicode.
-                    // "<test>"           => "<test>".
-                    // "&#33;hello&Delta;&#33;" => "!helloΔ!".
-                    name = WebUtility.HtmlDecode(raw);
-
-                    // Optional: Decode twice to handle "&amp;lt;" => "<" => "<".
-                    name = WebUtility.HtmlDecode(name);
+                    name = NameEncodingHelper.PrepareName(name);
 
                     try { CastleMinerZGame.Instance.MyNetworkGamer.Gamertag = name; } catch (Exception) { }
                     try { Gamer.SignedInGamers[PlayerIndex.One].Gamertag    = name; } catch (Exception) { }

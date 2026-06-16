@@ -140,6 +140,7 @@
     <Compile Include="Embedded\EmbeddedResolver.cs" />
     <Compile Include="Startup\ModConfig.cs" />
     <Compile Include="Utils\CryptoRng.cs" />
+    <Compile Include="Utils\NameEncodingHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Embedded\0Harmony.dll" />

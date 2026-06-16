@@ -69,6 +69,7 @@ namespace CastleWallsMk2
                     .Select(s => (s ?? string.Empty).Trim())
                     .Where(s => s.Length > 0 && !s.StartsWith("#") && !s.StartsWith("//"))
                     .Select(UnescapeTextFileEscapes)
+                    .Select(NameEncodingHelper.PrepareName)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
 
