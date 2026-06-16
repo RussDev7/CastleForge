@@ -5,6 +5,7 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 #pragma warning disable IDE0060         // Silence IDE0060.
+using DNA.CastleMinerZ.GraphicsProfileSupport;
 using DNA.CastleMinerZ.Terrain.WorldBuilders;
 using Microsoft.Xna.Framework.Graphics;
 using System.Runtime.CompilerServices;
@@ -825,8 +826,9 @@ namespace ModLoaderExt
         /// </summary>
         internal static class PlayerStatsSettingsGuard
         {
-            private const int VanillaMinDrawDistance = 0;
-            private const int VanillaMaxDrawDistance = 4;
+            private static int? _lastKnownGoodDrawDistance;
+            private const int   VanillaMinDrawDistance = 0;
+            private const int   VanillaMaxDrawDistance = 4;
 
             /// <summary>
             /// Normalizes DrawDistance without destroying extended RenderDistancePlus values.
@@ -845,16 +847,19 @@ namespace ModLoaderExt
                     if (validValues != null && validValues.Length > 0)
                     {
                         stats.DrawDistance = SnapToNearest(value, validValues);
+                        RememberLastKnownDrawDistance(stats);
                         return;
                     }
 
                     // RenderDistancePlus was detected, but its valid step table could not be read.
                     // Fall back to vanilla instead of using hardcoded RenderDistancePlus values.
                     ClampToVanilla(stats);
+                    RememberLastKnownDrawDistance(stats);
                     return;
                 }
 
                 ClampToVanilla(stats);
+                RememberLastKnownDrawDistance(stats);
             }
 
             /// <summary>
@@ -869,6 +874,33 @@ namespace ModLoaderExt
                     stats.DrawDistance = VanillaMinDrawDistance;
                 else if (stats.DrawDistance > VanillaMaxDrawDistance)
                     stats.DrawDistance = VanillaMaxDrawDistance;
+            }
+
+            /// <summary>
+            /// Keeps a session-local copy of the last valid render distance so a failed
+            /// stats load does not leave the player stuck at the Reach fallback value.
+            /// </summary>
+            private static void RememberLastKnownDrawDistance(CastleMinerZPlayerStats stats)
+            {
+                if (stats == null)
+                    return;
+
+                if (stats.DrawDistance < 0)
+                    return;
+
+                _lastKnownGoodDrawDistance = stats.DrawDistance;
+            }
+
+            /// <summary>
+            /// Restores the last known draw distance when vanilla-style stats loading falls
+            /// back to a fresh/default stats object.
+            /// </summary>
+            public static void RestoreLastKnownDrawDistance(CastleMinerZPlayerStats stats)
+            {
+                if (stats == null || !_lastKnownGoodDrawDistance.HasValue)
+                    return;
+
+                stats.DrawDistance = _lastKnownGoodDrawDistance.Value;
             }
 
             /// <summary>
@@ -953,6 +985,7 @@ namespace ModLoaderExt
             }
         }
 
+        /*
         [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.LoadPlayerData))]
         internal static class CastleMinerZGame_LoadPlayerData_ClampDrawDistance
         {
@@ -966,18 +999,156 @@ namespace ModLoaderExt
                 PlayerStatsSettingsGuard.Normalize(__instance?.PlayerStats);
             }
         }
+        */
 
         [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.SavePlayerStats))]
         internal static class CastleMinerZGame_SavePlayerStats_ClampDrawDistance
         {
             /// <summary>
             /// Normalizes DrawDistance before vanilla writes player stats.
-            /// RenderDistancePlus extended values are preserved when that mod is loaded.
+            /// Also keeps the stats Gamertag aligned with the current visible gamer name
+            /// so the next vanilla/profile read does not immediately fail.
             /// </summary>
             [HarmonyPrefix]
             private static void Prefix(CastleMinerZPlayerStats playerStats)
             {
+                if (playerStats == null)
+                    return;
+
+                try
+                {
+                    if (Screen.CurrentGamer != null &&
+                        !string.IsNullOrEmpty(Screen.CurrentGamer.Gamertag))
+                    {
+                        playerStats.GamerTag = Screen.CurrentGamer.Gamertag;
+                    }
+                }
+                catch
+                {
+                }
+
                 PlayerStatsSettingsGuard.Normalize(playerStats);
+            }
+        }
+        #endregion
+
+        #region PlayerStats Gamertag Mismatch Guard
+
+        /// <summary>
+        /// Loads player stats in a name-spoof tolerant way.
+        ///
+        /// Vanilla CastleMiner Z stores the current Gamertag inside stats.sav and throws
+        /// "Stats Error" if the saved Gamertag does not match Screen.CurrentGamer.Gamertag.
+        /// That breaks username spoofing / UsernameList randomization because changing the
+        /// visible name makes vanilla treat the existing stats file as invalid.
+        ///
+        /// This guard accepts a Gamertag mismatch, keeps the loaded stats, and updates the
+        /// stats Gamertag to the current visible name before the next save.
+        /// </summary>
+        internal static class PlayerStatsGamertagMismatchGuard
+        {
+            public static void SafeLoad(CastleMinerZGame game)
+            {
+                if (game == null)
+                    return;
+
+                string currentName = GetCurrentGamerTag();
+
+                try
+                {
+                    CastleMinerZPlayerStats stats = new CastleMinerZPlayerStats
+                    {
+                        GamerTag = currentName
+                    };
+
+                    game.SaveDevice.Load("stats.sav", delegate (Stream stream)
+                    {
+                        using (BinaryReader reader = new BinaryReader(stream))
+                        {
+                            stats.Load(reader);
+                        }
+                    });
+
+                    if (!string.Equals(stats.GamerTag, currentName, StringComparison.Ordinal))
+                    {
+                        Log(
+                            "Saved stats Gamertag did not match current Gamertag. " +
+                            "Keeping stats and updating profile name. " +
+                            $"Saved='{stats.GamerTag}', Current='{currentName}'");
+
+                        stats.GamerTag = currentName;
+                    }
+
+                    PlayerStatsSettingsGuard.Normalize(stats);
+                    game.PlayerStats = stats;
+                }
+                catch (Exception ex)
+                {
+                    GamePatches.LogException(ex, "PlayerStatsGamertagMismatchGuard.SafeLoad");
+
+                    CastleMinerZPlayerStats fallback = new CastleMinerZPlayerStats
+                    {
+                        GamerTag = currentName
+                    };
+
+                    if (GraphicsProfileManager.Instance != null &&
+                        GraphicsProfileManager.Instance.IsReach)
+                    {
+                        fallback.DrawDistance = 0;
+                    }
+
+                    PlayerStatsSettingsGuard.RestoreLastKnownDrawDistance(fallback);
+                    PlayerStatsSettingsGuard.Normalize(fallback);
+
+                    game.PlayerStats = fallback;
+                }
+            }
+
+            /// <summary>
+            /// Returns the active player name, falling back to the local network gamer when needed.
+            /// </summary>
+            private static string GetCurrentGamerTag()
+            {
+                try
+                {
+                    if (Screen.CurrentGamer != null &&
+                        !string.IsNullOrEmpty(Screen.CurrentGamer.Gamertag))
+                    {
+                        return Screen.CurrentGamer.Gamertag;
+                    }
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    if (CastleMinerZGame.Instance?.MyNetworkGamer != null &&
+                        !string.IsNullOrEmpty(CastleMinerZGame.Instance.MyNetworkGamer.Gamertag))
+                    {
+                        return CastleMinerZGame.Instance.MyNetworkGamer.Gamertag;
+                    }
+                }
+                catch
+                {
+                }
+
+                return string.Empty;
+            }
+        }
+
+        [HarmonyPatch(typeof(CastleMinerZGame), nameof(CastleMinerZGame.LoadPlayerData))]
+        internal static class CastleMinerZGame_LoadPlayerData_NameSpoofSafe
+        {
+            /// <summary>
+            /// Replaces vanilla LoadPlayerData so username spoofing does not trigger
+            /// "Stats Error" and reset DrawDistance to the lowest value.
+            /// </summary>
+            [HarmonyPrefix]
+            private static bool Prefix(CastleMinerZGame __instance)
+            {
+                PlayerStatsGamertagMismatchGuard.SafeLoad(__instance);
+                return false;
             }
         }
         #endregion

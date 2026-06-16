@@ -46,6 +46,8 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 | Runtime / Config | Hot-reload config hotkey | Improvement | Adds a configurable in-game reload hotkey so ModLoaderExt settings can be reapplied without restarting the game. |
 | Crash diagnostics | Backtrace crash-report tap | Improvement | Hooks the game’s crash-report/backtrace path so exceptions can be captured locally and upstream crash upload behavior can be controlled. |
 | Crash safety | `Program.Main(...)` guard | Fix | Adds a guarded crash path around the game entry point to reduce hard-crash behavior during startup or fatal exception flow. |
+| Profile safety | Player stats / render setting hardening | Fix | Preserves existing player stats when spoofed or randomized usernames change, preventing vanilla `Stats Error` fallback from resetting render distance to the lowest setting. |
+
 
 </details>
 
