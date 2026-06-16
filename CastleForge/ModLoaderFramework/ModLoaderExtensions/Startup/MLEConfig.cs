@@ -315,7 +315,7 @@ namespace ModLoaderExt
                     "",
                     "[FloodGuard]",
                     "; Master toggle for inbound flood protection / blackhole logic.",
-                    "Enabled                   = true",
+                    "Enabled                   = false",
                     "; Per-sender inbound packet cap (1 second window).",
                     "; Don't set this too low unless you're OK dropping legit bursts.",
                     "PerSenderMaxPacketsPerSec = 512",
