@@ -189,8 +189,7 @@ namespace CastleWallsMk2
                                 _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled, _chaosModeEnabled, _clockDiscordEnabled, _dragonDiscordEnabled,
                                 _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled, _spamTextEnabled, _spamTextSudoEnabled,
                                 _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
-                                _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled, _cameraFovEnabled, _cameraSettingsEnabled
-                                ;
+                                _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled, _cameraFovEnabled, _cameraSettingsEnabled;
 
         // Sliders:
         private static TriState _worldTimeState;
@@ -3017,12 +3016,22 @@ namespace CastleWallsMk2
 
                 if (!enabled)
                 {
+                    bool wasCameraXyzEnabled = _cameraXyzEnabled;
+                    bool wasCameraFovEnabled = _cameraFovEnabled;
+
                     // Reset UI state and runtime state together.
                     IGMainUI._cameraXyz = false;
                     IGMainUI._cameraFov = false;
 
-                    Callbacks.OnCamera?.Invoke(false);
-                    Callbacks.OnCameraFov?.Invoke(false);
+                    if (wasCameraXyzEnabled)
+                        Callbacks.OnCamera?.Invoke(false);
+                    else
+                        _cameraXyzEnabled = false;
+
+                    if (wasCameraFovEnabled)
+                        Callbacks.OnCameraFov?.Invoke(false);
+                    else
+                        _cameraFovEnabled = false;
                 }
 
                 SendLog($"Camera Settings: {enabled}");
@@ -3030,31 +3039,47 @@ namespace CastleWallsMk2
 
             #region Camera XYZ
 
-            Vector3 _originalEyePivotOffset = Vector3.Zero;
+            Vector3 _originalCameraPivotOffset = new Vector3(0f, FPSRig.EyePointHeight, 0f);
+            bool    _cameraPivotOffsetCaptured = false;
+            Player  _cameraPivotOffsetOwner    = null;
             Callbacks.OnCamera = enabled =>
             {
                 try
                 {
-                    _cameraXyzEnabled = enabled;
+                    AccessTools.FieldRef<FPSRig, Entity> PitchPivot =
+                        AccessTools.FieldRefAccess<FPSRig, Entity>("pitchPiviot");
 
-                    AccessTools.FieldRef<FPSRig, Entity> PitchPivot = AccessTools.FieldRefAccess<FPSRig, Entity>("pitchPiviot");
-                    var pivot = PitchPivot(CastleMinerZGame.Instance?.LocalPlayer);
+                    var player = CastleMinerZGame.Instance?.LocalPlayer;
+                    var pivot = player != null ? PitchPivot(player) : null;
+
+                    if (pivot == null)
+                        return;
 
                     if (enabled)
                     {
-                        // Backup the original value.
-                        _originalEyePivotOffset = pivot?.LocalPosition ?? Vector3.Zero;
+                        if (!_cameraPivotOffsetCaptured || !ReferenceEquals(_cameraPivotOffsetOwner, player))
+                        {
+                            _originalCameraPivotOffset = pivot.LocalPosition;
+                            _cameraPivotOffsetOwner    = player;
+                            _cameraPivotOffsetCaptured = true;
+                        }
 
                         // Set the new camera value.
+                        _cameraXyzEnabled = true;
                         SetEyePivotOffset();
                     }
                     else
                     {
-                        // Restore original value.
-                        if (pivot != null)
-                            pivot.LocalPosition = _originalEyePivotOffset;
+                        if (_cameraPivotOffsetCaptured)
+                            pivot.LocalPosition = _originalCameraPivotOffset;
+
+                        _cameraXyzEnabled          = false;
+                        _cameraPivotOffsetCaptured = false;
+                        _cameraPivotOffsetOwner    = null;
                     }
-                } catch { }
+                }
+                catch { }
+
                 SendLog($"Custom Camera XYZ: {enabled}");
             };
             Callbacks.OnCameraXValue = value =>
@@ -3102,6 +3127,10 @@ namespace CastleWallsMk2
                     _cameraYValue = 0f;
                     _cameraZValue = 0f;
 
+                    _originalCameraPivotOffset = new Vector3(0f, FPSRig.EyePointHeight, 0f);
+                    _cameraPivotOffsetOwner    = CastleMinerZGame.Instance?.LocalPlayer;
+                    _cameraPivotOffsetCaptured = true;
+
                     if (_cameraSettingsEnabled && _cameraXyzEnabled)
                         SetEyePivotOffset();
                 }
@@ -3112,11 +3141,16 @@ namespace CastleWallsMk2
 
             void SetEyePivotOffset()
             {
+                if (!_cameraXyzEnabled || !_cameraPivotOffsetCaptured) return;
                 AccessTools.FieldRef<FPSRig, Entity> PitchPivot = AccessTools.FieldRefAccess<FPSRig, Entity>("pitchPiviot");
-                var pivot = PitchPivot(CastleMinerZGame.Instance?.LocalPlayer);
-                pivot.LocalPosition = new Vector3(_originalEyePivotOffset.X + _cameraXValue,
-                                                  _originalEyePivotOffset.Y + _cameraYValue,
-                                                  _originalEyePivotOffset.Z + _cameraZValue);
+
+                var player = CastleMinerZGame.Instance?.LocalPlayer;
+                var pivot  = player != null ? PitchPivot(player) : null;
+
+                if (pivot == null) return;
+                pivot.LocalPosition = new Vector3(_originalCameraPivotOffset.X + _cameraXValue,
+                                                  _originalCameraPivotOffset.Y + _cameraYValue,
+                                                  _originalCameraPivotOffset.Z + _cameraZValue);
             }
             #endregion
 
