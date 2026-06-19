@@ -12536,13 +12536,22 @@ namespace CastleWallsMk2
         private static readonly HashSet<string> _rememberedToggleExcludedUiFields =
             new HashSet<string>(StringComparer.Ordinal)
             {
+                // UI/window-only state.
                 "_tabPlayerOpen",
                 "_tabEnemiesOpen",
                 "_tabDragonOpen",
                 "_showDemoWindow",
+
+                // Temporary UI helpers.
                 "_spawnMobSamePos",
                 "_spamTextExpandBox",
                 "_changeGameTitle",
+
+                // Session-authority actions.
+                // These depend on the current network session/host ID and should never
+                // be remembered or restored after leaving a world.
+                "_host",
+                "_softCrash",
             };
 
         /// <summary>
