@@ -4,7 +4,7 @@ Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
 */
 
-// #pragma warning disable IDE0060 // Silence IDE0060.
+#pragma warning disable IDE0060   // Silence IDE0060.
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using DNA.CastleMinerZ.UI;
@@ -12,11 +12,11 @@ using System.Reflection;
 using DNA.CastleMinerZ;
 using DNA.Drawing.UI;
 using System.Linq;
-using HarmonyLib;                  // Harmony patching library.
+using HarmonyLib;                 // Harmony patching library.
 using DNA.Input;
 using System;
 
-using static ModLoader.LogSystem;  // For Log(...).
+using static ModLoader.LogSystem; // For Log(...).
 
 namespace WorldEditPixelart
 {
