@@ -1,9 +1,16 @@
 @echo off
 REM ****************************************************************
-REM * Batch deploy script - copies all files & dirs.
-REM * from this folder (minus this .bat) into:
+REM * Batch deploy script - copies modded files only.
+REM * from this folder into:
 REM *    C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z
 REM * Then unblocks copied files and launches CastleMinerZ.exe.
+REM *
+REM * This intentionally copies only:
+REM *   - CastleMinerZ.exe.config
+REM *   - ModLoader.dll
+REM *   - !Mods\**
+REM *
+REM * It does NOT copy the whole directory the .bat is in.
 REM ****************************************************************
 
 SETLOCAL
@@ -42,19 +49,54 @@ SET "DEST=C:\Program Files (x86)\Steam\steamapps\common\CastleMiner Z"
 
 echo.
 echo ============================================================
-echo Copying from "%SOURCE%" to "%DEST%" (excluding "%~nx0")
+echo Copying modded files only from "%SOURCE%" to "%DEST%"
 echo ============================================================
 
 REM --------------------------------------------------
-REM 4) Run ROBOCOPY to sync everything (quiet mode).
+REM 4) Copy only known modded root files and !Mods.
 REM --------------------------------------------------
-robocopy "%SOURCE%" "%DEST%" /E /COPY:DAT /R:3 /W:1 /XF "%~nx0" /NFL /NDL /NJH /NJS /NC /NS /NP
+SET "DEPLOY_ERROR=0"
+
+IF NOT EXIST "%DEST%\" (
+    echo ERROR: Destination folder does not exist:
+    echo "%DEST%"
+    echo.
+    SET "DEPLOY_ERROR=1"
+    GOTO DeployDone
+)
+
+REM Copy root mod files only.
+IF EXIST "%SOURCE%\CastleMinerZ.exe.config" (
+    copy /Y "%SOURCE%\CastleMinerZ.exe.config" "%DEST%\CastleMinerZ.exe.config" >NUL
+    IF ERRORLEVEL 1 SET "DEPLOY_ERROR=1"
+) ELSE (
+    echo WARNING: Missing CastleMinerZ.exe.config - skipping.
+)
+
+IF EXIST "%SOURCE%\ModLoader.dll" (
+    copy /Y "%SOURCE%\ModLoader.dll" "%DEST%\ModLoader.dll" >NUL
+    IF ERRORLEVEL 1 SET "DEPLOY_ERROR=1"
+) ELSE (
+    echo WARNING: Missing ModLoader.dll - skipping.
+)
+
+REM Copy the mod folder only.
+IF EXIST "%SOURCE%\!Mods\" (
+    robocopy "%SOURCE%\!Mods" "%DEST%\!Mods" /E /COPY:DAT /R:3 /W:1 /NFL /NDL /NJH /NJS /NC /NS /NP
+
+    REM Robocopy exit code: 0-7 = OK, 8+ = errors.
+    IF ERRORLEVEL 8 SET "DEPLOY_ERROR=1"
+) ELSE (
+    echo WARNING: Missing !Mods folder - skipping.
+)
+
+:DeployDone
 
 REM ------------------------------------------
 REM 5) Check exit code: 0-7 = OK, 8+ = errors.
 REM ------------------------------------------
-IF ERRORLEVEL 8 (
-    echo Deployment finished with errors ^(code=%ERRORLEVEL%^).
+IF "%DEPLOY_ERROR%"=="1" (
+    echo Deployment finished with errors.
     echo.
 ) ELSE (
     echo Deployment succeeded.
