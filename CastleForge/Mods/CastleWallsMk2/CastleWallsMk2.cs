@@ -211,6 +211,11 @@ namespace CastleWallsMk2
         public static int       _caveLighterMaxDistanceValue = 16;
         public static int       _blockNukerRangeValue        = 0;
 
+        // Camera XYZ runtime state.
+        private static Vector3 _originalCameraPivotOffset = new Vector3(0f, FPSRig.EyePointHeight, 0f);
+        private static bool    _cameraPivotOffsetCaptured = false;
+        private static Player  _cameraPivotOffsetOwner    = null;
+
         // RadioButtons:
         public enum   PlayerSelectScope { Personal, Everyone            }
         public enum   VanishSelectScope { InPlace, Spawn, Distant, Zero }
@@ -3039,9 +3044,6 @@ namespace CastleWallsMk2
 
             #region Camera XYZ
 
-            Vector3 _originalCameraPivotOffset = new Vector3(0f, FPSRig.EyePointHeight, 0f);
-            bool    _cameraPivotOffsetCaptured = false;
-            Player  _cameraPivotOffsetOwner    = null;
             Callbacks.OnCamera = enabled =>
             {
                 try
