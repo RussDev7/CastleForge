@@ -705,6 +705,34 @@ After conversion, use this mod's normal schematic flow:
 
 > **Compatibility note:** Converted schematics depend on the quality of the block map. Minecraft has many blocks that do not have direct CastleMiner Z equivalents, so some manual mapping/tuning is expected.
 
+### MCToCMZWorldConverter
+
+**[MCToCMZWorldConverter](https://github.com/RussDev7/MCToCMZWorldConverter)** is an optional external companion tool for converting rendered Minecraft Java worlds into playable CastleMiner Z world folders.
+
+Use it when you want to bring a full Minecraft world or rendered area into CastleMiner Z as native CMZ save data:
+
+```bat
+MCToCMZWorldConverter.exe config.json
+```
+
+Common config areas:
+
+- `config.json` controls the Minecraft world path, CMZ output folder, dimension, chunk range, vertical mapping, and SaveDevice settings.
+- `block-map.json` controls how Minecraft block states map to CastleMiner Z block types.
+- `ConvertAllRenderedChunks` can convert every rendered chunk found in the selected Minecraft region folder.
+- `VerticalMapping` controls which Minecraft Y slice is imported into CMZ's fixed Y range of `-64..63`.
+- The generated `.unmapped.txt` report lists Minecraft blocks that need more mapping coverage.
+
+After conversion, launch CastleMiner Z and load the generated world from the normal saved-world list.
+
+```text
+Single Player
+Load World
+Converted Minecraft World
+```
+
+> **Compatibility note:** Converted worlds depend on the quality of the block map and on using CMZ's actual `Worlds` save folder. Minecraft has many blocks, block states, entities, and tile data that do not have direct CastleMiner Z equivalents, so some manual mapping/tuning is expected.
+
 ---
 
 ## Full command reference
