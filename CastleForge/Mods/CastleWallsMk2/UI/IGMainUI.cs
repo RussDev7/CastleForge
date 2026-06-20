@@ -1510,7 +1510,7 @@ namespace CastleWallsMk2
                     CB_Checkbox    ("Spam Text:",        ref _spamTextShow,           Callbacks.OnSpamTextShow);
                     CB_Checkbox    ("[ Start Spam ]",    ref _spamTextStart,          Callbacks.OnSpamTextStart, enabled: _spamTextShow);
                     CB_Checkbox    (" - Sudo Player:",   ref _spamTextSudo,           Callbacks.OnSpamTextSudo, enabled: _spamTextShow);
-                    CB_SinglePCombo("##stSudoPlrCombo",  ref _spamTextTargetIndex,    Callbacks.OnSpamTextSudoPlayer, ref _spamTextTargetMode, ref _spamTextTargetNetid, _spamTextSudo);
+                    CB_SinglePCombo("##stSudoPlrCombo",  ref _spamTextTargetIndex,    Callbacks.OnSpamTextSudoPlayer, ref _spamTextTargetMode, ref _spamTextTargetNetid, _spamTextShow && _spamTextSudo);
                     CB_Slider      ("##spamTextValue",   ref _spamTextTimerValue,     Callbacks.OnSpamTextValue, min: 1, max: 1000, format: "Speed: %d ms", enabled: _spamTextShow);
                     CB_Checkbox    ("Expand Text Box",   ref _spamTextExpandBox,      null, enabled: _spamTextShow);
                     CB_TextArea    ("##spamTextInput",   ref _spamTextInput,          Callbacks.OnSpamTextMessage, rowsTall: _spamTextExpandBox ? 6 : 1, enabled: _spamTextShow, hint: "Type text here...");
