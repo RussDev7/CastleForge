@@ -3973,15 +3973,21 @@ namespace TexturePacks
             public static bool TryPlay3D_IfAvailable(string cueName, AudioEmitter emitter)
             {
                 if (!TryGet(cueName, out var sfx)) return false;
+                SoundEffectInstance inst = null;
                 try
                 {
-                    var inst = sfx.CreateInstance();
+                    inst = sfx.CreateInstance();
                     inst.IsLooped = false;
                     inst.Apply3D(SoundManager.ActiveListener, emitter);
                     inst.Play();
+                    _active3D.Add(inst);
                     return true;
                 }
-                catch { return false; }
+                catch
+                {
+                    try { inst?.Dispose(); } catch { }
+                    return false;
+                }
             }
 
             /// <summary>
