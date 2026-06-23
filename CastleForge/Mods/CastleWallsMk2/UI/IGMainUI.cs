@@ -1458,7 +1458,7 @@ namespace CastleWallsMk2
 
                     CB_Checkbox    ("Hat",               ref _hat,                    Callbacks.OnHat);
                     CB_Checkbox    ("or Boots!",         ref _boots,                  Callbacks.OnBoots, enabled: _hat);
-                    CB_BlockCombo  ("##hatBlockCombo",   ref _wearBlockComboIndex,    Callbacks.OnWearType, enabled: _hat || _boots);
+                    CB_BlockCombo  ("##hatBlockCombo",   ref _wearBlockComboIndex,    Callbacks.OnWearType, enabled: _hat);
 
                     // ===================== [Admin & Punishments] =====================
                     ImGui.AlignTextToFramePadding(); CenterText("[Admin & Punishments]", Color.Gold);
