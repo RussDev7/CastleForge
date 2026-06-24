@@ -6502,12 +6502,13 @@ namespace CastleWallsMk2
 
                 #region 2) Apply Terrain Crater Locally
 
-                // Vanilla only breaks terrain in Endurance/DragonEndurance or HARD/HARDCORE.
-                // If you want it ALWAYS, comment out this block.
-                if (!(CastleMinerZGame.Instance.GameMode == GameModeTypes.Endurance
-                   || CastleMinerZGame.Instance.GameMode == GameModeTypes.DragonEndurance
-                   || CastleMinerZGame.Instance.Difficulty == GameDifficultyTypes.HARD
-                   || CastleMinerZGame.Instance.Difficulty == GameDifficultyTypes.HARDCORE))
+                // Vanilla only breaks/ices terrain in Endurance/DragonEndurance or HARD/HARDCORE.
+                // Force Blast/Ice lets Shoot Fireballs bypass that gate for marked client fireballs.
+                bool forceTerrainEffect =
+                    CastleWallsMk2._shootFireballAmmoEnabled &&
+                    CastleWallsMk2._shootFBallForceTerrainEnabled;
+
+                if (!forceTerrainEffect && !VanillaAllowsFireballTerrain())
                 {
                     return false; // Skip original (and importantly: skip sending net messages).
                 }
@@ -6573,6 +6574,18 @@ namespace CastleWallsMk2
             static bool IsUpperDoor(BlockTypeEnum blockType)
             {
                 return blockType == BlockTypeEnum.NormalUpperDoorClosed || blockType == BlockTypeEnum.NormalUpperDoorOpen || blockType == BlockTypeEnum.StrongUpperDoorClosed || blockType == BlockTypeEnum.StrongUpperDoorOpen;
+            }
+
+            static bool VanillaAllowsFireballTerrain()
+            {
+                var game = CastleMinerZGame.Instance;
+                if (game == null)
+                    return false;
+
+                return game.GameMode   == GameModeTypes.Endurance
+                    || game.GameMode   == GameModeTypes.DragonEndurance
+                    || game.Difficulty == GameDifficultyTypes.HARD
+                    || game.Difficulty == GameDifficultyTypes.HARDCORE;
             }
             #endregion
         }

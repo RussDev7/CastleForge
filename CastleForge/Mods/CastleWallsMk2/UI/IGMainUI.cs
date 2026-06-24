@@ -222,6 +222,7 @@ namespace CastleWallsMk2
                             _noClip,
                             _explodingOres,
                             _shootFireballAmmo,
+                            _shootFBallForceTerrain,
                             _rocketSpeed,
                             _forceRespawn,
                             _disableInvRetrieval,
@@ -292,7 +293,7 @@ namespace CastleWallsMk2
             _noLavaVisuals = _reliableFlood = _blockEsp = _blockEspHideTracers = _nametags = _muteShowMessage =
             _spamTextShow = _spamTextStart = _spamTextSudo = _spamTextExpandBox = _chaoticAim = _disableItemPickups =
             _alwaysDaySky = _changeGameTitle = _rapidPlace = _doorSpam = _allHarvest = _pvpThorns = _trailMode =
-            _deathAura = _begoneAura = _blockNuker
+            _deathAura = _begoneAura = _blockNuker = _shootFBallForceTerrain
 
             // Debugging.
             // = _test
@@ -849,6 +850,7 @@ namespace CastleWallsMk2
             public static Action<bool>                                        OnNoClip;
             public static Action<bool>                                        OnExplodingOres;
             public static Action<bool>                                        OnShootFireballAmmo;
+            public static Action<bool>                                        OnShootFBallForceTerrain;
             public static Action<bool>                                        OnRocketSpeed;
             public static Action<float>                                       OnRocketSpeedValue;
             public static Action<float>                                       OnGuidedRocketSpeedValue;
@@ -1713,6 +1715,7 @@ namespace CastleWallsMk2
                     CB_Checkbox    ("Shoot Bow Ammo",    ref _shootBowAmmo,           Callbacks.OnShootBowAmmo);
 
                     CB_Checkbox    ("Shoot Fireballs:",  ref _shootFireballAmmo,      Callbacks.OnShootFireballAmmo);
+                    CB_Checkbox    (" - Force Expl/Ice", ref _shootFBallForceTerrain, Callbacks.OnShootFBallForceTerrain, enabled: _shootFireballAmmo);
                     CB_FireBCombo  ("##fireBallCombo",   ref _fireballIndex, enabled: _shootFireballAmmo);
 
                     CB_Checkbox    ("Rocket Speed:",     ref _rocketSpeed,            Callbacks.OnRocketSpeed);

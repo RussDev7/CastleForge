@@ -177,18 +177,16 @@ namespace CastleWallsMk2
         private static bool         _showStatsWindow;
         public static bool          _rapidFireEnabled, _superGunStatsEnabled, _fullBrightEnabled; // Runtime-enabled states used for session teardown/reapply.
 
-        public static bool      _godEnabled, _infiniteItemsEnabled, _infiniteDurabilityEnabled, _noKickEnabled, _noEnemiesEnabled, _noConsumeAmmo, _infiClipsEnabled, _flyEnabled,
-                                _noTargetEnabled, _tracersEnabled, _hitboxesEnabled, _playerAimbotEnabled, _dragonAimbotEnabled, _mobAimbotEnabled, _aimbotBulletDropEnabled,
-                                _aimbotFaceEnemyEnabled, _aimbotRequireLosEnabled, _noGunCooldownEnabled, _noGunRecoilEnabled, _vanishEnabled, _vanishIsDeadEnabled,
-                                _playerPositionEnabled, _movementSpeedEnabled, _pickupRangeEnabled, _xrayEnabled, _instantMineEnabled, _rapidToolsEnabled, _noMobBlockingEnabled,
-                                _multiColorAmmoEnabled, _multiColorRNGEnabled, _shootBlocksEnabled, _shootHostAmmoEnabled, _shootGrenadeAmmoEnabled, _shootRocketAmmoEnabled,
-                                _freezeLasersEnabled, _extendLaserTimeEnabled, _infiLaserPathEnabled, _infiLaserBounceEnabled, _explosiveLasersEnabled, _noTPOnServerRestartEnabled,
-                                _corruptOnKickEnabled, _projectileTuningEnabled, _freeFlyCameraEnabled, _noClipEnabled, _rideDragonEnabled, _shootBowAmmoEnabled, _explodingOresEnabled,
-                                _shootFireballAmmoEnabled, _rocketSpeedEnabled, _forceRespawnEnabled, _gravityEnabled, _disableInvRetrievalEnabled, _cameraXyzEnabled, _muteEnabled,
-                                _muteWarnOffenderEnabled, _muteShowMessageEnabled, _trailEnabled, _trailPrivateEnabled, _showerEnabled, _dragonCounterEnabled, _hatEnabled, _bootsEnabled,
-                                _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled, _chaosModeEnabled, _clockDiscordEnabled, _dragonDiscordEnabled,
-                                _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled, _spamTextEnabled, _spamTextSudoEnabled,
-                                _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
+        public static bool      _godEnabled, _infiniteItemsEnabled, _infiniteDurabilityEnabled, _noKickEnabled, _noEnemiesEnabled, _noConsumeAmmo, _infiClipsEnabled, _flyEnabled, _noTargetEnabled, _tracersEnabled, 
+                                _hitboxesEnabled, _playerAimbotEnabled, _dragonAimbotEnabled, _mobAimbotEnabled, _aimbotBulletDropEnabled, _aimbotFaceEnemyEnabled, _aimbotRequireLosEnabled, _noGunCooldownEnabled,
+                                _noGunRecoilEnabled, _vanishEnabled, _vanishIsDeadEnabled, _playerPositionEnabled, _movementSpeedEnabled, _pickupRangeEnabled, _xrayEnabled, _instantMineEnabled, _rapidToolsEnabled,
+                                _noMobBlockingEnabled, _multiColorAmmoEnabled, _multiColorRNGEnabled, _shootBlocksEnabled, _shootHostAmmoEnabled, _shootGrenadeAmmoEnabled, _shootRocketAmmoEnabled, _freezeLasersEnabled,
+                                _extendLaserTimeEnabled, _infiLaserPathEnabled, _infiLaserBounceEnabled, _explosiveLasersEnabled, _noTPOnServerRestartEnabled, _corruptOnKickEnabled, _projectileTuningEnabled,
+                                _freeFlyCameraEnabled, _noClipEnabled, _rideDragonEnabled, _shootBowAmmoEnabled, _explodingOresEnabled, _shootFireballAmmoEnabled, _shootFBallForceTerrainEnabled, _rocketSpeedEnabled,
+                                _forceRespawnEnabled, _gravityEnabled, _disableInvRetrievalEnabled, _cameraXyzEnabled, _muteEnabled, _muteWarnOffenderEnabled, _muteShowMessageEnabled, _trailEnabled, _trailPrivateEnabled,
+                                _showerEnabled, _dragonCounterEnabled, _hatEnabled, _bootsEnabled, _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled, _chaosModeEnabled,
+                                _clockDiscordEnabled, _dragonDiscordEnabled, _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled, _spamTextEnabled,
+                                _spamTextSudoEnabled, _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
                                 _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled, _cameraFovEnabled, _cameraSettingsEnabled;
 
         // Sliders:
@@ -3761,6 +3759,11 @@ namespace CastleWallsMk2
                 _shootFireballAmmoEnabled = enabled;
                 SendLog($"Shoot Fireball Ammo: {enabled}");
             };
+            Callbacks.OnShootFBallForceTerrain = enabled =>
+            {
+                _shootFBallForceTerrainEnabled = enabled;
+                SendLog($"Shoot Fireball Force Terrain: {enabled}");
+            };
             Callbacks.OnFireball = value =>
             {
                 _shootFireballType = FireballToDragon((FireballTypes)value);
@@ -3949,21 +3952,21 @@ namespace CastleWallsMk2
                     #region Runtime Toggles
 
                     /* Global */   _noConsumeAmmo
-                    /* Tick   */ = _noEnemiesEnabled           = _noTargetEnabled          = _playerAimbotEnabled        = _dragonAimbotEnabled    = _mobAimbotEnabled           = _playerPositionEnabled   =
+                    /* Tick   */ = _noEnemiesEnabled           = _noTargetEnabled          = _playerAimbotEnabled           = _dragonAimbotEnabled    = _mobAimbotEnabled           = _playerPositionEnabled   =
                                    _rideDragonEnabled          = _forceRespawnEnabled
-                    /* Patch  */ = _infiniteItemsEnabled       = _tracersEnabled           = _hitboxesEnabled            = _noKickEnabled          = _vanishEnabled              = _godEnabled              =
-                                   _pickupRangeEnabled         = _noGunCooldownEnabled     = _noGunRecoilEnabled         = _xrayEnabled            = _instantMineEnabled         = _rapidToolsEnabled       =
-                                   _noMobBlockingEnabled       = _multiColorAmmoEnabled    = _multiColorRNGEnabled       = _shootBlocksEnabled     = _shootHostAmmoEnabled       = _shootGrenadeAmmoEnabled =
-                                   _shootRocketAmmoEnabled     = _freezeLasersEnabled      = _extendLaserTimeEnabled     = _infiLaserPathEnabled   = _infiLaserBounceEnabled     = _explosiveLasersEnabled  =
-                                   _noTPOnServerRestartEnabled = _corruptOnKickEnabled     = _projectileTuningEnabled    = _freeFlyCameraEnabled   = _noClipEnabled              = _shootBowAmmoEnabled     =
-                                   _explodingOresEnabled       = _shootFireballAmmoEnabled = _rocketSpeedEnabled         = _gravityEnabled         = _disableInvRetrievalEnabled = _cameraXyzEnabled        =
-                                   _muteEnabled                = _muteWarnOffenderEnabled  = _muteShowMessageEnabled     = _trailEnabled           = _trailPrivateEnabled        = _showerEnabled           =
-                                   _dragonCounterEnabled       = _hatEnabled               = _bootsEnabled               = _rapidItemsEnabled      = _disableControlsEnabled     = _itemVortexEnabled       =
-                                   _beaconModeEnabled          = _chaosModeEnabled         = _clockDiscordEnabled        = _dragonDiscordEnabled   = _hugEnabled                 = _noLavaVisualsEnabled    =
-                                   _reliableFloodEnabled       = _blockEspEnabled          = _blockEspNoTraceEnabled     = _nametagsEnabled        = _infiClipsEnabled           = _spamTextEnabled         =
-                                   _spamTextSudoEnabled        = _chaoticAimEnabled        = _disableItemPickupEnabled   = _rapidPlaceEnabled      = _sudoPlayerEnabled          = _doorSpamEnabled         =
-                                   _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled           = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled       =
-                                   _cameraFovEnabled           = _cameraSettingsEnabled
+                    /* Patch  */ = _infiniteItemsEnabled       = _tracersEnabled           = _hitboxesEnabled               = _noKickEnabled          = _vanishEnabled              = _godEnabled              =
+                                   _pickupRangeEnabled         = _noGunCooldownEnabled     = _noGunRecoilEnabled            = _xrayEnabled            = _instantMineEnabled         = _rapidToolsEnabled       =
+                                   _noMobBlockingEnabled       = _multiColorAmmoEnabled    = _multiColorRNGEnabled          = _shootBlocksEnabled     = _shootHostAmmoEnabled       = _shootGrenadeAmmoEnabled =
+                                   _shootRocketAmmoEnabled     = _freezeLasersEnabled      = _extendLaserTimeEnabled        = _infiLaserPathEnabled   = _infiLaserBounceEnabled     = _explosiveLasersEnabled  =
+                                   _noTPOnServerRestartEnabled = _corruptOnKickEnabled     = _projectileTuningEnabled       = _freeFlyCameraEnabled   = _noClipEnabled              = _shootBowAmmoEnabled     =
+                                   _explodingOresEnabled       = _shootFireballAmmoEnabled = _rocketSpeedEnabled            = _gravityEnabled         = _disableInvRetrievalEnabled = _cameraXyzEnabled        =
+                                   _muteEnabled                = _muteWarnOffenderEnabled  = _muteShowMessageEnabled        = _trailEnabled           = _trailPrivateEnabled        = _showerEnabled           =
+                                   _dragonCounterEnabled       = _hatEnabled               = _bootsEnabled                  = _rapidItemsEnabled      = _disableControlsEnabled     = _itemVortexEnabled       =
+                                   _beaconModeEnabled          = _chaosModeEnabled         = _clockDiscordEnabled           = _dragonDiscordEnabled   = _hugEnabled                 = _noLavaVisualsEnabled    =
+                                   _reliableFloodEnabled       = _blockEspEnabled          = _blockEspNoTraceEnabled        = _nametagsEnabled        = _infiClipsEnabled           = _spamTextEnabled         =
+                                   _spamTextSudoEnabled        = _chaoticAimEnabled        = _disableItemPickupEnabled      = _rapidPlaceEnabled      = _sudoPlayerEnabled          = _doorSpamEnabled         =
+                                   _allGunsHarvestEnabled      = _pvpThornsEnabled         = _trialModeEnabled              = _deathAuraEnabled       = _begoneAuraEnabled          = _blockNukerEnabled       =
+                                   _cameraFovEnabled           = _cameraSettingsEnabled    = _shootFBallForceTerrainEnabled
                         = false;
 
                     // Disable TriState ticks.
