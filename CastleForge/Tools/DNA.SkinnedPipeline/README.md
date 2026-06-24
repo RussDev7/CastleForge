@@ -1,4 +1,4 @@
-# DNA.SkinnedPipeline
+﻿# DNA.SkinnedPipeline
 
 > Compile CastleMiner Z / DNA-style **skinned FBX models** into runtime-friendly `.xnb` assets by pairing a custom XNA pipeline extension with **FbxToXnb**.
 
@@ -216,7 +216,7 @@ It writes:
 
 It also defensively handles null clips by writing a safe empty clip instead of crashing the build path.
 
-Even though clip extraction is not yet wired into `SkinedModelProcessor`, the writer is already present so the project has the proper serialization foundation in place.
+`AnimationClipProcessor` now uses this writer to build standalone clip XNBs from FBX animation takes. `SkinedModelProcessor` still focuses on model skinning metadata rather than embedding clips inside model tags.
 
 </details>
 
@@ -334,16 +334,16 @@ Use normal **FbxToXnb** processing without this extension when your model is sim
 
 ## Limitations and important notes
 
-### Animation clip extraction is not implemented yet
-This is the single biggest behavior note to call out.
+### Standalone animation clip extraction
+`DNA.SkinnedPipeline` now includes a second processor:
 
-The processor currently builds and attaches:
+```text
+AnimationClipProcessor
+```
 
-- the skeleton,
-- inverse bind pose data,
-- and an empty clip dictionary.
+Use it when the FBX is meant to become a standalone `DNA.Drawing.Animation.AnimationClip` XNB, such as a WeaponAddons custom reload, shoot, idle, or shoulder animation.
 
-So this project is already excellent for **runtime-compatible skinned model structure**, but it is **not yet a full animation extraction pipeline**.
+The original `SkinedModelProcessor` still builds skinned model XNBs and attaches skeleton metadata. It does not embed full FBX animation clips into the model tag. For WeaponAddons animation packs, prefer standalone clips built with `AnimationClipProcessor`.
 
 ### The processor name intentionally uses `Skined`, not `Skinned`
 The processor name is:
@@ -383,7 +383,7 @@ Double-check:
 - bone naming,
 - and whether your runtime code expects real animation clips instead of only skeleton data.
 
-The current processor provides the skeleton and inverse bind pose foundation, but not full clip extraction.
+`SkinedModelProcessor` provides the skeleton and inverse bind pose foundation. For standalone WeaponAddons clips, build the FBX with `AnimationClipProcessor` instead.
 
 </details>
 
@@ -413,3 +413,51 @@ This tool pairs especially well with:
 **DNA.SkinnedPipeline** is the CastleForge tool that turns **FbxToXnb** from a normal FBX compiler into a **CMZ / DNA-aware skinned model pipeline**.
 
 If you need skeleton metadata, inverse bind pose data, and reader-compatible `.xnb` output for a rigged model, this is the piece that makes the workflow feel complete.
+
+---
+
+## Building standalone WeaponAddons animation clips
+
+Use this when you have an FBX animation exported from Blender against the CastleForge/CMZ reference player armature.
+
+Drag-and-drop:
+
+```text
+FbxToXnb_Drop_Animation.bat
+```
+
+Command line:
+
+```powershell
+FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir "SkinedModelProcessor" --animName Reload "C:\Authoring\reload.fbx"
+```
+
+Optional flags supported by FbxToXnb:
+
+```text
+--animName Reload
+--sourceClip "Take 001"
+--frameRate 30
+--noReduce
+--param Name=Value
+```
+
+Output example:
+
+```text
+C:\Authoring\reload\reload.xnb
+```
+
+WeaponAddons pack example:
+
+```text
+WeaponAddons\Packs\Raygun\animations\reload.xnb
+```
+
+`.clag` reference:
+
+```ini
+$ANIM_RELOAD: animations\reload
+```
+
+Important authoring note: keep the exported reference armature bone names, hierarchy, and order intact. The runtime `AnimationClip` stores transforms by bone index.

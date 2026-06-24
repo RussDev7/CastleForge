@@ -74,7 +74,11 @@ namespace CMZ.ContentPipeline
 
             // _animationFrameRate (reader: ReadInt32).
             // Private field, so we grab it with reflection.
-            int afr = GetInt(value, "_animationFrameRate", 30);
+            // Constructor-authored clips store the requested rate in _frameRate in this DNA build,
+            // while deserialized clips already carry _animationFrameRate.
+            int afr = GetInt(value, "_animationFrameRate", -1);
+            if (afr <= 0)
+                afr = GetInt(value, "_frameRate", 30);
             output.Write(afr);
 
             // Duration ticks (reader: ReadInt64 -> TimeSpan.FromTicks)

@@ -1,4 +1,4 @@
-# TexturePacks
+﻿# TexturePacks
 
 > **Re-skin CastleMiner Z far beyond simple block textures.**
 >  
@@ -200,6 +200,30 @@ Cubemap skies can be replaced for:
 ### Built-in author tooling
 TexturePacks includes extraction tooling so authors can dump reference assets from the game and build packs against real asset names and structures.
 
+### Animation authoring export
+`/tpexportall` now also exports vanilla animation-authoring references to:
+
+```text
+!Mods\TexturePacks\_Extracted\<timestamp>\Models\Animations\
+```
+
+This folder includes copied vanilla `AnimationClip` `.xnb` files from paths such as:
+
+```text
+Content\Character\Animation\
+Content\Props\Weapons\Conventional\Pistol\Animation\
+Content\Props\Weapons\Space\Pistol\Animation\
+Content\Props\Tools\...\Animation\
+```
+
+The copied files are compiled references. They can be reused directly by mods such as WeaponAddons, but they are not Blender source files. For Blender editing, use the exported player reference model, usually:
+
+```text
+!Mods\TexturePacks\_Extracted\<timestamp>\Models\Player\Misc\Player.glb
+```
+
+Animate that reference armature in Blender, export an FBX animation, then compile it with the CastleForge animation pipeline.
+
 ---
 
 ## Installation
@@ -266,12 +290,12 @@ Ctrl+Shift+F3
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `/tpset [PackName]` | Sets a new active texture pack, saves it to config, and requests a reload. |
-| `/tpreset` | Clears the active pack and restores vanilla visuals. |
-| `/tpreload` | Reloads the currently selected pack. |
-| `/tpexportall` | Dumps game assets to `!Mods\TexturePacks\_Extracted\<timestamp>\` for pack-author reference. |
+| Command             | Description                                                                                                                                            |
+|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/tpset [PackName]` | Sets a new active texture pack, saves it to config, and requests a reload.                                                                             |
+| `/tpreset`          | Clears the active pack and restores vanilla visuals.                                                                                                   |
+| `/tpreload`         | Reloads the currently selected pack.                                                                                                                   |
+| `/tpexportall`      | Dumps game assets to `!Mods\TexturePacks\_Extracted\<timestamp>\` for pack-author reference, including animation references under `Models\Animations`. |
 
 ---
 
@@ -1751,6 +1775,58 @@ Models\Items\0051_Pistol_model\
 ```
 
 ![Model Workflow](_Images/ModelAuthoringWorkflow.png)
+
+---
+
+## Animation authoring workflow
+
+Animation authoring support is meant to help create WeaponAddons-style custom avatar / weapon handling clips.
+
+Recommended flow:
+
+```text
+/tpexportall
+        ↓
+_Extracted\<timestamp>\Models\Player\Misc\Player.glb
+        ↓
+Blender: import Player.glb as the reference armature
+        ↓
+Keep the armature names and bone order intact
+        ↓
+Animate one action, such as Reload or Shoot
+        ↓
+Export the animation to FBX
+        ↓
+FbxToXnb + AnimationClipProcessor
+        ↓
+WeaponAddons\Packs\<Pack>\animations\<clip>.xnb
+```
+
+Compile example:
+
+```powershell
+FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir "SkinedModelProcessor" --animName Reload "C:\Authoring\reload.fbx"
+```
+
+If the FBX contains multiple takes/actions, select one explicitly:
+
+```powershell
+FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir "SkinedModelProcessor" --sourceClip Reload --animName Reload "C:\Authoring\weapon_animations.fbx"
+```
+
+Then reference the resulting clip in a `.clag` file:
+
+```ini
+$ANIM_RELOAD: animations\reload
+```
+
+Notes:
+
+- Use the exported `Player.glb` as the Blender reference rig.
+- Do not rename, remove, reorder, or replace the armature bones.
+- `AnimationClip` data is written in the game’s expected bone order, so changed bone names/order can make the wrong body parts move.
+- Use `30` FPS unless you have a reason to change it.
+- Vanilla `.xnb` clips in `Models\Animations` are compiled reference clips. They are useful for copying, reusing, and drop-in testing, but they are not directly editable in Blender.
 
 ---
 

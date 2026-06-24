@@ -74,6 +74,13 @@ namespace XNAConverter
         /// </summary>
         public string FbxProcessorName { get; set; } = "ModelProcessor";
 
+        /// <summary>
+        /// Optional content-pipeline processor parameters.
+        /// Metadata is emitted as ProcessorParameters_{Name}, matching XNA .contentproj behavior.
+        /// </summary>
+        public Dictionary<string, string> ProcessorParameters { get; } =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         #endregion
 
         #region Construction
@@ -300,6 +307,23 @@ namespace XNAConverter
 
                 // Name is always file stem (keeps output stable).
                 meta["Name"] = Path.GetFileNameWithoutExtension(path);
+
+                // Optional processor parameters, e.g.:
+                //   ProcessorParameters_FrameRate = 30
+                //   ProcessorParameters_ClipName = Reload
+                // This is used by AnimationClipProcessor and remains harmless for processors that
+                // ignore unknown parameters.
+                if (ProcessorParameters != null)
+                {
+                    foreach (var pair in ProcessorParameters)
+                    {
+                        if (string.IsNullOrWhiteSpace(pair.Key))
+                            continue;
+
+                        string value = pair.Value ?? "";
+                        meta["ProcessorParameters_" + pair.Key.Trim()] = value;
+                    }
+                }
 
                 items[i] = new TaskItem(path, meta);
             }

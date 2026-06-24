@@ -1,4 +1,4 @@
-FbxToXnbXna - ReadMe.txt
+﻿FbxToXnbXna - ReadMe.txt
 ========================
 
 What this is
@@ -127,3 +127,23 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 
 (If you redistribute this tool, keep license headers and comply with GPL terms.)
+
+AnimationClip FBX builds
+------------------------
+When DNA.SkinnedPipeline is available, FbxToXnb can also build standalone
+DNA.Drawing.Animation.AnimationClip XNB files:
+
+  FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir "SkinedModelProcessor" --animName Reload "C:\Authoring\reload.fbx"
+
+Useful flags:
+  --animName <name>      Output AnimationClip name
+  --sourceClip <name>    Source FBX take name
+  --frameRate <fps>      Sample rate, usually 30
+  --noReduce             Keep all sampled keys
+  --param Name=Value     Generic processor parameter
+
+The resulting XNB can be copied into a WeaponAddons pack, for example:
+  WeaponAddons\Packs\Raygun\animations\reload.xnb
+
+and referenced in .clag:
+  $ANIM_RELOAD: animations\reload

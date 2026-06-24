@@ -21,7 +21,8 @@ At runtime, the mod:
 - loads or renders a custom icon,
 - injects optional custom crafting recipes,
 - applies per-weapon stats and colors,
-- routes optional custom shoot/reload audio, and
+- routes optional custom shoot/reload audio,
+- routes optional custom avatar/weapon handling animations, and
 - keeps the whole system as multiplayer-safe as possible by remapping synthetic IDs back to a vanilla-safe base slot when necessary.
 
 This makes **WeaponAddons** useful in two different ways:
@@ -70,6 +71,7 @@ WeaponAddons is more than a DLL. The project includes:
 - hot-reload support,
 - recipe injection and crafting UI layout support,
 - file-backed custom audio routing,
+- custom avatar/weapon animation routing,
 - and a companion asset authoring path via **FbxToXnb** and **DNA.SkinnedPipeline**.
 
 On first launch, the mod can extract embedded content into your mod folder so you have a working example pack to learn from.
@@ -124,10 +126,15 @@ Shoot and reload sounds can be:
 
 If file-based audio is used, WeaponAddons registers audio tokens internally and reroutes playback through `SoundEffect` / `SoundEffectInstance`.
 
-### 8) Pack-specific crafting recipes
+### 8) Custom avatar/weapon handling animations
+A pack can optionally provide compiled `AnimationClip` `.xnb` assets for idle, walk/run, shoot, reload, shoulder, and shouldered poses.
+
+WeaponAddons registers those clips under per-item names and remaps the vanilla animation request only while the matching item is held.
+
+### 9) Pack-specific crafting recipes
 A weapon can inject its own recipe into the cookbook and optionally place itself **after** another recipe or **to the right of** another recipe row in the crafting UI.
 
-### 9) Runtime hot reload
+### 10) Runtime hot reload
 The default reload hotkey is:
 
 ```ini
@@ -162,7 +169,8 @@ WeaponAddons then uses its own working directory here:
          ├─ yourpack.clag
          ├─ icon.png
          ├─ models/
-         └─ sounds/
+         ├─ sounds/
+         └─ animations/
 ```
 
 WeaponAddons also supports one extra collection folder under `Packs`, which is useful for themed bundles:
@@ -178,12 +186,14 @@ WeaponAddons also supports one extra collection folder under `Packs`, which is u
          │  ├─ m27.clag
          │  ├─ icon.png
          │  ├─ models/
-         │  └─ sounds/
+         │  ├─ sounds/
+         │  └─ animations/
          └─ MSMC/
             ├─ msmc.clag
             ├─ icon.png
             ├─ models/
-            └─ sounds/
+            ├─ sounds/
+            └─ animations/
 ```
 
 ### Important folder note
@@ -251,6 +261,8 @@ For a themed collection, create the weapon inside a collection folder instead:
    - texture `.xnb` files beside the model
    - `sounds\shoot.wav`
    - `sounds\reload.wav`
+   - `animations\idle.xnb`
+   - `animations\reload.xnb`
 
 4. Reference those assets inside the `.clag`.
 5. Launch the game or use the reload hotkey.
@@ -264,9 +276,12 @@ For a themed collection, create the weapon inside a collection folder instead:
 ├─ models\
 │  ├─ myweapon.xnb
 │  └─ texture_0.xnb
-└─ sounds\
-   ├─ shoot.wav
-   └─ reload.wav
+├─ sounds\
+│  ├─ shoot.wav
+│  └─ reload.wav
+└─ animations\
+   ├─ idle.xnb
+   └─ reload.xnb
 ```
 
 ![Pack Layout](_Images/PackLayout.png)
@@ -477,7 +492,7 @@ That means each weapon pack should ideally contain:
 
 - one root-level `.clag`,
 - optional root-level icon,
-- optional subfolders for models and sounds.
+- optional subfolders for models, sounds, and animations.
 
 A collection folder should contain weapon pack folders, not loose `.clag` files. For example, use `Packs\BO2_Weapons\M27\m27.clag` instead of putting every BO2 `.clag` directly inside `Packs\BO2_Weapons`.
 
@@ -789,6 +804,41 @@ $RELOAD_PITCH: 0.0
 </details>
 
 <details>
+<summary><strong>Custom animation fields</strong></summary>
+
+```ini
+$ANIM_IDLE: animations\idle
+$ANIM_WALK: animations\walk
+$ANIM_RUN: animations\walk
+
+$ANIM_SHOOT: animations\shoot
+$ANIM_USE: animations\shoot
+
+$ANIM_RELOAD: animations\reload
+$ANIM_SHOULDER: animations\shoulder
+
+$ANIM_SHOULDER_IDLE: animations\shoulder_idle
+$ANIM_SHOULDER_WALK: animations\shoulder_walk
+$ANIM_SHOULDER_RUN: animations\shoulder_walk
+$ANIM_SHOULDER_SHOOT: animations\shoulder_shoot
+```
+
+- Animation values are pack-relative `AnimationClip` `.xnb` asset paths. The `.xnb` extension is optional.
+- Missing animation fields fall back to the vanilla animation selected by `SLOT_ID`.
+- `ANIM_WALK` and `ANIM_RUN` are aliases; use whichever name matches your asset naming.
+- `ANIM_SHOOT` and `ANIM_USE` are aliases for the upper-body action animation.
+- `ANIM_RELOAD` and `ANIM_SHOULDER` are registered as non-looping clips. The other animation fields are registered as looping clips.
+- WeaponAddons masks these clips to `AvatarBone.BackUpper`, matching the vanilla weapon animation registrations.
+- Synthetic items get their own routes by final `ITEM_ID`, so a custom pistol can use custom animations locally without changing vanilla pistol animations globally.
+
+Implementation notes:
+- WeaponAddons does not patch `Player.UpdateAnimation` directly.
+- It registers custom clips with `AvatarAnimationManager`, then remaps `AvatarAnimationCollection.Play(...)` from the vanilla name to the custom name while the matching item is held.
+- The returned `AnimationPlayer.Name` is restored to the original vanilla name so vanilla state checks remain stable.
+
+</details>
+
+<details>
 <summary><strong>Weapon behavior and balance fields</strong></summary>
 
 ```ini
@@ -866,6 +916,48 @@ Supported behavior:
 If the recipe tab is missing or invalid, the runtime falls back to **Advanced**.
 
 </details>
+
+---
+
+## Custom animation workflow
+
+Custom animation support is intended for avatar/weapon handling clips, not animated weapon-model bones.
+
+Recommended pack layout:
+
+```text
+!Mods\WeaponAddons\Packs\MyWeapon\
+├─ myweapon.clag
+└─ animations\
+   ├─ idle.xnb
+   ├─ walk.xnb
+   ├─ shoot.xnb
+   ├─ reload.xnb
+   ├─ shoulder.xnb
+   ├─ shoulder_idle.xnb
+   ├─ shoulder_walk.xnb
+   └─ shoulder_shoot.xnb
+```
+
+Example `.clag` entries:
+
+```ini
+$ANIM_IDLE: animations\idle
+$ANIM_WALK: animations\walk
+$ANIM_SHOOT: animations\shoot
+$ANIM_RELOAD: animations\reload
+
+$ANIM_SHOULDER: animations\shoulder
+$ANIM_SHOULDER_IDLE: animations\shoulder_idle
+$ANIM_SHOULDER_WALK: animations\shoulder_walk
+$ANIM_SHOULDER_SHOOT: animations\shoulder_shoot
+```
+
+The `SLOT_ID` still controls the underlying vanilla animation set. For example, a weapon cloned from `Pistol` normally asks for `PistolIdle`, `PistolShoot`, and `PistolReload`; WeaponAddons remaps only those requests for the matching item when custom clips are present.
+
+For multiplayer safety, synthetic item IDs are still remapped to their base `SLOT_ID` for peers. The local player sees the synthetic item and gets its custom animations; peers see the vanilla-safe base representation unless the pack intentionally overrides a vanilla slot.
+
+Animated gun-model parts are a separate feature area. This animation support handles the player/avatar weapon poses through `AnimationClip` assets.
 
 ---
 

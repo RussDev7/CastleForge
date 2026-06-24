@@ -84,7 +84,9 @@
     <Compile Include="Embedded\EmbeddedExporter.cs" />
     <Compile Include="Startup\WeaponAddonConfig.cs" />
     <Compile Include="Patching\WeaponAddonEntitySwapper.cs" />
+    <Compile Include="Patching\WeaponAddonAnimationPatches.cs" />
     <Compile Include="Runtime\WeaponAddonManager.cs" />
+    <Compile Include="Runtime\Animation\WeaponAddonAnimationRouter.cs" />
     <Compile Include="Runtime\Audio\WeaponAddonAudio.cs" />
     <Compile Include="Runtime\Injection\WeaponAddonItemInjector.cs" />
     <Compile Include="Runtime\Crafting\WeaponAddonRecipeInjector.cs" />

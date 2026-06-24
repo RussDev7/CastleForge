@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -9,6 +9,9 @@ using Microsoft.Xna.Framework.Content;
 using DNA.CastleMinerZ.Inventory;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using DNA.Drawing.Animation;
+using DNA.Net.GamerServices;
+using DNA.Avatars;
 using HarmonyLib;
 using System.IO;
 using System;
@@ -30,6 +33,7 @@ namespace WeaponAddons
     //   • Display strings (name/description) via reflection best-effort.
     //   • Gun stats (damage, recoil, fire rate, clip, etc.) when the slot is a GunInventoryItemClass.
     //   • Model overrides (optional) loaded via a pack-rooted ContentManager, cached by slot.
+    //   • Optional custom avatar/weapon handling animation clips.
     //   • Optional UI icon overrides:
     //       - PNG icon (direct file load)
     //       - Rendered model icon (RenderTarget2D snapshot)
@@ -99,6 +103,16 @@ namespace WeaponAddons
         public string  ModelPath; // e.g. "models\\model2".
         public string  ShootSfx;
         public string  ReloadSfx;
+
+        // Optional avatar animation clip paths (pack-relative XNB assets).
+        public string  AnimIdle;
+        public string  AnimWalk;
+        public string  AnimShoot;
+        public string  AnimReload;
+        public string  AnimShoulder;
+        public string  AnimShoulderIdle;
+        public string  AnimShoulderWalk;
+        public string  AnimShoulderShoot;
 
         public float   ShootVol;
         public float   ShootPitch;
@@ -328,6 +342,7 @@ namespace WeaponAddons
         ///        - Resolve final ItemId (synthetic if requested)
         ///        - Load model override (TryLoadModel)
         ///        - Load icon override (TryLoadIcon) OR render icon (TryRenderIconFromModel)
+        ///        - Load optional avatar animation overrides (TryLoadAnimations)
         ///        - Apply stat/name/ammo/sfx onto ItemId (ApplyDefToItemId)
         ///   5) Persist auto-allocated IDs to config (if needed)
         /// =====================================================================================
@@ -343,7 +358,7 @@ namespace WeaponAddons
         /// - Clears previous runtime caches.
         /// - Discovers/loads pack definitions (.clag).
         /// - Applies stat overrides to matching item slots.
-        /// - Loads/caches model overrides + optional icons.
+        /// - Loads/caches model overrides, optional icons, and optional avatar animations.
         /// </summary>
         public static void LoadApply()
         {
@@ -352,6 +367,7 @@ namespace WeaponAddons
                 var cfg = WeaponAddonConfig.LoadOrCreate();
                 if (!cfg.Enabled)
                 {
+                    WeaponAddonAnimationRouter.SoftResetRouting();
                     Log("Disabled via config.");
                     return;
                 }
@@ -368,6 +384,7 @@ namespace WeaponAddons
                 // Soft reset.
                 _bySlot.Clear();
                 SoftResetPackCM();
+                WeaponAddonAnimationRouter.SoftResetRouting();
 
                 var defs = LoadAllDefs(cfg);
 
@@ -413,6 +430,9 @@ namespace WeaponAddons
 
                     // If no PNG icon was provided/loaded, optionally render one from the model.
                     TryRenderIconFromModel(def);
+
+                    // Load optional avatar/weapon handling animations.
+                    TryLoadAnimations(def);
 
                     // Apply stats/model to def.ItemId (NOT def.SlotId)
                     ApplyDefToItemId(def, def.ItemId);
@@ -489,6 +509,15 @@ namespace WeaponAddons
                     ModelPath         = doc.Get("MODEL", ""),
                     ShootSfx          = doc.Get("SHOOT_SFX", ""),
                     ReloadSfx         = doc.Get("RELOAD_SFX", ""),
+
+                    AnimIdle          = doc.Get("ANIM_IDLE", ""),
+                    AnimWalk          = doc.Get("ANIM_WALK", doc.Get("ANIM_RUN", "")),
+                    AnimShoot         = doc.Get("ANIM_SHOOT", doc.Get("ANIM_USE", "")),
+                    AnimReload        = doc.Get("ANIM_RELOAD", ""),
+                    AnimShoulder      = doc.Get("ANIM_SHOULDER", ""),
+                    AnimShoulderIdle  = doc.Get("ANIM_SHOULDER_IDLE", ""),
+                    AnimShoulderWalk  = doc.Get("ANIM_SHOULDER_WALK", doc.Get("ANIM_SHOULDER_RUN", "")),
+                    AnimShoulderShoot = doc.Get("ANIM_SHOULDER_SHOOT", ""),
 
                     IconPath          = doc.Get("ICON", doc.Get("ICON_PNG", "")),
 
@@ -842,6 +871,130 @@ namespace WeaponAddons
             catch (Exception ex)
             {
                 Log($"Model load failed for {def?.PackFolderName}: {ex.Message}.");
+            }
+        }
+        #endregion
+
+        // =====================================================================================
+        // LOAD AVATAR ANIMATION OVERRIDES (XNB)
+        // =====================================================================================
+
+        #region Load .xnb Avatar Animations
+
+        /// <summary>
+        /// Loads and registers optional avatar/weapon handling animation clips for this pack.
+        ///
+        /// Summary:
+        /// - Resolves each ANIM_* path relative to PackRoot.
+        /// - Loads AnimationClip XNB assets from disk using the same pack ContentManager flow as models.
+        /// - Registers each clip under a unique per-item name.
+        /// - Adds a runtime route from the vanilla animation name to the custom registered name.
+        ///
+        /// Notes:
+        /// - Missing fields simply keep the vanilla animation.
+        /// - Failed loads are logged and do not prevent the weapon from loading.
+        /// - Routes are keyed by the final ItemId, so synthetic items use their own animation set locally.
+        /// </summary>
+        private static void TryLoadAnimations(WeaponAddonDef def)
+        {
+            try
+            {
+                if (def == null)
+                    return;
+
+                int loaded = 0;
+
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.Idle,          def.AnimIdle,          looping: true))  loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.Walk,          def.AnimWalk,          looping: true))  loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.Shoot,         def.AnimShoot,         looping: true))  loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.Reload,        def.AnimReload,        looping: false)) loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.Shoulder,      def.AnimShoulder,      looping: false)) loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.ShoulderIdle,  def.AnimShoulderIdle,  looping: true))  loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.ShoulderWalk,  def.AnimShoulderWalk,  looping: true))  loaded++;
+                if (TryLoadAnimation(def, WeaponAddonAnimationKind.ShoulderShoot, def.AnimShoulderShoot, looping: true))  loaded++;
+
+                if (loaded > 0)
+                    Log($"[WAddns] Registered {loaded} custom animation(s) for '{def.PackFolderName}' ({def.ItemId}).");
+            }
+            catch (Exception ex)
+            {
+                Log($"Animation load failed for {def?.PackFolderName}: {ex.Message}.");
+            }
+        }
+
+        /// <summary>
+        /// Loads and registers one animation clip if the pack supplied a path for it.
+        /// Summary: Returns true only when a clip was loaded, registered, and routed.
+        /// </summary>
+        private static bool TryLoadAnimation(WeaponAddonDef def, WeaponAddonAnimationKind kind, string path, bool looping)
+        {
+            if (def == null || string.IsNullOrWhiteSpace(path))
+                return false;
+
+            try
+            {
+                if (!WeaponAddonAnimationRouter.TryGetVanillaAnimationName(def.ItemId, kind, out var vanillaName))
+                {
+                    Log($"[WAddns] Animation '{kind}' skipped for '{def.PackFolderName}': no vanilla animation mapping for {def.ItemId}.");
+                    return false;
+                }
+
+                var clip = TryLoadAnimationClip(def, path);
+                if (clip == null)
+                    return false;
+
+                string customName = WeaponAddonAnimationRouter.MakeAnimationName(def.ItemId, kind);
+
+                AvatarAnimationManager.Instance.RegisterAnimation(
+                    customName,
+                    clip,
+                    looping,
+                    new AvatarBone[] { AvatarBone.BackUpper });
+
+                WeaponAddonAnimationRouter.RegisterRoute(def.ItemId, vanillaName, customName);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"[WAddns] Animation '{kind}' failed for '{def?.PackFolderName}': {ex.Message}.");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Loads a pack-relative AnimationClip XNB.
+        /// Summary: Mirrors TryLoadModel's folder-rooted ContentManager behavior so dependent assets resolve beside the clip.
+        /// </summary>
+        private static AnimationClip TryLoadAnimationClip(WeaponAddonDef def, string path)
+        {
+            try
+            {
+                var rel = (path ?? "").Replace('/', '\\').TrimStart('\\');
+                if (rel.Length == 0)
+                    return null;
+
+                var fullNoExt = Path.Combine(def.PackRoot, rel);
+
+                var xnbPath = fullNoExt.EndsWith(".xnb", StringComparison.OrdinalIgnoreCase)
+                    ? fullNoExt
+                    : fullNoExt + ".xnb";
+
+                if (!File.Exists(xnbPath))
+                {
+                    Log($"[WAddns] Missing animation XNB: {xnbPath}.");
+                    return null;
+                }
+
+                var root = Path.GetDirectoryName(xnbPath);
+                var asset = Path.GetFileNameWithoutExtension(xnbPath);
+
+                var cm = GetPackCM(root);
+                return cm?.Load<AnimationClip>(asset);
+            }
+            catch (Exception ex)
+            {
+                Log($"[WAddns] Animation clip load failed for '{def?.PackFolderName}' path '{path}': {ex.Message}.");
+                return null;
             }
         }
         #endregion

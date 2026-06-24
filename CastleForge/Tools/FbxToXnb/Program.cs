@@ -39,6 +39,10 @@ using System;
 ///   --pipeline     "<path>"   (repeatable) Path to a pipeline DLL *or* folder containing it.
 ///   --pipelineDir  "<path>"   (repeatable) Same as --pipeline, but name makes intent clearer.
 ///   --processor    "<name>"   FBX processor name (ex: SkinedModelProcessor).
+///   --animName     "<name>"   AnimationClipProcessor output clip name.
+///   --sourceClip   "<name>"   FBX take name to use when multiple takes exist.
+///   --frameRate    "30"       AnimationClipProcessor sample rate.
+///   --noReduce                Keep all sampled animation keys.
 ///
 /// Examples
 /// --------
@@ -47,6 +51,9 @@ using System;
 ///
 ///  (skinned - you MUST provide the custom pipeline DLL that defines SkinedModelProcessor)
 ///    FbxToXnbXna.exe --processor SkinedModelProcessor --pipelineDir "C:\...\YourPipelineBin" "C:\...\ALIEN.fbx"
+///
+///  (standalone avatar/weapon animation clip)
+///    FbxToXnbXna.exe --processor AnimationClipProcessor --pipelineDir "C:\...\SkinedModelProcessor" --animName Reload "C:\...\reload.fbx"
 ///
 /// Environment fallback
 /// --------------------
@@ -165,6 +172,10 @@ internal static class Program
         // If null/empty => builder default (keep items working).
         public string FbxProcessor;
 
+        // Optional processor parameters, used by custom processors such as AnimationClipProcessor.
+        public readonly Dictionary<string, string> ProcessorParameters =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         public bool ShowHelp;
     }
 
@@ -226,6 +237,48 @@ internal static class Program
                 continue;
             }
 
+            if (IsFlag(a, "--param", "--processorParam"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    AddProcessorParam(opt, TrimQuotes(args[++i]));
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--animName", "--clipName"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["ClipName"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--sourceClip", "--take"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["SourceClipName"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--frameRate", "--fps"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["FrameRate"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--noReduce"))
+            {
+                opt.ProcessorParameters["ReduceKeys"] = "False";
+                continue;
+            }
+
             // FBX files.
             if (a.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
             {
@@ -237,6 +290,27 @@ internal static class Program
         }
 
         return opt;
+    }
+
+    /// <summary>
+    /// Adds a processor parameter from Name=Value syntax.
+    /// </summary>
+    private static void AddProcessorParam(Options opt, string text)
+    {
+        if (opt == null || string.IsNullOrWhiteSpace(text))
+            return;
+
+        int eq = text.IndexOf('=');
+        if (eq <= 0)
+            return;
+
+        string name = text.Substring(0, eq).Trim();
+        string value = text.Substring(eq + 1).Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        opt.ProcessorParameters[name] = value;
     }
 
     /// <summary>
@@ -271,6 +345,11 @@ internal static class Program
         Console.WriteLine("  --pipeline <dllOrDir>     Add custom pipeline DLL or folder (repeatable)");
         Console.WriteLine("  --pipelineDir <dir>       Same as --pipeline (repeatable)");
         Console.WriteLine("  --processor <name>        FBX processor name (ex: SkinedModelProcessor)");
+        Console.WriteLine("  --param Name=Value        Generic processor parameter");
+        Console.WriteLine("  --animName <name>         AnimationClipProcessor output clip name");
+        Console.WriteLine("  --sourceClip <name>       AnimationClipProcessor source FBX take");
+        Console.WriteLine("  --frameRate <fps>         AnimationClipProcessor sample rate, usually 30");
+        Console.WriteLine("  --noReduce                Keep all sampled animation keys");
         Console.WriteLine("  --help                    Show help");
         Console.WriteLine();
         Console.WriteLine("Env:");
@@ -279,6 +358,7 @@ internal static class Program
         Console.WriteLine("Examples:");
         Console.WriteLine("  FbxToXnbXna.exe \"C:\\...\\0051_Pistol_model.fbx\"");
         Console.WriteLine("  FbxToXnbXna.exe --processor SkinedModelProcessor --pipelineDir \"C:\\...\\PipelineBin\" \"C:\\...\\ALIEN.fbx\"");
+        Console.WriteLine("  FbxToXnbXna.exe --processor AnimationClipProcessor --pipelineDir \"C:\\...\\SkinedModelProcessor\" --animName Reload \"C:\\...\\reload.fbx\"");
         Console.WriteLine();
     }
     #endregion
@@ -354,6 +434,7 @@ internal static class Program
             // OPTIONAL: If you add a property in XNBBuilderEx like builder.FbxProcessorName, set it here.
             // If you DIDN'T add such a property, ignore this and keep processor selection inside XNBBuilderEx.
             TrySetBuilderFbxProcessor(builder, opt.FbxProcessor);
+            TrySetBuilderProcessorParameters(builder, opt.ProcessorParameters);
 
             string intermediateDir = Path.Combine(Path.GetTempPath(), "XNB_Inter_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(intermediateDir);
@@ -368,6 +449,8 @@ internal static class Program
                 Console.WriteLine($"  * FBX Processor: {opt.FbxProcessor}");
             if (opt.ExtraPipeline.Count > 0)
                 Console.WriteLine($"  * Extra Pipeline: {string.Join("; ", opt.ExtraPipeline)}");
+            if (opt.ProcessorParameters.Count > 0)
+                Console.WriteLine($"  * Processor Params: {string.Join(", ", opt.ProcessorParameters.Select(kv => kv.Key + "=" + kv.Value))}");
 
             // NOTE: This call assumes you updated XNBBuilderEx.PackageContent signature to include:
             //   string[] extraPipelineAssembliesOrDirs
@@ -552,6 +635,36 @@ internal static class Program
             var p = t.GetProperty("FbxProcessorName");
             if (p != null && p.CanWrite && p.PropertyType == typeof(string))
                 p.SetValue(builder, processorName, null);
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Copies parsed processor parameters into XNBBuilderEx when the property exists.
+    /// </summary>
+    private static void TrySetBuilderProcessorParameters(object builder, IDictionary<string, string> parameters)
+    {
+        if (builder == null || parameters == null || parameters.Count == 0)
+            return;
+
+        try
+        {
+            var t = builder.GetType();
+            var p = t.GetProperty("ProcessorParameters");
+            if (p == null)
+                return;
+
+            var target = p.GetValue(builder, null) as IDictionary<string, string>;
+            if (target == null)
+                return;
+
+            foreach (var pair in parameters)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                    continue;
+
+                target[pair.Key] = pair.Value ?? "";
+            }
         }
         catch { }
     }

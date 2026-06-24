@@ -1,4 +1,4 @@
-# FbxToXnb
+﻿# FbxToXnb
 
 > Convert one or more `.fbx` models into XNA-ready `.xnb` output with a workflow built for CastleForge creators, drag-and-drop usage, isolated output folders, and optional custom pipeline processors.
 
@@ -265,11 +265,16 @@ That makes it easier to keep your custom pipeline locations available automatica
 ## Command-line reference
 
 | Flag | Purpose |
-|-----------------------------|-------------------------------------------------------------------|
-| `--pipeline <dllOrDir>`     | Adds a custom pipeline DLL or folder. Repeatable.                 |
-| `--pipelineDir <dir>`       | Same idea as `--pipeline`, but clearer when pointing at a folder. |
-| `--processor <name>`        | Overrides the FBX processor name, such as `SkinedModelProcessor`. |
-| `--help`                    | Shows help text.                                                  |
+|-----------------------------|-----------------------------------------------------------------------------------------------|
+| `--pipeline <dllOrDir>`     | Adds a custom pipeline DLL or folder. Repeatable.                                             |
+| `--pipelineDir <dir>`       | Same idea as `--pipeline`, but clearer when pointing at a folder.                             |
+| `--processor <name>`        | Overrides the FBX processor name, such as `SkinedModelProcessor` or `AnimationClipProcessor`. |
+| `--param Name=Value`        | Passes a generic processor parameter.                                                         |
+| `--animName <name>`         | Shortcut for `AnimationClipProcessor` output clip name.                                       |
+| `--sourceClip <name>`       | Shortcut for choosing a specific FBX take.                                                    |
+| `--frameRate <fps>`         | Shortcut for `AnimationClipProcessor` sample rate; use `30` for vanilla-like clips.           |
+| `--noReduce`                | Tells `AnimationClipProcessor` to keep all sampled keys.                                      |
+| `--help`                    | Shows help text.                                                                              |
 
 ### Default processor behavior
 If you do not provide a processor override, the build path uses the normal XNA:
@@ -461,6 +466,49 @@ FbxToXnb is especially useful for:
 - converting rigid/static models for CastleForge mods,
 - experimenting with XNA-compatible asset compilation,
 - and pairing with **DNA.SkinnedPipeline** for more advanced skinned content.
+
+---
+
+## Standalone AnimationClip builds
+
+For WeaponAddons custom handling animations, use `AnimationClipProcessor` from `DNA.SkinnedPipeline`.
+
+Example:
+
+```powershell
+FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir "C:\CastleForge\!Mods\TexturePacks\_FbxToXnb\SkinedModelProcessor" --animName Reload "C:\Authoring\reload.fbx"
+```
+
+The output keeps the normal per-asset layout:
+
+```text
+C:\Authoring\reload\
+└─ reload.xnb
+```
+
+That `.xnb` is a standalone `DNA.Drawing.Animation.AnimationClip` asset. Put it in a WeaponAddons pack, for example:
+
+```text
+WeaponAddons\Packs\Raygun\animations\reload.xnb
+```
+
+and reference it without the `.xnb` extension:
+
+```ini
+$ANIM_RELOAD: animations\reload
+```
+
+Useful animation flags:
+
+```text
+--animName Reload       Sets the AnimationClip.Name written into the XNB.
+--sourceClip "Take 001" Chooses a specific FBX take when the file has more than one.
+--frameRate 30          Samples the FBX at 30 FPS.
+--noReduce              Keeps constant channels uncompressed for debugging.
+--param Name=Value      Passes any custom processor parameter.
+```
+
+Keep the imported/exported armature aligned with the CastleForge reference model. The runtime clip stores bone transforms by index, so changed bone order can make arms, hands, or shoulders animate incorrectly.
 
 ---
 

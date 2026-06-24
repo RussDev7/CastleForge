@@ -95,6 +95,37 @@ $RELOAD_VOL:   1.0
 $RELOAD_PITCH: 0.0
 
 ; ==========================================================
+; Optional Avatar / Weapon Animations
+; ----------------------------------------------------------
+; Custom player-handling animation clips for this weapon.
+; Paths are relative to this pack folder and should omit .xnb.
+; Only uncomment fields for clips that actually exist.
+;
+; Flow:
+; - SLOT_ID still chooses the vanilla animation set to inherit.
+; - WeaponAddons registers these clips for ITEM_ID.
+; - Missing clips fall back to SLOT_ID animations.
+;
+; Suggested folder:
+;   animations\idle.xnb
+;   animations\walk.xnb
+;   animations\shoot.xnb
+;   animations\reload.xnb
+;   animations\shoulder.xnb
+;   animations\shoulder_idle.xnb
+;   animations\shoulder_walk.xnb
+;   animations\shoulder_shoot.xnb
+; ==========================================================
+; $ANIM_IDLE:           animations\idle
+; $ANIM_WALK:           animations\walk
+; $ANIM_SHOOT:          animations\shoot
+; $ANIM_RELOAD:         animations\reload
+; $ANIM_SHOULDER:       animations\shoulder
+; $ANIM_SHOULDER_IDLE:  animations\shoulder_idle
+; $ANIM_SHOULDER_WALK:  animations\shoulder_walk
+; $ANIM_SHOULDER_SHOOT: animations\shoulder_shoot
+
+; ==========================================================
 ; Behavior
 ; ==========================================================
 $AUTOMATIC: false

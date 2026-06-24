@@ -7033,6 +7033,8 @@ namespace TexturePacks
         //     • Skys            -> Cubemap export as 6 PNG faces per sky.
         //     • ParticleEffects -> Export ParticleEffects *.xnb from Content flavor folders,
         //                          plus optional Texture2D PNG export when an XNB is a texture.
+        //     • Animations      -> Copy weapon/player-handling AnimationClip XNB references into
+        //                          Models\Animations for Blender/FBX authoring workflows.
         //
         // High-level usage:
         //   • Call TexturePackExtractor.ExportAll() from a debug hotkey after content load
@@ -7110,6 +7112,18 @@ namespace TexturePacks
                     Path.Combine(root, "Models", "Extras", "Enemies"),
                     Path.Combine(root, "Models", "Extras", "Dragons"));
                 if (extra > 0) Log($"[Export][IMS] + Wrote {extra} extra by-name models to \"{ShortenForLog(Path.Combine(root, "Models", "Extras"))}\" \\ (Enemies | Dragons).");
+
+                // Animation authoring references (vanilla AnimationClip XNBs + workflow notes).
+                Try(() =>
+                {
+                    var animDir = Path.Combine(root, "Models", "Animations");
+                    var animContentRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Content");
+                    var count = AnimationAuthoringExporter.ExportWeaponAnimationReferences(animContentRoot, animDir);
+
+                    Log(count > 0
+                        ? $"[Export] Wrote {count} animation authoring file(s) to \"{ShortenForLog(animDir)}\"."
+                        : $"[Export] No weapon animation references found to export.");
+                });
 
                 // Fonts.
                 FontExtractor.ExportAllFonts(gm, Path.Combine(root, "Fonts"));
@@ -11581,6 +11595,184 @@ namespace TexturePacks
                     return rel;
                 }
                 catch { return null; }
+            }
+        }
+        #endregion
+
+        #region Animation Authoring References
+
+        /// <summary>
+        /// Exports vanilla weapon/avatar handling animation references into the model-authoring tree.
+        ///
+        /// Output:
+        ///   !Mods\TexturePacks\_Extracted\{timestamp}\Models\Animations\
+        ///
+        /// This intentionally copies AnimationClip XNBs instead of trying to decompile them.
+        /// The clips are useful as drop-in references for WeaponAddons, while Blender editing should
+        /// start from the exported player/reference model and then compile a new FBX with
+        /// AnimationClipProcessor.
+        /// </summary>
+        internal static class AnimationAuthoringExporter
+        {
+            private static readonly string[] AnimationRoots =
+            {
+                Path.Combine("Character", "Animation"),
+                Path.Combine("Props", "Items", "Block", "Animation"),
+                Path.Combine("Props", "Tools"),
+                Path.Combine("Props", "Weapons"),
+            };
+
+            /// <summary>
+            /// Copies all vanilla AnimationClip XNBs under known animation folders into outDir,
+            /// preserving the path relative to Content.
+            /// </summary>
+            public static int ExportWeaponAnimationReferences(string contentRoot, string outDir)
+            {
+                int wrote = 0;
+
+                if (string.IsNullOrWhiteSpace(contentRoot) || !Directory.Exists(contentRoot))
+                    return wrote;
+
+                Directory.CreateDirectory(outDir);
+
+                for (int i = 0; i < AnimationRoots.Length; i++)
+                {
+                    string root = Path.Combine(contentRoot, AnimationRoots[i]);
+                    if (!Directory.Exists(root))
+                        continue;
+
+                    foreach (var xnbPath in Directory.GetFiles(root, "*.xnb", SearchOption.AllDirectories))
+                    {
+                        if (!IsAnimationReferencePath(xnbPath))
+                            continue;
+
+                        string rel = GetRelativePathSafe(contentRoot, xnbPath);
+                        if (string.IsNullOrWhiteSpace(rel))
+                            continue;
+
+                        string dst = Path.Combine(outDir, rel);
+                        string dstDir = Path.GetDirectoryName(dst);
+                        if (!string.IsNullOrEmpty(dstDir))
+                            Directory.CreateDirectory(dstDir);
+
+                        File.Copy(xnbPath, dst, overwrite: true);
+                        wrote++;
+                    }
+                }
+
+                WriteAnimationAuthoringReadme(outDir, wrote);
+                WriteWeaponAddonClagTemplate(outDir);
+
+                return wrote;
+            }
+
+            private static bool IsAnimationReferencePath(string xnbPath)
+            {
+                if (string.IsNullOrWhiteSpace(xnbPath))
+                    return false;
+
+                string normalized = xnbPath.Replace('/', '\\');
+
+                // Character\Animation is a direct animation folder.
+                if (normalized.IndexOf("\\Character\\Animation\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+
+                // Weapon/tool/item handling clips are kept in Animation subfolders.
+                if (normalized.IndexOf("\\Animation\\", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+
+                return false;
+            }
+
+            /// <summary>
+            /// Returns path relative to root (best-effort), using OS separators.
+            /// </summary>
+            private static string GetRelativePathSafe(string root, string fullPath)
+            {
+                try
+                {
+                    root = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                    if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                        return null;
+
+                    return fullPath.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                }
+                catch { return null; }
+            }
+
+            private static void WriteAnimationAuthoringReadme(string outDir, int copiedCount)
+            {
+                try
+                {
+                    Directory.CreateDirectory(outDir);
+
+                    File.WriteAllLines(Path.Combine(outDir, "README_AnimationAuthoring.txt"), new[]
+                    {
+                        "CastleForge animation authoring references",
+                        "==========================================",
+                        "",
+                        "This folder is produced by /tpexportall.",
+                        "",
+                        "What was copied:",
+                        "- Vanilla AnimationClip .xnb files from Content\\Character\\Animation.",
+                        "- Vanilla weapon/tool/item AnimationClip .xnb files from Content\\Props\\...\\Animation.",
+                        "",
+                        "These copied .xnb files are compiled references. They can be reused directly by",
+                        "WeaponAddons, but they are not Blender source files.",
+                        "",
+                        "Recommended Blender workflow:",
+                        "1. Import the exported player/reference GLB from Models\\Player\\Misc\\Player.glb.",
+                        "2. Keep the armature/bone names and hierarchy intact.",
+                        "3. Animate the upper-body weapon motion in Blender.",
+                        "4. Export a one-clip FBX animation.",
+                        "5. Compile the FBX with FbxToXnb using AnimationClipProcessor:",
+                        "",
+                        "   FbxToXnb.exe --processor AnimationClipProcessor --pipelineDir \"SkinedModelProcessor\" \"reload.fbx\"",
+                        "",
+                        "Useful optional flags:",
+                        "   --animName Reload",
+                        "   --sourceClip Take 001",
+                        "   --frameRate 30",
+                        "   --noReduce",
+                        "",
+                        "Then copy the produced .xnb into a WeaponAddons pack:",
+                        "",
+                        "   WeaponAddons\\Packs\\MyWeapon\\animations\\reload.xnb",
+                        "",
+                        "and reference it in the .clag file as:",
+                        "",
+                        "   $ANIM_RELOAD: animations\\reload",
+                        "",
+                        "Copied clip count: " + copiedCount.ToString(),
+                    });
+                }
+                catch { }
+            }
+
+            private static void WriteWeaponAddonClagTemplate(string outDir)
+            {
+                try
+                {
+                    Directory.CreateDirectory(outDir);
+
+                    File.WriteAllLines(Path.Combine(outDir, "WeaponAddons_AnimationFields.clag.txt"), new[]
+                    {
+                        "; Optional Avatar / Weapon Animations",
+                        "; Paths are relative to the WeaponAddons pack folder and omit .xnb.",
+                        "; Missing clips fall back to the vanilla SLOT_ID animation set.",
+                        "",
+                        "; $ANIM_IDLE:           animations\\idle",
+                        "; $ANIM_WALK:           animations\\walk",
+                        "; $ANIM_SHOOT:          animations\\shoot",
+                        "; $ANIM_RELOAD:         animations\\reload",
+                        "; $ANIM_SHOULDER:       animations\\shoulder",
+                        "; $ANIM_SHOULDER_IDLE:  animations\\shoulder_idle",
+                        "; $ANIM_SHOULDER_WALK:  animations\\shoulder_walk",
+                        "; $ANIM_SHOULDER_SHOOT: animations\\shoulder_shoot",
+                    });
+                }
+                catch { }
             }
         }
         #endregion
