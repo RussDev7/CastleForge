@@ -438,7 +438,9 @@ namespace WeaponAddons
         /// - Supports:
         ///   A) !Mods\WeaponAddons\<PackName>\...
         ///   B) !Mods\WeaponAddons\Packs\<PackName>\...
-        /// - Each pack must contain exactly one *.clag (first match wins).
+        ///   C) !Mods\WeaponAddons\Packs\<CollectionName>\<PackName>\...
+        /// - Each weapon pack folder must contain a root-level *.clag (first match wins).
+        /// - Collection folders are containers only; loose *.clag files should stay in weapon pack folders.
         /// - Resolves SlotId using:
         ///   1) SLOT_ID from .clag
         ///   2) Config [Slots] mapping
@@ -454,10 +456,11 @@ namespace WeaponAddons
             // Support either:
             //  A) RootDir\PackName\...
             //  B) RootDir\Packs\PackName\...
+            //  C) RootDir\Packs\CollectionName\PackName\...
             var packsDir = Path.Combine(RootDir, "Packs");
             var scanRoot = Directory.Exists(packsDir) ? packsDir : RootDir;
 
-            foreach (var dir in Directory.EnumerateDirectories(scanRoot, "*", SearchOption.TopDirectoryOnly))
+            foreach (var dir in EnumeratePackDirs(scanRoot))
             {
                 var folderName = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
@@ -576,6 +579,72 @@ namespace WeaponAddons
             }
 
             return list;
+
+            /// <summary>
+            /// Enumerates direct weapon pack folders and one-level nested collection pack folders.
+            ///
+            /// Summary:
+            /// - Direct pack: scanRoot\PackName\*.clag
+            /// - Collection pack: scanRoot\CollectionName\PackName\*.clag
+            /// - If a folder has its own root-level .clag, it is treated as a weapon pack and child
+            ///   folders are not scanned as nested packs.
+            /// </summary>
+            IEnumerable<string> EnumeratePackDirs(string root)
+            {
+                foreach (var dir in Directory.EnumerateDirectories(root, "*", SearchOption.TopDirectoryOnly))
+                {
+                    if (ShouldSkipPackFolder(dir))
+                        continue;
+
+                    // Direct weapon pack:
+                    //   Packs\PackName\weapon.clag
+                    if (FirstFileOrNull(dir, "*.clag") != null)
+                    {
+                        yield return dir;
+                        continue;
+                    }
+
+                    // Collection folder:
+                    //   Packs\CollectionName\PackName\weapon.clag
+                    string[] childDirs = null;
+
+                    try
+                    {
+                        childDirs = Directory.GetDirectories(dir, "*", SearchOption.TopDirectoryOnly);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Failed to scan collection folder '{dir}': {ex.Message}");
+                    }
+
+                    if (childDirs == null)
+                        continue;
+
+                    foreach (var child in childDirs)
+                    {
+                        if (ShouldSkipPackFolder(child))
+                            continue;
+
+                        if (FirstFileOrNull(child, "*.clag") != null)
+                            yield return child;
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Returns true when a folder name is reserved for loader-owned or non-pack content.
+            /// Summary: Keeps common support folders from being treated as weapon packs.
+            /// </summary>
+            bool ShouldSkipPackFolder(string dir)
+            {
+                var name = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+                if (string.IsNullOrWhiteSpace(name)) return true;
+                if (name.Equals("Embedded", StringComparison.OrdinalIgnoreCase)) return true;
+                if (name.Equals("!Logs", StringComparison.OrdinalIgnoreCase)) return true;
+
+                return false;
+            }
 
             /// <summary>
             /// Finds the first file matching the pattern in the given folder.

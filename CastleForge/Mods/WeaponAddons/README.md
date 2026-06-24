@@ -165,19 +165,54 @@ WeaponAddons then uses its own working directory here:
          └─ sounds/
 ```
 
+WeaponAddons also supports one extra collection folder under `Packs`, which is useful for themed bundles:
+
+```text
+!Mods/
+├─ WeaponAddons.dll
+└─ WeaponAddons/
+   ├─ WeaponAddons.Config.ini
+   └─ Packs/
+      └─ BO2_Weapons/
+         ├─ M27/
+         │  ├─ m27.clag
+         │  ├─ icon.png
+         │  ├─ models/
+         │  └─ sounds/
+         └─ MSMC/
+            ├─ msmc.clag
+            ├─ icon.png
+            ├─ models/
+            └─ sounds/
+```
+
 ### Important folder note
 The runtime scans:
 
 - `!Mods\WeaponAddons\Packs\...` **if the `Packs` folder exists**
 - otherwise it scans `!Mods\WeaponAddons\...`
 
-Because of that, the safest and cleanest structure is:
+Because of that, the safest and cleanest single-weapon structure is:
 
 ```text
 !Mods\WeaponAddons\Packs\<PackName>\
 ```
 
-That is the structure I recommend documenting and shipping.
+For larger themed bundles, you can also group multiple weapon packs under one collection folder:
+
+```text
+!Mods\WeaponAddons\Packs\<CollectionName>\<PackName>\
+```
+
+For example:
+
+```text
+!Mods\WeaponAddons\Packs\BO2_Weapons\M27\
+!Mods\WeaponAddons\Packs\BO2_Weapons\MSMC\
+!Mods\WeaponAddons\Packs\BO2_Weapons\DSR50\
+```
+
+The collection folder is only a container. Each weapon still needs its own pack folder and its own root-level `.clag` file.
 
 ### First launch behavior
 
@@ -203,7 +238,13 @@ The included sample **Raygun** pack is embedded in the project and can be extrac
 !Mods\WeaponAddons\Packs\MyWeapon\
 ```
 
-2. Put exactly one `.clag` file at the root of that pack folder.
+For a themed collection, create the weapon inside a collection folder instead:
+
+```text
+!Mods\WeaponAddons\Packs\MyCollection\MyWeapon\
+```
+
+2. Put exactly one `.clag` file at the root of that weapon pack folder.
 3. Add your optional assets:
    - `icon.png`
    - `models\yourmodel.xnb`
@@ -420,11 +461,25 @@ If the requested `ITEM_ID` is already occupied, the mod walks forward until it f
 
 WeaponAddons scans pack folders and loads the **first `*.clag` file it finds at the top level of that pack folder**.
 
-That means each pack should ideally contain:
+Supported pack layouts are:
+
+```text
+!Mods\WeaponAddons\Packs\<PackName>\
+```
+
+and one-level collection folders:
+
+```text
+!Mods\WeaponAddons\Packs\<CollectionName>\<PackName>\
+```
+
+That means each weapon pack should ideally contain:
 
 - one root-level `.clag`,
 - optional root-level icon,
 - optional subfolders for models and sounds.
+
+A collection folder should contain weapon pack folders, not loose `.clag` files. For example, use `Packs\BO2_Weapons\M27\m27.clag` instead of putting every BO2 `.clag` directly inside `Packs\BO2_Weapons`.
 
 If multiple packs map to the same slot, the runtime uses **last-wins** behavior for that slot mapping.
 
@@ -1177,10 +1232,24 @@ Use:
 !Mods\WeaponAddons\Packs\<PackName>\
 ```
 
+For themed bundles, use:
+
+```text
+!Mods\WeaponAddons\Packs\<CollectionName>\<PackName>\
+```
+
 This avoids scan-root ambiguity and keeps your content tidy.
 
 ### Keep one `.clag` per pack root
-The loader looks for the first matching `*.clag` in the pack root folder. Do not bury it deep inside subfolders.
+The loader looks for the first matching `*.clag` in the weapon pack root folder. Do not bury it deep inside unrelated subfolders.
+
+For collection packs, keep the `.clag` inside each weapon folder:
+
+```text
+!Mods\WeaponAddons\Packs\BO2_Weapons\M27\m27.clag
+```
+
+Do not place several weapon `.clag` files directly inside the collection folder.
 
 ### Use WAV when possible
 MP3 is supported, but 16-bit PCM WAV is usually the simplest, safest path.
@@ -1228,8 +1297,8 @@ That is part of the vanilla-safe networking strategy.
 Check:
 
 - the mod is enabled in `WeaponAddons.Config.ini`
-- the pack is under `!Mods\WeaponAddons\Packs\`
-- the pack has a valid root-level `.clag`
+- the pack is under `!Mods\WeaponAddons\Packs\<PackName>\` or `!Mods\WeaponAddons\Packs\<CollectionName>\<PackName>\`
+- the weapon pack folder has a valid root-level `.clag`
 - `SLOT_ID` is valid or provided through `[Slots]`
 
 ### Custom model is not showing
