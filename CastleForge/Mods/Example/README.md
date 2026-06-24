@@ -41,6 +41,40 @@ This mod gives you all of that in one place.
 
 ---
 
+## CastleForge AI Modding Assistant
+
+![CastleForge AI Modding Assistant](_Images/CastleForgeAIModAssistant.png)
+
+Need help turning this Example mod into your own CastleMiner Z / CastleForge mod?
+
+I made a custom GPT called **CastleForge Modding Assistant** to help make CastleForge modding easier, whether you are brand new to modding or already familiar with CastleMiner Z and CastleForge development.
+
+The assistant is designed to use this **Example mod** as a foundation. You can describe the mod idea you want, and it can help you plan the smallest clean change, find likely patch points, write starter code, organize files, and explain what each part does.
+
+Whether you already mod CastleMiner Z or just have an idea and no clue where to start, this should make the process a lot easier.
+
+### What It Can Help With
+
+- Creating simple recipe or item balance mods.
+- Writing small Harmony Prefix/Postfix patches.
+- Finding where something is handled in the game code.
+- Using the CastleForge Example Mod as a starting template.
+- Organizing mods like the existing CastleForge community mods.
+- Writing README files, release notes, and GitHub descriptions.
+- Helping newer users who may not know C# or the CastleForge API yet.
+
+### Example Prompt
+
+```text
+Make a simple mod that changes alien ammo to cost 1 Green Goo and 1 Space Rock.
+````
+
+### Try It Here
+
+[https://chatgpt.com/g/g-6a3998face448191858502b337a5e9e3-castleforge-modding-assistant](https://chatgpt.com/g/g-6a3998face448191858502b337a5e9e3-castleforge-modding-assistant)
+
+---
+
 ## Highlights
 
 ### Included Out of the Box
@@ -537,39 +571,8 @@ Yes. That is the main purpose of the project.
 
 ---
 
-## Repository Placement
-
-Within your planned repository structure, this README belongs here:
-
-```text
-CastleForge/
-└─ CastleForge/
-   └─ Mods/
-      └─ Example/
-         └─ README.md
-```
-
-If you keep screenshots local to the mod folder, a clean layout would be:
-
-```text
-CastleForge/
-└─ CastleForge/
-   └─ Mods/
-      └─ Example/
-         ├─ README.md
-         └─ Images/
-            ├─ Example_Hero_Banner.png
-            ├─ Example_Startup_Flow.png
-            ├─ Example_Commands.png
-            ├─ Example_Config.png
-            ├─ Example_Harmony.png
-            └─ Example_Embedded.png
-```
-
----
-
 ## TL;DR
 
 **Example** is the CastleForge starter mod. It is a reusable foundation for building new mods, showing how to wire together startup, config, commands, embedded dependencies, and Harmony patch infrastructure in a clean and maintainable way.
 
-If you want a project you can copy and turn into a real feature mod, this is the one.
+If you want a project you can copy and turn into a real feature mod, start here. If you want help making that first mod, the CastleForge AI Modding Assistant can walk you through it.
