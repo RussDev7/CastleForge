@@ -20,7 +20,7 @@ namespace WeaponAddons
     // - Reads a simple, line-based "CLAG" definition file into a dictionary.
     // - First non-empty line is treated as the document "Type" (e.g., "Firearm").
     // - Remaining lines are key/value pairs in the form:
-    //      <sigils...><KEY>: <VALUE>
+    //      <sigils...><KEY>: <VALUE>  or  <sigils...><KEY> = <VALUE>
     //
     // Supported behaviors:
     // - Comment lines begin with ';' or '//' (kept distinct so '#CLIP_SIZE' remains valid).
@@ -83,7 +83,7 @@ namespace WeaponAddons
         ///
         /// Summary:
         /// - The first non-empty, non-comment line becomes doc.Type.
-        /// - Each subsequent non-empty, non-comment line with "KEY: VALUE" is stored in Raw.
+        /// - Each subsequent non-empty, non-comment line with "KEY: VALUE" or "KEY = VALUE" is stored in Raw.
         /// - Leading sigils ($, ", %, #, =, *) are stripped before key parsing.
         ///
         /// Notes:
@@ -127,17 +127,32 @@ namespace WeaponAddons
                     line = line.Substring(1).TrimStart();
                 }
 
-                int colon = line.IndexOf(':');
-                if (colon <= 0) continue;
+                int sep = FirstKeyValueSeparator(line);
+                if (sep <= 0) continue;
 
-                var key = line.Substring(0, colon).Trim();
-                var val = line.Substring(colon + 1).Trim();
+                var key = line.Substring(0, sep).Trim();
+                var val = line.Substring(sep + 1).Trim();
 
                 if (key.Length == 0) continue;
                 doc.Raw[key] = val;
             }
 
             return doc;
+        }
+
+        /// <summary>
+        /// Finds the first supported key/value separator in a .clag line.
+        /// Summary: accepts both "KEY: VALUE" and "KEY = VALUE" forms.
+        /// </summary>
+        private static int FirstKeyValueSeparator(string line)
+        {
+            int colon = line.IndexOf(':');
+            int equals = line.IndexOf('=');
+
+            if (colon <= 0) return equals;
+            if (equals <= 0) return colon;
+
+            return Math.Min(colon, equals);
         }
 
         /// <summary>

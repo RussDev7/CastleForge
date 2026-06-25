@@ -1,4 +1,4 @@
-Firearm
+﻿Firearm
 $NAME:         Raygun
 $AUTHOR:       RussDev7
 $DESCRIPTION1: RAYGUUUUN
@@ -76,14 +76,41 @@ $ICON_RENDER_ZOOM: 1.0
 ; - Omit the .xnb extension.
 ;   (ex: models\raygun -> <Pack>\models\raygun.xnb)
 ;
-; SHOOT_SFX / RELOAD_SFX:
+; UseSound / ReloadSound:
 ; - Either a vanilla cue name (ex: LaserGun4, Teleport), OR
 ; - A file path relative to the pack folder (WAV/MP3).
 ;   Recommended: 16-bit PCM WAV (most compatible).
+;
+; UseSound / ReloadSound:
+; - Either a vanilla cue name (ex: LaserGun4, Teleport), OR
+; - A file path relative to the pack folder (WAV/MP3).
+;   Recommended: 16-bit PCM WAV (most compatible).
+;
+; Optional multi-cue sounds:
+; - UseSounds / ReloadSounds are comma-separated.
+; - UseSoundMode / ReloadSoundMode can be Single, Random, or Cycle.
+; - Single = default, use UseSound / ReloadSound.
+; - Random = pick from UseSounds / ReloadSounds.
+; - Cycle  = play UseSounds / ReloadSounds in order.
+; - If the plural list is missing, it falls back to the single sound.
+;
+;   Example:
+;     $UseSound:     GunShot3
+;     $UseSounds:    GunShot3, GunShot3Alt1, GunShot3Alt2
+;     $UseSoundMode: Random
+;
+;   Example:
+;     $ReloadSound:     GunReload
+;     $ReloadSounds:    GunReload, GunReloadAlt1, sounds\reload_alt.wav
+;     $ReloadSoundMode: Random
+;
+; Backward-compatible aliases still work:
+; - SHOOT_SFX / SHOT
+; - RELOAD_SFX / RELOAD
 ; ==========================================================
 $MODEL: models\raygun
-$SHOOT_SFX:  sounds\shoot.wav
-$RELOAD_SFX: sounds\reload.wav
+$UseSound:    sounds\shoot.wav
+$ReloadSound: sounds\reload.wav
 
 ; Optional SFX tuning (only affects file-based SFX, not cue names).
 ; Volume: 0..1  (1.0 = full volume).

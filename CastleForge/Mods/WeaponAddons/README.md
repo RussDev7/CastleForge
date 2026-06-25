@@ -1,4 +1,4 @@
-# WeaponAddons
+﻿# WeaponAddons
 
 > Turn CastleMiner Z weapons into data-driven content packs.  
 > Build custom guns and other weapon-style addons with a `.clag` file, optional custom models, custom icons, custom sounds, optional crafting recipes, and runtime-safe synthetic item IDs.
@@ -786,8 +786,15 @@ $ICON_RENDER_ZOOM: 1.0
 
 ```ini
 $MODEL: models\myweapon
-$SHOOT_SFX: sounds\shoot.wav
-$RELOAD_SFX: sounds\reload.wav
+
+$UseSound: GunShot3
+$UseSounds: GunShot3, GunShot3Alt1, GunShot3Alt2
+$UseSoundMode: Random
+
+$ReloadSound: sounds\reload.wav
+$ReloadSounds: sounds\reload.wav, sounds\reload_alt.wav
+$ReloadSoundMode: Cycle
+
 $SHOOT_VOL: 1.0
 $SHOOT_PITCH: 0.0
 $RELOAD_VOL: 1.0
@@ -798,6 +805,10 @@ $RELOAD_PITCH: 0.0
 - Shoot and reload SFX can be:
   - a vanilla cue name, or
   - a pack-relative file path ending in `.wav` or `.mp3`
+- `UseSoundMode` / `ReloadSoundMode` support `Single`, `Random`, and `Cycle`.
+- `Single` is the default. In `Single` mode, `UseSound` / `ReloadSound` is used first, with the first list entry only as a fallback.
+- `UseSounds` / `ReloadSounds` are comma-separated and may mix vanilla cue names with pack-relative `.wav` / `.mp3` paths.
+- Backward-compatible aliases still work: `SHOOT_SFX`, `SHOT`, `RELOAD_SFX`, and `RELOAD`.
 - File-based sound volume is clamped to **0..1**
 - File-based sound pitch is clamped to **-1..1**
 

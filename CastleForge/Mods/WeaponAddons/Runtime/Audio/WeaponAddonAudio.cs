@@ -14,17 +14,29 @@ using static ModLoader.LogSystem;
 namespace WeaponAddons
 {
     /// <summary>
+    /// Selects how a WeaponAddons sound list is used.
+    /// Summary: Single preserves vanilla-style one-cue behavior and is the default.
+    /// </summary>
+    internal enum WeaponAddonSoundMode
+    {
+        Single,
+        Random,
+        Cycle
+    }
+
+    /// <summary>
     /// WeaponAddonAudio
     /// ----------------
-    /// File-backed SFX router for WeaponAddons.
+    /// File-backed and cue-list SFX router for WeaponAddons.
     ///
     /// Summary:
     /// - Supports .clag SFX values as either:
-    ///   • Vanilla cue name (handled by the engine normally), OR
-    ///   • Pack-relative file path (.wav/.mp3) loaded into SoundEffect.
-    /// - For file-based sounds:
-    ///   • Registers per-item SHOOT/RELOAD sounds.
-    ///   • Stores per-item Volume/Pitch tuning.
+    ///   • Vanilla cue name,
+    ///   • Pack-relative file path (.wav/.mp3) loaded into SoundEffect, OR
+    ///   • A Random/Cycle list containing cue names and/or file paths.
+    /// - For file-based or multi-choice sounds:
+    ///   • Registers per-item SHOOT/RELOAD routes.
+    ///   • Stores per-item Volume/Pitch tuning for file-backed choices.
     ///   • Uses token strings (WASFX_SHOOT:id / WASFX_RELOAD:id) that the SoundManager patches intercept.
     ///
     /// Notes:
@@ -38,12 +50,13 @@ namespace WeaponAddons
         // =====================================================================================
         //
         // Summary:
-        // - These prefixes are written into gun _useSoundCue / _reloadSound.
-        // - SoundManager.PlayInstance(...) patches detect these and play file-backed SFX instead.
+        // - These prefixes are written into gun _useSoundCue / _reloadSound when a file-backed
+        //   sound or Random/Cycle route is needed.
+        // - SoundManager.PlayInstance(...) patches detect these and play the resolved choice.
         //
         // Example:
-        //   "WASFX_SHOOT:204"  -> play shoot SFX registered for itemId=204
-        //   "WASFX_RELOAD:204" -> play reload SFX registered for itemId=204
+        //   "WASFX_SHOOT:204"  -> select/play shoot sound route for itemId=204
+        //   "WASFX_RELOAD:204" -> select/play reload sound route for itemId=204
         //
         // =====================================================================================
 
@@ -52,19 +65,22 @@ namespace WeaponAddons
         private const string ReloadPrefix = "WASFX_RELOAD:";
 
         // =====================================================================================
-        // CACHES (PATH -> SFX, ITEM -> SFX, ITEM -> PARAMS)
+        // CACHES (PATH -> SFX, ITEM -> ROUTE, ACTIVE INSTANCES)
         // =====================================================================================
 
         // Path cache so multiple items can share the same on-disk file.
         private static readonly Dictionary<string, SoundEffect> _pathCache =
             new Dictionary<string, SoundEffect>(StringComparer.OrdinalIgnoreCase);
 
-        // ItemId -> SoundEffect.
-        private static readonly Dictionary<int, SoundEffect> _shootById  = new Dictionary<int, SoundEffect>();
-        private static readonly Dictionary<int, SoundEffect> _reloadById = new Dictionary<int, SoundEffect>();
+        // ItemId -> route containing one or more cue/file choices.
+        private static readonly Dictionary<int, SoundRoute> _shootRoutes  = new Dictionary<int, SoundRoute>();
+        private static readonly Dictionary<int, SoundRoute> _reloadRoutes = new Dictionary<int, SoundRoute>();
 
-        // 3D instances need disposal after they finish.
+        // 3D/2D token-created instances need disposal after they finish.
         private static readonly List<SoundEffectInstance> _active3D = new List<SoundEffectInstance>();
+
+        private static readonly Random _random = new Random();
+        private static readonly object _randomLock = new object();
 
         /// <summary>
         /// Per-item tuning for file-based SFX.
@@ -77,8 +93,25 @@ namespace WeaponAddons
             public float Pitch;  // -1..1.
         }
 
-        private static readonly Dictionary<int, SfxParams> _shootParams  = new Dictionary<int, SfxParams>();
-        private static readonly Dictionary<int, SfxParams> _reloadParams = new Dictionary<int, SfxParams>();
+        /// <summary>
+        /// One selectable sound choice. Exactly one of CueName/Sfx is expected.
+        /// </summary>
+        private sealed class SoundChoice
+        {
+            public string CueName;
+            public SoundEffect Sfx;
+        }
+
+        /// <summary>
+        /// Per-item sound route used by Single file-backed sounds and Random/Cycle lists.
+        /// </summary>
+        private sealed class SoundRoute
+        {
+            public WeaponAddonSoundMode Mode;
+            public SfxParams Params;
+            public readonly List<SoundChoice> Choices = new List<SoundChoice>();
+            public int NextIndex;
+        }
 
         // =====================================================================================
         // LIFECYCLE
@@ -112,10 +145,8 @@ namespace WeaponAddons
             }
             catch { }
 
-            _shootById.Clear();
-            _reloadById.Clear();
-            _shootParams.Clear();
-            _reloadParams.Clear();
+            _shootRoutes.Clear();
+            _reloadRoutes.Clear();
         }
 
         /// <summary>
@@ -124,10 +155,8 @@ namespace WeaponAddons
         /// </summary>
         public static void SoftResetRouting()
         {
-            _shootById.Clear();
-            _reloadById.Clear();
-            _shootParams.Clear();
-            _reloadParams.Clear();
+            _shootRoutes.Clear();
+            _reloadRoutes.Clear();
 
             // Intentionally keep:
             // - _pathCache (SoundEffects)
@@ -154,56 +183,191 @@ namespace WeaponAddons
         }
 
         // =====================================================================================
-        // REGISTRATION (FILE PATH -> TOKEN)
+        // REGISTRATION / FIELD VALUE PREPARATION
         // =====================================================================================
         //
         // Summary:
-        // - TryRegisterShoot/TryRegisterReload:
-        //   • If input looks like a file path, load it and register it for the itemId.
-        //   • Store volume/pitch params.
-        //   • Return a token string written into the gun's sound string field.
-        // - If registration fails, returns null and caller should keep the base cue unchanged.
+        // - TryPrepareShootSound/TryPrepareReloadSound:
+        //   • Single mode returns a direct cue name when possible (vanilla behavior).
+        //   • File-backed sounds and Random/Cycle lists are registered as token routes.
+        //   • Lists may mix vanilla cue names and pack-relative .wav/.mp3 paths.
+        // - TryRegisterShoot/TryRegisterReload are kept as compatibility wrappers.
         //
         // =====================================================================================
 
-        // Returns token string (WASFX_SHOOT:id) if registered, else null.
+        /// <summary>
+        /// Prepares the value that should be written into the gun's _useSoundCue field.
+        /// Summary: Single is default/preserved behavior; Random/Cycle use the supplied list.
+        /// </summary>
+        public static string TryPrepareShootSound(
+            int itemId,
+            string packRoot,
+            string primary,
+            string[] values,
+            WeaponAddonSoundMode mode,
+            float vol,
+            float pitch)
+            => TryPrepareSound(itemId, packRoot, primary, values, mode, isShoot: true, vol, pitch);
+
+        /// <summary>
+        /// Prepares the value that should be written into the gun's _reloadSound field.
+        /// Summary: Mirrors TryPrepareShootSound for reload sounds.
+        /// </summary>
+        public static string TryPrepareReloadSound(
+            int itemId,
+            string packRoot,
+            string primary,
+            string[] values,
+            WeaponAddonSoundMode mode,
+            float vol,
+            float pitch)
+            => TryPrepareSound(itemId, packRoot, primary, values, mode, isShoot: false, vol, pitch);
+
+        // Returns token string (WASFX_SHOOT:id) if a file-backed route is registered; cue names pass through.
         public static string TryRegisterShoot(int itemId, string packRoot, string value, float vol, float pitch)
-            => TryRegister(itemId, packRoot, value, isShoot: true, vol, pitch);
+            => TryPrepareShootSound(itemId, packRoot, value, null, WeaponAddonSoundMode.Single, vol, pitch);
 
         public static string TryRegisterReload(int itemId, string packRoot, string value, float vol, float pitch)
-            => TryRegister(itemId, packRoot, value, isShoot: false, vol, pitch);
+            => TryPrepareReloadSound(itemId, packRoot, value, null, WeaponAddonSoundMode.Single, vol, pitch);
 
         private static float Clamp01(float v) => (v < 0f) ? 0f : (v > 1f ? 1f : v);
         private static float ClampPitch(float v) => (v < -1f) ? -1f : (v > 1f ? 1f : v);
 
-        private static string TryRegister(int itemId, string packRoot, string value, bool isShoot, float vol, float pitch)
+        private static string TryPrepareSound(
+            int itemId,
+            string packRoot,
+            string primary,
+            string[] values,
+            WeaponAddonSoundMode mode,
+            bool isShoot,
+            float vol,
+            float pitch)
         {
-            if (!IsFileSpec(value)) return null;
+            var list = BuildChoiceList(primary, values, mode);
+
+            if (list.Count == 0)
+                return null;
+
+            // Single cue names stay direct so vanilla behavior remains the default.
+            if (mode == WeaponAddonSoundMode.Single)
+            {
+                var value = list[0];
+
+                if (!IsFileSpec(value))
+                    return value;
+
+                return TryRegisterRoute(itemId, packRoot, list, WeaponAddonSoundMode.Single, isShoot, vol, pitch);
+            }
+
+            return TryRegisterRoute(itemId, packRoot, list, mode, isShoot, vol, pitch);
+        }
+
+        /// <summary>
+        /// Builds the effective choice list for the requested mode.
+        /// Summary:
+        /// - Single uses primary first, then the first list entry as fallback.
+        /// - Random/Cycle use the list when present, otherwise primary as fallback.
+        /// </summary>
+        private static List<string> BuildChoiceList(string primary, string[] values, WeaponAddonSoundMode mode)
+        {
+            var result = new List<string>();
+
+            if (mode == WeaponAddonSoundMode.Single)
+            {
+                AddClean(result, primary);
+
+                if (result.Count == 0 && values != null)
+                {
+                    for (int i = 0; i < values.Length; i++)
+                    {
+                        AddClean(result, values[i]);
+                        if (result.Count > 0)
+                            break;
+                    }
+                }
+
+                return result;
+            }
+
+            if (values != null)
+            {
+                for (int i = 0; i < values.Length; i++)
+                    AddClean(result, values[i]);
+            }
+
+            if (result.Count == 0)
+                AddClean(result, primary);
+
+            return result;
+        }
+
+        private static void AddClean(List<string> list, string value)
+        {
+            if (list == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            value = value.Trim().Trim('"', '\'');
+            if (value.Length > 0)
+                list.Add(value);
+        }
+
+        private static string TryRegisterRoute(
+            int itemId,
+            string packRoot,
+            List<string> values,
+            WeaponAddonSoundMode mode,
+            bool isShoot,
+            float vol,
+            float pitch)
+        {
+            if (values == null || values.Count == 0)
+                return null;
+
+            var route = new SoundRoute
+            {
+                Mode = mode,
+                Params = new SfxParams { Volume = Clamp01(vol), Pitch = ClampPitch(pitch) }
+            };
+
+            for (int i = 0; i < values.Count; i++)
+                TryAddChoice(route, packRoot, values[i]);
+
+            if (route.Choices.Count == 0)
+                return null;
+
+            var routes = isShoot ? _shootRoutes : _reloadRoutes;
+            routes[itemId] = route;
+
+            if (route.Choices.Count > 1 || mode != WeaponAddonSoundMode.Single)
+                Log($"[WAddns] Registered {route.Choices.Count} {(isShoot ? "shoot" : "reload")} sound option(s) for item {itemId} ({mode}).");
+
+            return (isShoot ? ShootPrefix : ReloadPrefix) + itemId.ToString();
+        }
+
+        private static void TryAddChoice(SoundRoute route, string packRoot, string value)
+        {
+            if (route == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            value = value.Trim();
+
+            if (!IsFileSpec(value))
+            {
+                route.Choices.Add(new SoundChoice { CueName = value });
+                return;
+            }
 
             var full = ResolvePackPath(packRoot, value);
             if (full == null || !File.Exists(full))
             {
                 Log($"[WAddns] Missing SFX file: {value}.");
-                return null; // Caller should keep base sound.
+                return;
             }
 
             if (!TryLoadByPath(full, out var sfx) || sfx == null)
-                return null; // Keep base sound.
+                return;
 
-            var p = new SfxParams { Volume = Clamp01(vol), Pitch = ClampPitch(pitch) };
-
-            if (isShoot)
-            {
-                _shootById[itemId]   = sfx;
-                _shootParams[itemId] = p;
-            }
-            else
-            {
-                _reloadById[itemId]   = sfx;
-                _reloadParams[itemId] = p;
-            }
-
-            return (isShoot ? ShootPrefix : ReloadPrefix) + itemId.ToString();
+            route.Choices.Add(new SoundChoice { Sfx = sfx });
         }
 
         // =====================================================================================
@@ -277,25 +441,93 @@ namespace WeaponAddons
         }
 
         // =====================================================================================
-        // PLAYBACK (TOKEN -> EFFECT INSTANCE)
+        // PLAYBACK (TOKEN -> CUE OR EFFECT INSTANCE)
         // =====================================================================================
         //
         // Summary:
         // - TryPlay2D / TryPlay3D:
-        //   • Parse token, locate SFX for item id, apply volume/pitch, and play.
-        //   • Instances are tracked in _active3D and disposed later in Update().
+        //   • Parse token, locate route for item id, select based on Single/Random/Cycle, and play.
+        //   • Cue choices are passed back into SoundManager as normal cue names.
+        //   • File choices create SoundEffectInstances tracked in _active3D and disposed later.
         //
         // =====================================================================================
 
         public static bool TryPlay2D(string name)
         {
             if (!TryResolveToken(name, out var isShoot, out var id)) return false;
+            if (!TryGetRoute(isShoot, id, out var route)) return false;
 
-            var dict = isShoot ? _shootById : _reloadById;
-            if (!dict.TryGetValue(id, out var sfx) || sfx == null || sfx.IsDisposed) return false;
+            var choice = Choose(route);
+            if (choice == null) return false;
 
-            var pd = isShoot ? _shootParams : _reloadParams;
-            pd.TryGetValue(id, out var p);
+            if (!string.IsNullOrWhiteSpace(choice.CueName))
+            {
+                try
+                {
+                    DNA.Audio.SoundManager.Instance?.PlayInstance(choice.CueName);
+                    return true;
+                }
+                catch { return false; }
+            }
+
+            return TryPlaySfx2D(choice.Sfx, route.Params);
+        }
+
+        public static bool TryPlay3D(string name, AudioEmitter emitter)
+        {
+            if (!TryResolveToken(name, out var isShoot, out var id)) return false;
+            if (!TryGetRoute(isShoot, id, out var route)) return false;
+
+            var choice = Choose(route);
+            if (choice == null) return false;
+
+            if (!string.IsNullOrWhiteSpace(choice.CueName))
+            {
+                try
+                {
+                    DNA.Audio.SoundManager.Instance?.PlayInstance(choice.CueName, emitter);
+                    return true;
+                }
+                catch { return false; }
+            }
+
+            return TryPlaySfx3D(choice.Sfx, route.Params, emitter);
+        }
+
+        private static bool TryGetRoute(bool isShoot, int id, out SoundRoute route)
+        {
+            var routes = isShoot ? _shootRoutes : _reloadRoutes;
+            return routes.TryGetValue(id, out route) && route != null && route.Choices.Count > 0;
+        }
+
+        private static SoundChoice Choose(SoundRoute route)
+        {
+            if (route == null || route.Choices.Count == 0)
+                return null;
+
+            if (route.Mode == WeaponAddonSoundMode.Random)
+            {
+                lock (_randomLock)
+                    return route.Choices[_random.Next(route.Choices.Count)];
+            }
+
+            if (route.Mode == WeaponAddonSoundMode.Cycle)
+            {
+                int index = route.NextIndex % route.Choices.Count;
+                route.NextIndex++;
+                if (route.NextIndex < 0)
+                    route.NextIndex = 0;
+
+                return route.Choices[index];
+            }
+
+            return route.Choices[0];
+        }
+
+        private static bool TryPlaySfx2D(SoundEffect sfx, SfxParams p)
+        {
+            if (sfx == null || sfx.IsDisposed)
+                return false;
 
             try
             {
@@ -305,22 +537,16 @@ namespace WeaponAddons
                 inst.Pitch    = ClampPitch(p.Pitch);
                 inst.Play();
 
-                // Track so we can dispose later (same as your 3D list, or reuse it).
                 _active3D.Add(inst);
                 return true;
             }
             catch { return false; }
         }
 
-        public static bool TryPlay3D(string name, AudioEmitter emitter)
+        private static bool TryPlaySfx3D(SoundEffect sfx, SfxParams p, AudioEmitter emitter)
         {
-            if (!TryResolveToken(name, out var isShoot, out var id)) return false;
-
-            var dict = isShoot ? _shootById : _reloadById;
-            if (!dict.TryGetValue(id, out var sfx) || sfx == null || sfx.IsDisposed) return false;
-
-            var pd = isShoot ? _shootParams : _reloadParams;
-            pd.TryGetValue(id, out var p);
+            if (sfx == null || sfx.IsDisposed)
+                return false;
 
             try
             {

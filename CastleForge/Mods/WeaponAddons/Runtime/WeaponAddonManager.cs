@@ -1,4 +1,4 @@
-/*
+﻿/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -99,10 +99,14 @@ namespace WeaponAddons
         public InventoryItemIDs SlotId;
 
         // Weapon configuration / behavior.
-        public string  AmmoId;
-        public string  ModelPath; // e.g. "models\\model2".
-        public string  ShootSfx;
-        public string  ReloadSfx;
+        public string               AmmoId;
+        public string               ModelPath; // e.g. "models\\model2".
+        public string               ShootSfx;
+        public string[]             ShootSfxList;
+        public WeaponAddonSoundMode ShootSoundMode;
+        public string               ReloadSfx;
+        public string[]             ReloadSfxList;
+        public WeaponAddonSoundMode ReloadSoundMode;
 
         // Optional avatar animation clip paths (pack-relative XNB assets).
         public string  AnimIdle;
@@ -507,8 +511,18 @@ namespace WeaponAddons
 
                     AmmoId            = doc.Get("AMMO_ID", doc.Get("AMMO_NAME", "")),
                     ModelPath         = doc.Get("MODEL", ""),
-                    ShootSfx          = doc.Get("SHOOT_SFX", ""),
-                    ReloadSfx         = doc.Get("RELOAD_SFX", ""),
+
+                    // Shoot SFX aliases:
+                    // - UseSound / UseSounds / UseSoundMode are the preferred cue-list keys.
+                    // - SHOOT_SFX and SHOT are kept for existing packs.
+                    ShootSfx          = GetFirst(doc, "USE_SOUND", "UseSound", "SHOOT_SFX", "SHOT_SFX", "SHOT"),
+                    ShootSfxList      = ParseSoundList(GetFirst(doc, "USE_SOUNDS", "UseSounds", "SHOOT_SFX_LIST", "SHOOT_SOUNDS", "SHOTS")),
+                    ShootSoundMode    = ParseSoundMode(GetFirst(doc, "USE_SOUND_MODE", "UseSoundMode", "SHOOT_SOUND_MODE", "ShotSoundMode"), WeaponAddonSoundMode.Single),
+
+                    // Reload SFX aliases mirror shoot where possible.
+                    ReloadSfx         = GetFirst(doc, "RELOAD_SOUND", "ReloadSound", "RELOAD_SFX", "RELOAD"),
+                    ReloadSfxList     = ParseSoundList(GetFirst(doc, "RELOAD_SOUNDS", "ReloadSounds", "RELOAD_SFX_LIST", "RELOADS")),
+                    ReloadSoundMode   = ParseSoundMode(GetFirst(doc, "RELOAD_SOUND_MODE", "ReloadSoundMode"), WeaponAddonSoundMode.Single),
 
                     AnimIdle          = doc.Get("ANIM_IDLE", ""),
                     AnimWalk          = doc.Get("ANIM_WALK", doc.Get("ANIM_RUN", "")),
@@ -693,6 +707,84 @@ namespace WeaponAddons
         #endregion
 
         // =====================================================================================
+        // .CLAG SOUND HELPERS
+        // =====================================================================================
+
+        #region .clag Sound Helpers
+
+        /// <summary>
+        /// Returns the first non-empty value for the supplied aliases.
+        /// Summary: Allows new UseSound-style keys while preserving older SHOOT_SFX/RELOAD_SFX keys.
+        /// </summary>
+        private static string GetFirst(ClagDoc doc, params string[] keys)
+        {
+            if (doc == null || keys == null)
+                return "";
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                var value = doc.Get(keys[i], null);
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
+
+            return "";
+        }
+
+        /// <summary>
+        /// Parses a comma-separated sound list from .clag.
+        /// Summary: Empty entries are ignored; simple wrapping quotes are trimmed.
+        /// </summary>
+        private static string[] ParseSoundList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return new string[0];
+
+            var parts = value.Split(',');
+            var list = new List<string>();
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var item = (parts[i] ?? "").Trim().Trim('"', '\'');
+                if (item.Length > 0)
+                    list.Add(item);
+            }
+
+            return list.ToArray();
+        }
+
+        /// <summary>
+        /// Parses UseSoundMode/ReloadSoundMode.
+        /// Summary: Defaults to Single unless Random or Cycle is explicitly requested.
+        /// </summary>
+        private static WeaponAddonSoundMode ParseSoundMode(string value, WeaponAddonSoundMode def)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return def;
+
+            var normalized = value.Trim()
+                                  .Replace("_", "")
+                                  .Replace("-", "")
+                                  .Replace(" ", "");
+
+            if (normalized.Equals("Random", StringComparison.OrdinalIgnoreCase))
+                return WeaponAddonSoundMode.Random;
+
+            if (normalized.Equals("Cycle", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Cyclic", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Sequential", StringComparison.OrdinalIgnoreCase))
+                return WeaponAddonSoundMode.Cycle;
+
+            if (normalized.Equals("Single", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                return WeaponAddonSoundMode.Single;
+
+            Log($"Unknown sound mode '{value}', using {def}.");
+            return def;
+        }
+        #endregion
+
+        // =====================================================================================
         // APPLY OVERRIDES (STATS / DISPLAY / AMMO / SFX)
         // =====================================================================================
 
@@ -771,37 +863,33 @@ namespace WeaponAddons
                     if (TryResolveInventoryItemId(def.AmmoId, out var ammoId))
                         gun.AmmoType = InventoryItem.GetClass(ammoId);
 
-                    // Reload SFX: Cue name OR file path.
-                    if (!string.IsNullOrWhiteSpace(def.ReloadSfx))
-                    {
-                        var token = WeaponAddonAudio.TryRegisterReload((int)def.ItemId, def.PackRoot, def.ReloadSfx, def.ReloadVol, def.ReloadPitch);
-                        if (!string.IsNullOrEmpty(token))
-                        {
-                            SetStringBestEffort(gun, "_reloadSound", token);
-                        }
-                        else if (!WeaponAddonAudio.IsFileSpec(def.ReloadSfx))
-                        {
-                            // Cue name.
-                            SetStringBestEffort(gun, "_reloadSound", def.ReloadSfx);
-                        }
-                        // else: file spec but failed load -> leave the cloned base reload sound intact
-                    }
+                    // Reload SFX: Single cue/file path, or optional Random/Cycle cue list.
+                    var reloadSound = WeaponAddonAudio.TryPrepareReloadSound(
+                        (int)def.ItemId,
+                        def.PackRoot,
+                        def.ReloadSfx,
+                        def.ReloadSfxList,
+                        def.ReloadSoundMode,
+                        def.ReloadVol,
+                        def.ReloadPitch);
 
-                    // Shoot SFX: Cue name OR file path.
-                    if (!string.IsNullOrWhiteSpace(def.ShootSfx))
-                    {
-                        var token = WeaponAddonAudio.TryRegisterShoot((int)def.ItemId, def.PackRoot, def.ShootSfx, def.ShootVol, def.ShootPitch);
-                        if (!string.IsNullOrEmpty(token))
-                        {
-                            SetStringBestEffort(gun, "_useSoundCue", token);
-                        }
-                        else if (!WeaponAddonAudio.IsFileSpec(def.ShootSfx))
-                        {
-                            // Cue name.
-                            SetStringBestEffort(gun, "_useSoundCue", def.ShootSfx);
-                        }
-                        // else: file spec but failed load -> leave the cloned base shoot sound intact
-                    }
+                    if (!string.IsNullOrWhiteSpace(reloadSound))
+                        SetStringBestEffort(gun, "_reloadSound", reloadSound);
+                    // else: missing/failed file specs leave the cloned base reload sound intact.
+
+                    // Shoot SFX: Single cue/file path, or optional Random/Cycle cue list.
+                    var shootSound = WeaponAddonAudio.TryPrepareShootSound(
+                        (int)def.ItemId,
+                        def.PackRoot,
+                        def.ShootSfx,
+                        def.ShootSfxList,
+                        def.ShootSoundMode,
+                        def.ShootVol,
+                        def.ShootPitch);
+
+                    if (!string.IsNullOrWhiteSpace(shootSound))
+                        SetStringBestEffort(gun, "_useSoundCue", shootSound);
+                    // else: missing/failed file specs leave the cloned base shoot sound intact.
 
                     SetColorBestEffort(cls, "ToolColor", def.ModelColor1);
                     SetColorBestEffort(cls, "ToolColor2", def.ModelColor2);
@@ -914,7 +1002,7 @@ namespace WeaponAddons
                 if (TryLoadAnimation(def, WeaponAddonAnimationKind.ShoulderShoot, def.AnimShoulderShoot, looping: true))  loaded++;
 
                 if (loaded > 0)
-                    Log($"[WAddns] Registered {loaded} custom animation(s) for '{def.PackFolderName}' ({def.ItemId}).");
+                    Log($"Registered {loaded} custom animation(s) for '{def.PackFolderName}' ({def.ItemId}).");
             }
             catch (Exception ex)
             {
@@ -935,7 +1023,7 @@ namespace WeaponAddons
             {
                 if (!WeaponAddonAnimationRouter.TryGetVanillaAnimationName(def.ItemId, kind, out var vanillaName))
                 {
-                    Log($"[WAddns] Animation '{kind}' skipped for '{def.PackFolderName}': no vanilla animation mapping for {def.ItemId}.");
+                    Log($"Animation '{kind}' skipped for '{def.PackFolderName}': no vanilla animation mapping for {def.ItemId}.");
                     return false;
                 }
 
@@ -956,7 +1044,7 @@ namespace WeaponAddons
             }
             catch (Exception ex)
             {
-                Log($"[WAddns] Animation '{kind}' failed for '{def?.PackFolderName}': {ex.Message}.");
+                Log($"Animation '{kind}' failed for '{def?.PackFolderName}': {ex.Message}.");
                 return false;
             }
         }
@@ -981,7 +1069,7 @@ namespace WeaponAddons
 
                 if (!File.Exists(xnbPath))
                 {
-                    Log($"[WAddns] Missing animation XNB: {xnbPath}.");
+                    Log($"Missing animation XNB: {xnbPath}.");
                     return null;
                 }
 
@@ -993,7 +1081,7 @@ namespace WeaponAddons
             }
             catch (Exception ex)
             {
-                Log($"[WAddns] Animation clip load failed for '{def?.PackFolderName}' path '{path}': {ex.Message}.");
+                Log($"Animation clip load failed for '{def?.PackFolderName}' path '{path}': {ex.Message}.");
                 return null;
             }
         }
