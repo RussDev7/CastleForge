@@ -153,11 +153,6 @@ CastleWallsMk2 also includes a handful of smaller quality-of-life improvements t
 
 #### Included tweaks
 
-- **Improved text input support**
-  - restores **Ctrl+V paste** in text boxes
-  - allows a wider range of printable characters instead of the stricter vanilla input filter
-  - still blocks raw control characters to keep text input safe and clean
-
 - **Teleport stays visible in the vanilla menu**
   - keeps the **Teleport** option in its normal vanilla slot
   - prevents it from disappearing in cases where vanilla would normally hide it, such as certain mode/difficulty combinations
@@ -165,14 +160,6 @@ CastleWallsMk2 also includes a handful of smaller quality-of-life improvements t
 - **Removes the PvP restriction from "Teleport To Player”**
   - keeps the normal **online-only** requirement
   - removes the extra PvP visibility gate so the option is available more consistently
-
-- **Optional max world height removal**
-  - can remove the vanilla world-height ceiling
-  - controlled through config with `RemoveMaxWorldHeight = true`
-
-- **Config hot-reload shortcut**
-  - supports reloading the mod config in-game without restarting
-  - default hotkey: `Ctrl+Shift+R`
 
 #### Why it matters
 

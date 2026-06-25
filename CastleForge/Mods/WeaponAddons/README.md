@@ -1083,6 +1083,22 @@ In that case, WeaponAddons:
 - intercepts `SoundManager.PlayInstance(...)`,
 - and plays the file-backed sound instead.
 
+### Multiple shoot/reload sounds
+
+WeaponAddons also supports optional multi-cue lists:
+
+```ini
+$UseSound:     GunShot3
+$UseSounds:    GunShot3, GunShot3Alt1, sounds\shoot_alt.wav
+$UseSoundMode: Random
+
+$ReloadSound:     sounds\reload.wav
+$ReloadSounds:    sounds\reload.wav, sounds\reload_alt.wav
+$ReloadSoundMode: Cycle
+```
+
+`Single` is the default. `Random` picks from the plural list, and `Cycle` plays the plural list in order.
+
 ### Supported file formats
 - `.wav`
 - `.mp3`
@@ -1431,6 +1447,7 @@ Check:
 - the file format is valid
 - WAV is PCM 16-bit when possible
 - the cue/path was typed correctly
+- if using `Random` or `Cycle`, make sure `UseSounds` / `ReloadSounds` has more than one valid entry
 
 ### Skinned model build fails
 Check:
