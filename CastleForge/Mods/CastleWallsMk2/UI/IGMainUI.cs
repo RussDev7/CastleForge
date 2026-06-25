@@ -9931,12 +9931,13 @@ namespace CastleWallsMk2
 
         #region UI State & Fields
 
-        private static string   _srvSearchText    = "";
-        private static string   _srvPasswordText  = "";
-        private static bool     _srvHidePasswords = true; // Default ON.
-        private static string   _srvSelectedKey   = null;
-        private static string   _srvLastStatus    = "";
-        private static DateTime _srvLastStatusUtc = DateTime.MinValue;
+        private static string   _srvSearchText        = "";
+        private static string   _srvPasswordText      = "";
+        private static string   _srvDirectSteamIdText = "";
+        private static bool     _srvHidePasswords     = true; // Default ON.
+        private static string   _srvSelectedKey       = null;
+        private static string   _srvLastStatus        = "";
+        private static DateTime _srvLastStatusUtc     = DateTime.MinValue;
         private static double   _srvLastRowClickTime;
         private static string   _srvLastRowClickKey;
 
@@ -10091,16 +10092,65 @@ namespace CastleWallsMk2
 
             ImGui.Separator();
 
-            #region 5) Connection Row (Disconnect + Cancel Search)
+            #region 5) Connection Row (Direct Connect + Disconnect + Cancel Search)
 
             // Connection row.
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted("Server:");
 
-            bool   inSession = CastleMinerZGame.Instance != null && CastleMinerZGame.Instance.CurrentNetworkSession != null;
+            var    serverRowGame = CastleMinerZGame.Instance;
+            bool   inSession     = serverRowGame != null && serverRowGame.CurrentNetworkSession != null;
             bool   searching;
             string searchingName;
-            lock (_srvJoinGate) { searching = _srvJoinSearchInFlight; searchingName = _srvJoinSearchForName; }
+            bool   serverRowJoinQueued;
+            lock (_srvJoinGate)
+            {
+                searching           = _srvJoinSearchInFlight;
+                searchingName       = _srvJoinSearchForName;
+                serverRowJoinQueued = _srvJoinPendingSession != null;
+            }
+
+            bool  hasDirectSteamId  = TryParseDirectSteamId(_srvDirectSteamIdText, out ulong directSteamId);
+            bool  directConnectBusy = searching || serverRowJoinQueued;
+            bool  canDirectConnect  = serverRowGame != null && !inSession && !directConnectBusy && hasDirectSteamId;
+
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(205f);
+            ImGui.InputTextWithHint("##srv_direct_steamid", "direct SteamID", ref _srvDirectSteamIdText, 32);
+
+            if (!canDirectConnect) ImGui.BeginDisabled();
+
+            ImGui.SameLine();
+            if (ImGui.Button("Connect##srv_direct_connect", new Vector2(90, 0)))
+            {
+                BeginDirectJoinQueued(
+                    directSteamId,
+                    (_srvPasswordText ?? "").Trim(),
+                    useFrontEndFlow: true
+                );
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Connect (ghost-sli)##srv_direct_connect_ghost_sli", new Vector2(155, 0)))
+            {
+                BeginDirectJoinQueued(
+                    directSteamId,
+                    (_srvPasswordText ?? "").Trim(),
+                    useFrontEndFlow: false
+                );
+            }
+
+            if (!canDirectConnect) ImGui.EndDisabled();
+
+            if (!hasDirectSteamId && ImGui.IsItemHovered())
+                ImGui.SetTooltip("Enter the host/player SteamID64 from the online session list.");
+            else if (directConnectBusy && ImGui.IsItemHovered())
+                ImGui.SetTooltip("Join/search in progress... please wait.");
+            else if (inSession && ImGui.IsItemHovered())
+                ImGui.SetTooltip("Disconnect from the current server first.");
+
+            ImGui.SameLine();
+            ImGui.TextDisabled("|");
 
             if (!inSession) ImGui.BeginDisabled();
 
@@ -10122,6 +10172,8 @@ namespace CastleWallsMk2
                 }
             }
 
+            if (!inSession) ImGui.EndDisabled();
+
             if (searching)
             {
                 ImGui.SameLine();
@@ -10137,8 +10189,6 @@ namespace CastleWallsMk2
                     SetSrvStatus("Canceled search.");
                 }
             }
-
-            if (!inSession) ImGui.EndDisabled();
 
             #endregion
 
@@ -10327,7 +10377,7 @@ namespace CastleWallsMk2
                 // NOTE:
                 // - joinBusy is meant to disable buttons while searching/queued.
                 // - If you ever notice buttons are not disabling during joinBusy, double-check the boolean expression here.
-                bool canJoin = joinBusy || CastleMinerZGame.Instance != null && CastleMinerZGame.Instance.CurrentNetworkSession == null;
+                bool canJoin = !joinBusy && CastleMinerZGame.Instance != null && CastleMinerZGame.Instance.CurrentNetworkSession == null;
 
                 if (!canJoin) ImGui.BeginDisabled();
 
@@ -10560,6 +10610,122 @@ namespace CastleWallsMk2
                         QueueSrvStatus("Join error: " + ex.Message);
                     }
                 });
+            }
+
+            void BeginDirectJoinQueued(ulong steamId, string passwordToUse, bool useFrontEndFlow)
+            {
+                var game = CastleMinerZGame.Instance;
+                if (game == null) { SetSrvStatus("ERROR: Game instance is null."); return; }
+                if (game.CurrentNetworkSession != null) { SetSrvStatus("ERROR: Leave current session first."); return; }
+
+                if (steamId == 0)
+                {
+                    SetSrvStatus("ERROR: Enter a valid SteamID64 first.");
+                    return;
+                }
+
+                var signedIn = GetAnySignedInGamer();
+                if (signedIn == null)
+                {
+                    SetSrvStatus("ERROR: No SignedInGamer found yet (profile not initialized). Try opening Multiplayer once, or host/leave once.");
+                    return;
+                }
+
+                string pw = string.IsNullOrWhiteSpace(passwordToUse) ? null : passwordToUse.Trim();
+
+                int token;
+                lock (_srvJoinGate)
+                {
+                    // If we already queued a join, don't allow more until it drains.
+                    if (_srvJoinPendingSession != null)
+                    {
+                        SetSrvStatus("Join already queued... (wait)");
+                        return;
+                    }
+
+                    // If a search is already running, ignore new attempts.
+                    if (_srvJoinSearchInFlight)
+                    {
+                        SetSrvStatus($"Already searching sessions for {_srvJoinSearchForName ?? "server"}...");
+                        return;
+                    }
+
+                    _srvJoinSearchInFlight = true;
+                    _srvJoinSearchForKey   = steamId.ToString(CultureInfo.InvariantCulture);
+                    _srvJoinSearchForName  = "SteamID " + _srvJoinSearchForKey;
+
+                    token = ++_srvJoinSearchToken; // token for THIS request
+                }
+
+                SetSrvStatus($"Searching online sessions for SteamID {steamId.ToString(CultureInfo.InvariantCulture)}...");
+
+                game.GetNetworkSessions(sessions =>
+                {
+                    try
+                    {
+                        // Ignore stale callbacks (cancel/retry invalidates the active token).
+                        lock (_srvJoinGate)
+                        {
+                            if (token != _srvJoinSearchToken) return;
+                            _srvJoinSearchInFlight = false;
+                            _srvJoinSearchForKey   = null;
+                            _srvJoinSearchForName  = null;
+                        }
+
+                        if (sessions == null)
+                        {
+                            QueueSrvStatus("Direct connect error: session query returned null.");
+                            return;
+                        }
+
+                        var match = FindSessionBySteamId(sessions, steamId);
+                        if (match == null)
+                        {
+                            QueueSrvStatus($"No online session found for SteamID {steamId.ToString(CultureInfo.InvariantCulture)}.");
+                            return;
+                        }
+
+                        // IMPORTANT: Do NOT call JoinGame here (this callback is not guaranteed to be UI thread).
+                        QueueJoin(match, pw, useFrontEndFlow);
+                    }
+                    catch (Exception ex)
+                    {
+                        QueueSrvStatus("Direct connect error: " + ex.Message);
+                    }
+                });
+            }
+
+            bool TryParseDirectSteamId(string text, out ulong steamId)
+            {
+                steamId = 0;
+
+                if (string.IsNullOrWhiteSpace(text))
+                    return false;
+
+                string trimmed = text.Trim();
+
+                // Accept pasted profile URLs by using the final numeric segment.
+                int lastSlash = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+                if (lastSlash >= 0 && lastSlash + 1 < trimmed.Length)
+                    trimmed = trimmed.Substring(lastSlash + 1).Trim();
+
+                return ulong.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out steamId) && steamId != 0;
+            }
+
+            AvailableNetworkSession FindSessionBySteamId(AvailableNetworkSessionCollection sessions, ulong steamId)
+            {
+                if (sessions == null || steamId == 0) return null;
+
+                foreach (AvailableNetworkSession s in sessions)
+                {
+                    if (s == null) continue;
+
+                    // HostSteamID is the stable Steam identity exposed by the online session browser.
+                    if (s.HostSteamID != 0 && s.HostSteamID == steamId)
+                        return s;
+                }
+
+                return null;
             }
 
             AvailableNetworkSession FindSession(AvailableNetworkSessionCollection sessions, ServerHistory.Entry entry)

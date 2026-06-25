@@ -796,6 +796,7 @@ The Server-History tab maintains a persistent record of hosts you have joined.
 
 - searchable host history table
 - reload / save / remove all
+- direct SteamID textbox on the `Server:` row; searches online sessions by HostSteamID and supports `Connect` / `Connect (ghost-sli)`
 - connect to saved entries
 - connect using **front-end flow**
 - connect using **ghost-cli** flow
