@@ -214,6 +214,27 @@ namespace ModLoaderExt
     }
     #endregion
 
+    #region TNT Explosion Safety
+
+    /// <summary>
+    /// Runtime knobs for multiplayer TNT/C4 explosion safety patches.
+    /// Written by MLEConfig.ApplyToStatics(), read by TntExplosionSafetyPatches.
+    /// </summary>
+    internal static class TntExplosionSafetyConfig
+    {
+        // [TntExplosionSafety].
+
+        /// <summary>Master toggle for TNT/C4 multiplayer safety patches.</summary>
+        public static volatile bool Enabled = true;
+
+        /// <summary>
+        /// Maximum number of blocks sent in one RemoveBlocksMessage.
+        /// Lower values are safer for networking, but send more packets.
+        /// </summary>
+        public static volatile int MaxBlocksPerRemoveBlocksMessage = 256;
+    }
+    #endregion
+
     #endregion
 
     /// <summary>
@@ -277,6 +298,10 @@ namespace ModLoaderExt
 
         // [TerrainRendering].
         public bool StabilizeSelfIlluminatingFancyBlocks = true;
+
+        // [TntExplosionSafety].
+        public bool TntExplosionSafetyEnabled       = true;
+        public int  MaxBlocksPerRemoveBlocksMessage = 256;
 
         // [Hotkeys].
         // Hotkey to reload this config at runtime.
@@ -384,6 +409,13 @@ namespace ModLoaderExt
                     "; such as Lantern / FixedLantern, without disabling vanilla fancy lighting.",
                     "StabilizeSelfIlluminatingFancyBlocks = true",
                     "",
+                    "[TntExplosionSafety]",
+                    "; Master toggle for multiplayer TNT/C4 safety patches.",
+                    "Enabled = true",
+                    "; Max blocks sent in one RemoveBlocksMessage chunk.",
+                    "; Lower is safer but sends more packets. 256 is conservative.",
+                    "MaxBlocksPerRemoveBlocksMessage = 256",
+                    "",
                     "[Hotkeys]",
                     "; Reload this config while in-game:",
                     "ReloadConfig = Ctrl+Shift+R",
@@ -394,6 +426,7 @@ namespace ModLoaderExt
             EnsureUpdateCheckDefaults();
             EnsureVanillaSpawnerDefaults();
             EnsureTerrainRenderingDefaults();
+            EnsureTntExplosionSafetyDefaults();
             var ini = SimpleIni.Load(ConfigPath);
 
             var cfg = new MLEConfig
@@ -448,6 +481,10 @@ namespace ModLoaderExt
 
                 // [TerrainRendering].
                 StabilizeSelfIlluminatingFancyBlocks = ini.GetBool("TerrainRendering", "StabilizeSelfIlluminatingFancyBlocks", true),
+
+                // [TntExplosionSafety].
+                TntExplosionSafetyEnabled       = ini.GetBool("TntExplosionSafety", "Enabled", true),
+                MaxBlocksPerRemoveBlocksMessage = Clamp(ini.GetInt("TntExplosionSafety", "MaxBlocksPerRemoveBlocksMessage", 256), 16, 4096),
 
                 // [Hotkeys].
                 ReloadConfigHotkey = ini.GetString("Hotkeys", "ReloadConfig", "Ctrl+Shift+R"),
@@ -531,6 +568,10 @@ namespace ModLoaderExt
             // [TerrainRendering].
             TerrainRenderingConfig.StabilizeSelfIlluminatingFancyBlocks = StabilizeSelfIlluminatingFancyBlocks;
             GamePatches.TerrainLightBlockRenderStability.Apply(StabilizeSelfIlluminatingFancyBlocks);
+
+            // [TntExplosionSafety].
+            TntExplosionSafetyConfig.Enabled = TntExplosionSafetyEnabled;
+            TntExplosionSafetyConfig.MaxBlocksPerRemoveBlocksMessage = MaxBlocksPerRemoveBlocksMessage;
         }
 
         /// <summary>
@@ -665,6 +706,27 @@ namespace ModLoaderExt
                     "true",
                     42
                 );
+
+                File.WriteAllLines(ConfigPath, lines.ToArray());
+            }
+            catch
+            {
+                // Do not block config loading if optional default insertion fails.
+            }
+        }
+
+        /// <summary>
+        /// Ensures older ModLoaderExtensions config files include the TNT explosion safety section
+        /// and its default multiplayer protection options.
+        /// </summary>
+        private static void EnsureTntExplosionSafetyDefaults()
+        {
+            try
+            {
+                var lines = new List<string>(File.ReadAllLines(ConfigPath));
+
+                EnsureIniKeyDefault(lines, "TntExplosionSafety", "Enabled", "true", 34);
+                EnsureIniKeyDefault(lines, "TntExplosionSafety", "MaxBlocksPerRemoveBlocksMessage", "256", 34);
 
                 File.WriteAllLines(ConfigPath, lines.ToArray());
             }

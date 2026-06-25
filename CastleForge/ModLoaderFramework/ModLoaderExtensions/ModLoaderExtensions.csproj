@@ -93,6 +93,7 @@
     <Compile Include="Patching\EntityLimiterSystem.cs" />
     <Compile Include="Patching\GamePatches.cs" />
     <Compile Include="ModLoaderExtensions.cs" />
+    <Compile Include="Patching\TntExplosionSafety.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Embedded\EmbeddedResolver.cs" />
     <Compile Include="Startup\MLEConfig.cs" />

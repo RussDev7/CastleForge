@@ -24,6 +24,7 @@ On top of that, ModLoaderExtensions also improves the game’s foundation with:
 - a central help/command registry for mods
 - hot-reloadable runtime configuration
 - safer networking behavior
+- chunked large terrain-removal messages for safer TNT/C4 chain detonations in multiplayer
 - stronger chat and gamertag protections
 - fullscreen recovery improvements
 - terrain rendering stability for large self-illuminating light-block builds
@@ -36,17 +37,17 @@ In other words, this mod is first and foremost the **command extension layer** f
 
 ## Full patch inventory
 
-For readers who want the exact patch-level breakdown, here is a full organized inventory of the tweaks, fixes, and improvements implemented in `GamePatches.cs`.
+For readers who want the exact patch-level breakdown, here is a full organized inventory of the tweaks, fixes, and improvements implemented in `GamePatches.cs` and companion patch systems.
 
 <details>
 <summary><strong>Runtime, config, and crash diagnostics</strong></summary>
 
 | Area | Patch / system | Type | What it changes |
-|---|---|---|---|
-| Runtime / Config | Hot-reload config hotkey | Improvement | Adds a configurable in-game reload hotkey so ModLoaderExt settings can be reapplied without restarting the game. |
-| Crash diagnostics | Backtrace crash-report tap | Improvement | Hooks the game’s crash-report/backtrace path so exceptions can be captured locally and upstream crash upload behavior can be controlled. |
-| Crash safety | `Program.Main(...)` guard | Fix | Adds a guarded crash path around the game entry point to reduce hard-crash behavior during startup or fatal exception flow. |
-| Profile safety | Player stats / render setting hardening | Fix | Preserves existing player stats when spoofed or randomized usernames change, preventing vanilla `Stats Error` fallback from resetting render distance to the lowest setting. |
+|-------------------|-----------------------------------------|-------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Runtime / Config  | Hot-reload config hotkey                | Improvement | Adds a configurable in-game reload hotkey so ModLoaderExt settings can be reapplied without restarting the game.                                                             |
+| Crash diagnostics | Backtrace crash-report tap              | Improvement | Hooks the game’s crash-report/backtrace path so exceptions can be captured locally and upstream crash upload behavior can be controlled.                                     |
+| Crash safety      | `Program.Main(...)` guard               | Fix         | Adds a guarded crash path around the game entry point to reduce hard-crash behavior during startup or fatal exception flow.                                                  |
+| Profile safety    | Player stats / render setting hardening | Fix         | Preserves existing player stats when spoofed or randomized usernames change, preventing vanilla `Stats Error` fallback from resetting render distance to the lowest setting. |
 
 
 </details>
@@ -62,6 +63,7 @@ For readers who want the exact patch-level breakdown, here is a full organized i
 | Network stability      | Safe message dispatch (`EnemyManager.HandleMessage`)         | Fix               | Prevents downstream message-handler exceptions from tearing down the game when enemy/network message routing hits bad state.                      |
 | Anti-spam / networking | FloodGuard packet gate + queued-packet purge                 | Improvement / Fix | Adds per-sender rate limits, timed blackhole logic, allowlist handling, and precise pending-data purge behavior for abusive or malformed traffic. |
 | Anti-spam / networking | Pickup request throttle                                      | Improvement       | Uses a config-backed token-bucket throttle for local pickup requests to reduce pickup spam abuse and accidental flooding.                         |
+| Network stability      | TNT/C4 terrain-removal message chunking                      | Fix / Safeguard   | Splits oversized `RemoveBlocksMessage` payloads into smaller reliable chunks so very large TNT/C4 chain detonations are less likely to hard-crash multiplayer clients. |
 | Network validation     | Remote transform sanity checks (`PlayerUpdateMessage.Apply`) | Fix               | Rejects NaN, Infinity, and absurd transform data from remote players before it can destabilize simulation or rendering.                           |
 | Net message hardening  | `ShotgunShotMessage` validation                              | Fix               | Validates shotgun payload/item data before it is trusted, reducing malformed message crashes or bad-state behavior.                               |
 | Net message hardening  | Safe inventory-store handling on host                        | Fix               | Guards the host-side inventory store path when sender state is invalid or unstable.                                                               |
@@ -182,6 +184,7 @@ That makes it one of the most important "always-on" core mods in the CastleForge
 ### Stability and recovery
 
 - safer handling around certain send/receive/network exceptions
+- chunked large terrain-removal packets from huge TNT/C4 chain detonations
 - guarded message decode and dispatch paths
 - fullscreen alt-tab terrain recovery
 - normal terrain fallback geometry for large self-illuminating fancy-block builds, such as lantern mazes
@@ -227,6 +230,7 @@ That makes it one of the most important "always-on" core mods in the CastleForge
 - inbound flood guard with timed blackhole logic
 - allowlist support for permitted message types during blackhole
 - pickup-request throttling to prevent pickup spam edge cases
+- oversized `RemoveBlocksMessage` chunking for very large TNT/C4 terrain-removal bursts
 - validation for invalid remote player transforms
 - shotgun message validation
 - safer inventory-store handling on the host
@@ -439,7 +443,40 @@ This is the "defensive shell" portion of the mod. It helps the game survive malf
 </details>
 
 <details>
-<summary><strong>8) Vanilla world generation controls</strong></summary>
+<summary><strong>8) TNT/C4 explosion network safety</strong></summary>
+
+### What it does
+
+ModLoaderExtensions can split oversized terrain-removal network messages into smaller chunks when very large TNT/C4 chains remove many blocks at once.
+
+### Included protection
+
+- preserves vanilla TNT/C4 chain calculation
+- does not move explosion ownership from clients to the host
+- splits large `RemoveBlocksMessage` payloads before sending
+- uses a recursion guard so chunked sends do not recursively re-enter the chunking path
+- can be toggled through `[TntExplosionSafety]`
+
+### Why it matters
+
+In multiplayer, the player who detonates a TNT/C4 chain can end up sending a very large terrain-removal message. On non-host clients especially, a massive burst of block removals can destabilize the session or hard-crash the game.
+
+This safeguard keeps the normal explosion behavior intact while reducing the chance of one oversized reliable packet overwhelming the networking path.
+
+### Config
+
+```ini
+[TntExplosionSafety]
+Enabled = true
+MaxBlocksPerRemoveBlocksMessage = 256
+```
+
+Lower values are safer but send more packets. The configured chunk size is clamped internally from `16` to `4096`.
+
+</details>
+
+<details>
+<summary><strong>9) Vanilla world generation controls</strong></summary>
 
 ### What it does
 
@@ -478,7 +515,7 @@ GenerateLootBlocks     = false
 </details>
 
 <details>
-<summary><strong>9) Steam host compatibility and migration guardrails</strong></summary>
+<summary><strong>10) Steam host compatibility and migration guardrails</strong></summary>
 
 ### Included protections
 
@@ -497,7 +534,7 @@ This is one of the most interesting parts of the mod. It targets broken or modde
 </details>
 
 <details>
-<summary><strong>10) Gamertag integrity and chat sanitization</strong></summary>
+<summary><strong>11) Gamertag integrity and chat sanitization</strong></summary>
 
 ### Included protections
 
@@ -518,7 +555,7 @@ This is not just censorship. It is readability and trust protection. It keeps th
 </details>
 
 <details>
-<summary><strong>11) Menu and text-input quality-of-life</strong></summary>
+<summary><strong>12) Menu and text-input quality-of-life</strong></summary>
 
 ### Included improvements
 
@@ -548,12 +585,12 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 
 ### Included command
 
-| Command | Description |
-|---|---|
-| `/help` | Shows paged help using the shared help registry. |
-| `/help 2` | Shows page 2 of the full help listing. |
-| `/help ModName` | Filters help to a specific mod when registered. |
-| `/help ModName 2` | Shows a later page for that mod’s command list. |
+| Command           | Description                                      |
+|-------------------|--------------------------------------------------|
+| `/help`           | Shows paged help using the shared help registry. |
+| `/help 2`         | Shows page 2 of the full help listing.           |
+| `/help ModName`   | Filters help to a specific mod when registered.  |
+| `/help ModName 2` | Shows a later page for that mod’s command list.  |
 
 ### Notes
 
@@ -580,6 +617,7 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 | `[FloodGuard]`          | Inbound packet rate limiting and blackhole behavior.            |
 | `[FloodGuardAllowlist]` | Allowed message types and allowlist packet rate limits.         |
 | `[PickupThrottle]`      | Local pickup request throttling.                                |
+| `[TntExplosionSafety]`  | Chunking for oversized terrain-removal network messages.        |
 | `[ChatProtections]`     | Gamertag sanitization, anti-impersonation, newline handling.    |
 | `[EntityLimits]`        | Global entity limiting.                                         |
 | `[VanillaSpawners]`     | Vanilla spawner and random loot block generation behavior.      |
@@ -589,34 +627,36 @@ ModLoaderExtensions itself exposes a shared help command and provides the infras
 ### Config reference
 
 | Key | Default | What it controls |
-|---------------------------------------------------|--------------------------------------------:|----------------------------------------------------------------------------------------|
-| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                                                    |
-| `ShowDiscordButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left CastleForge Discord button on the main menu.                     |
-| `ShowSupportButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left Support CastleForge button on the main menu.                     |
-| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                                            |
-| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.                                      |
-| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap.                             |
-| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.                                        |
-| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.                               |
-| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.                                      |
-| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.                                  |
-| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                                                |
-| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.                                  |
-| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.                                         |
-| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                                                   |
-| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                                                      |
-| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                                                  |
-| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote.                             |
-| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                                             |
-| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.                                |
-| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                                         |
-| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                                     |
-| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                                       |
-| `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.                        |
-| `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.                      |
-| `GenerateLootBlocks` in `[VanillaSpawners]`       | `true`                                      | Allows newly generated terrain to place vanilla `LootBlock` / `LuckyLootBlock` blocks. |
-| `StabilizeSelfIlluminatingFancyBlocks`            | `true`                                      | Adds normal terrain fallback geometry for opaque self-illuminating fancy blocks.       |
-| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                                    |
+|---------------------------------------------------|--------------------------------------------:|-----------------------------------------------------------------------------------------------|
+| `HideMenuAd`                                      | `true`                                      | Hides the CMZ-Resurrection menu ad.                                                           |
+| `ShowDiscordButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left CastleForge Discord button on the main menu.                            |
+| `ShowSupportButton` in `[MenuItems]`              | `true`                                      | Shows the bottom-left Support CastleForge button on the main menu.                            |
+| `Enabled` in `[FloodGuard]`                       | `true`                                      | Master switch for inbound flood protection.                                                   |
+| `PerSenderMaxPacketsPerSec`                       | `512`                                       | Per-sender packet cap inside the 1-second window.                                             |
+| `BlackholeMs`                                     | `30000`                                     | How long a sender stays blackholed after tripping the cap.                                    |
+| `DoNotExemptHost`                                 | `true`                                      | Keeps the host subject to the same flood rules.                                               |
+| `AllowlistMaxPacketsPerSec`                       | `256`                                       | Per-sender cap for allowlisted traffic during blackhole.                                      |
+| `AllowMessageTypes`                               | `DNA.CastleMinerZ.Net.BroadcastTextMessage` | Message types allowed through the allowlist path.                                             |
+| `PickupTouchBurst`                                | `25`                                        | Initial local pickup request burst before throttling.                                         |
+| `PickupTouchRefillMs`                             | `5`                                         | Token refill speed for pickup requests.                                                       |
+| `Enabled` in `[TntExplosionSafety]`               | `true`                                      | Master switch for oversized terrain-removal message chunking.                                 |
+| `MaxBlocksPerRemoveBlocksMessage`                 | `256`                                       | Maximum blocks sent in one chunked `RemoveBlocksMessage`; clamped internally from 16 to 4096. |
+| `GamertagSanitizerEnabled`                        | `true`                                      | Master switch for general name and chat sanitization.                                         |
+| `AnnounceSanitizedJoinLeaveNames`                 | `true`                                      | Announces sanitized join/leave names publicly.                                                |
+| `GamertagSanitizerMaxNameLen`                     | `24`                                        | Maximum cleaned display-name length.                                                          |
+| `GamertagSanitizerMaxChatLineLen`                 | `220`                                       | Maximum cleaned chat line length.                                                             |
+| `NoImpersonationEnabled`                          | `true`                                      | Enables anti-impersonation detection.                                                         |
+| `ImpersonationUseClearChat`                       | `false`                                     | Uses clear-chat style response instead of a warning quote.                                    |
+| `ImpersonationProtectEveryone`                    | `true`                                      | Protects everyone rather than only locals.                                                    |
+| `ImpersonationHostOnlyRespondWhenProtectEveryone` | `false`                                     | Limits response spam when global protection is enabled.                                       |
+| `IgnoreChatNewlines`                              | `false`                                     | Drops blank/newline chat spam.                                                                |
+| `LimitEntities`                                   | `true`                                      | Enables the global entity limiter.                                                            |
+| `MaxGlobalEntities`                               | `500`                                       | Hard cap for the entity limiter.                                                              |
+| `GenerateSpawnerBlocks` in `[VanillaSpawners]`    | `true`                                      | Allows newly generated terrain to place vanilla spawner blocks.                               |
+| `AllowSpawnerActivation` in `[VanillaSpawners]`   | `true`                                      | Allows existing vanilla spawner blocks to be clicked / activated.                             |
+| `GenerateLootBlocks` in `[VanillaSpawners]`       | `true`                                      | Allows newly generated terrain to place vanilla `LootBlock` / `LuckyLootBlock` blocks.        |
+| `StabilizeSelfIlluminatingFancyBlocks`            | `true`                                      | Adds normal terrain fallback geometry for opaque self-illuminating fancy blocks.              |
+| `ReloadConfig`                                    | `Ctrl+Shift+R`                              | Hotkey to reload config at runtime.                                                           |
 
 ### Default config template
 
@@ -664,6 +704,14 @@ Enabled             = true
 ; RefillMs: Refill rate (1 token per X ms). Example: 5 => (1000ms / 5ms) ~200/sec sustained.
 PickupTouchBurst    = 25
 PickupTouchRefillMs = 5
+
+[TntExplosionSafety]
+; Master toggle for chunking oversized terrain-removal network messages.
+Enabled = true
+; Max blocks sent in one RemoveBlocksMessage chunk.
+; Lower is safer but sends more packets.
+; Valid range is clamped internally from 16 to 4096.
+MaxBlocksPerRemoveBlocksMessage = 256
 
 [ChatProtections]
 ; Master toggle for sanitizing gamertags + incoming chat text.
@@ -719,6 +767,41 @@ ReloadConfig = Ctrl+Shift+R
 ```
 
 </details>
+
+---
+
+## TNT/C4 explosion network safety
+
+ModLoaderExtensions can reduce multiplayer instability from very large TNT/C4 chain detonations by splitting oversized terrain-removal network messages into smaller chunks.
+
+This feature is intentionally conservative: it preserves vanilla TNT/C4 chain calculation and only changes how large `RemoveBlocksMessage` payloads are sent.
+
+### Config location
+
+```text
+!Mods/ModLoaderExt/ModLoaderExt.Config.ini
+```
+
+### Recommended setting
+
+```ini
+[TntExplosionSafety]
+Enabled = true
+MaxBlocksPerRemoveBlocksMessage = 256
+```
+
+### Tuning notes
+
+- Lower values are safer for fragile sessions but send more messages.
+- Higher values send fewer messages but move closer to the original oversized-packet risk.
+- The value is clamped internally from `16` to `4096`.
+
+For very unstable multiplayer sessions, try:
+
+```ini
+[TntExplosionSafety]
+MaxBlocksPerRemoveBlocksMessage = 128
+```
 
 ---
 
@@ -855,6 +938,30 @@ That usually means the loaded mods have not registered their command lists into 
 </details>
 
 <details>
+<summary><strong>Huge TNT/C4 chains crash or disconnect multiplayer clients</strong></summary>
+
+Very large TNT/C4 chains can create oversized terrain-removal network messages.
+
+ModLoaderExtensions includes chunking for these messages:
+
+```ini
+[TntExplosionSafety]
+Enabled = true
+MaxBlocksPerRemoveBlocksMessage = 256
+```
+
+If the session is still unstable, try lowering the chunk size:
+
+```ini
+[TntExplosionSafety]
+MaxBlocksPerRemoveBlocksMessage = 128
+```
+
+Avoid setting this extremely high, because larger values move back toward the original oversized-packet problem.
+
+</details>
+
+<details>
 <summary><strong>Large lantern or light-block builds look transparent / x-ray-like</strong></summary>
 
 This can happen when very large bulk edits use self-illuminating fancy blocks as normal terrain, such as building a maze entirely from `Lantern` / `FixedLantern`.
@@ -913,6 +1020,7 @@ It brings together:
 - fullscreen recovery safeguards
 - terrain rendering fallback for large self-illuminating light-block builds
 - network flood and malformed-packet hardening
+- TNT/C4 terrain-removal message chunking for large multiplayer explosions
 - gamertag and chat integrity protections
 - menu and text input polish
 - vanilla spawner and random loot block generation controls
