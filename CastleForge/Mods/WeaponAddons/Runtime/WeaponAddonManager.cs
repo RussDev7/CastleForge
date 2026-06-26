@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -34,6 +34,7 @@ namespace WeaponAddons
     //   • Gun stats (damage, recoil, fire rate, clip, etc.) when the slot is a GunInventoryItemClass.
     //   • Model overrides (optional) loaded via a pack-rooted ContentManager, cached by slot.
     //   • Optional custom avatar/weapon handling animation clips.
+    //   • Optional custom shoot/reload/swing sounds.
     //   • Optional UI icon overrides:
     //       - PNG icon (direct file load)
     //       - Rendered model icon (RenderTarget2D snapshot)
@@ -512,12 +513,13 @@ namespace WeaponAddons
                     AmmoId            = doc.Get("AMMO_ID", doc.Get("AMMO_NAME", "")),
                     ModelPath         = doc.Get("MODEL", ""),
 
-                    // Shoot SFX aliases:
+                    // Use/Shoot/Swing SFX aliases:
                     // - UseSound / UseSounds / UseSoundMode are the preferred cue-list keys.
-                    // - SHOOT_SFX and SHOT are kept for existing packs.
-                    ShootSfx          = GetFirst(doc, "USE_SOUND", "UseSound", "SHOOT_SFX", "SHOT_SFX", "SHOT"),
-                    ShootSfxList      = ParseSoundList(GetFirst(doc, "USE_SOUNDS", "UseSounds", "SHOOT_SFX_LIST", "SHOOT_SOUNDS", "SHOTS")),
-                    ShootSoundMode    = ParseSoundMode(GetFirst(doc, "USE_SOUND_MODE", "UseSoundMode", "SHOOT_SOUND_MODE", "ShotSoundMode"), WeaponAddonSoundMode.Single),
+                    // - SHOOT_SFX and SHOT are kept for existing firearm packs.
+                    // - SWING_* / MELEE_* aliases are accepted for knife/melee/tool packs.
+                    ShootSfx          = GetFirst(doc, "USE_SOUND", "UseSound", "SWING_SFX", "SWING_SOUND", "MELEE_SFX", "MELEE_SOUND", "SHOOT_SFX", "SHOT_SFX", "SHOT"),
+                    ShootSfxList      = ParseSoundList(GetFirst(doc, "USE_SOUNDS", "UseSounds", "SWING_SFX_LIST", "SWING_SOUNDS", "MELEE_SFX_LIST", "MELEE_SOUNDS", "SHOOT_SFX_LIST", "SHOOT_SOUNDS", "SHOTS")),
+                    ShootSoundMode    = ParseSoundMode(GetFirst(doc, "USE_SOUND_MODE", "UseSoundMode", "SWING_SOUND_MODE", "MELEE_SOUND_MODE", "SHOOT_SOUND_MODE", "ShotSoundMode"), WeaponAddonSoundMode.Single),
 
                     // Reload SFX aliases mirror shoot where possible.
                     ReloadSfx         = GetFirst(doc, "RELOAD_SOUND", "ReloadSound", "RELOAD_SFX", "RELOAD"),
@@ -791,11 +793,25 @@ namespace WeaponAddons
         #region Apply Runtime Overrides
 
         /// <summary>
+        /// Returns true for item classes that use the vanilla melee/tool ProcessInput path.
+        /// Summary: These classes can opt into WeaponAddons custom swing/use sounds.
+        /// </summary>
+        private static bool IsSwingSoundItemClass(InventoryItem.InventoryItemClass cls)
+        {
+            return cls is KnifeInventoryItemClass ||
+                   cls is PickInventoryItemClass  ||
+                   cls is AxeInventoryClass       ||
+                   cls is SpadeInventoryClass;
+        }
+
+        /// <summary>
         /// Applies parsed .clag fields onto the game's existing InventoryItemClass instance for a specific itemId.
         ///
         /// Summary:
         /// - Locates InventoryItem.AllItems[itemId].
         /// - Updates name/description via reflection (best-effort).
+        /// - If the class is a knife/tool class:
+        ///   • Applies optional SWING_SFX / UseSound values via best-effort reflection.
         /// - If the class is a GunInventoryItemClass:
         ///   • Applies damage, fire rate, reload time, recoil, inaccuracy, clip, etc.
         ///   • Applies tracer color (used for bullets and lasers depending on weapon type).
@@ -826,6 +842,27 @@ namespace WeaponAddons
 
                 SetStringBestEffort(cls, "Name", def.Name);
                 SetStringBestEffort(cls, "Description", fullDesc);
+
+                if (IsSwingSoundItemClass(cls))
+                {
+                    // Melee/tool swing SFX: use the same .clag keys as shoot SFX so packs can use
+                    // USE_SOUND / SWING_SFX / SHOOT_SFX with cue names or pack-relative .wav/.mp3 files.
+                    var swingSound = WeaponAddonAudio.TryPrepareShootSound(
+                        (int)itemId,
+                        def.PackRoot,
+                        def.ShootSfx,
+                        def.ShootSfxList,
+                        def.ShootSoundMode,
+                        def.ShootVol,
+                        def.ShootPitch);
+
+                    if (!string.IsNullOrWhiteSpace(swingSound))
+                    {
+                        SetStringBestEffort(cls, "_useSoundCue", swingSound);
+                        Log($"[WAddns] Applied custom swing sound to {itemId} ({cls.GetType().Name}).");
+                    }
+                    // else: Missing/failed file specs leave vanilla tool/knife sounds unchanged.
+                }
 
                 if (cls is GunInventoryItemClass gun)
                 {

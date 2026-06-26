@@ -1,4 +1,4 @@
-﻿Firearm
+Firearm
 $NAME:         Raygun
 $AUTHOR:       RussDev7
 $DESCRIPTION1: RAYGUUUUN
@@ -81,11 +81,6 @@ $ICON_RENDER_ZOOM: 1.0
 ; - A file path relative to the pack folder (WAV/MP3).
 ;   Recommended: 16-bit PCM WAV (most compatible).
 ;
-; UseSound / ReloadSound:
-; - Either a vanilla cue name (ex: LaserGun4, Teleport), OR
-; - A file path relative to the pack folder (WAV/MP3).
-;   Recommended: 16-bit PCM WAV (most compatible).
-;
 ; Optional multi-cue sounds:
 ; - UseSounds / ReloadSounds are comma-separated.
 ; - UseSoundMode / ReloadSoundMode can be Single, Random, or Cycle.
@@ -104,9 +99,21 @@ $ICON_RENDER_ZOOM: 1.0
 ;     $ReloadSounds:    GunReload, GunReloadAlt1, sounds\reload_alt.wav
 ;     $ReloadSoundMode: Random
 ;
+; Knife / melee / tool swing sounds:
+; - SWING_SFX is an alias for the weapon's use/shoot sound, but is clearer
+;   when making knife or tool-style packs.
+; - For a knife, pickaxe, axe, or spade pack, clone the matching vanilla class
+;   with SLOT_ID, then use:
+;     $SWING_SFX: sounds\swing.wav
+; - Optional plural/random/cycle swing sounds are also supported:
+;     $SWING_SOUNDS: sounds\swing1.wav, sounds\swing2.wav
+;     $SWING_SOUND_MODE: Random
+; - For firearm packs like this Raygun example, keep using UseSound.
+;
 ; Backward-compatible aliases still work:
 ; - SHOOT_SFX / SHOT
 ; - RELOAD_SFX / RELOAD
+; - SWING_SFX / MELEE_SFX
 ; ==========================================================
 $MODEL: models\raygun
 $UseSound:    sounds\shoot.wav

@@ -1,4 +1,4 @@
-﻿# WeaponAddons
+# WeaponAddons
 
 > Turn CastleMiner Z weapons into data-driven content packs.  
 > Build custom guns and other weapon-style addons with a `.clag` file, optional custom models, custom icons, custom sounds, optional crafting recipes, and runtime-safe synthetic item IDs.
@@ -791,6 +791,11 @@ $UseSound: GunShot3
 $UseSounds: GunShot3, GunShot3Alt1, GunShot3Alt2
 $UseSoundMode: Random
 
+; For knife/tool packs, SWING_SFX is a clearer alias for UseSound.
+$SWING_SFX: sounds\swing.wav
+$SWING_SOUNDS: sounds\swing1.wav, sounds\swing2.wav
+$SWING_SOUND_MODE: Random
+
 $ReloadSound: sounds\reload.wav
 $ReloadSounds: sounds\reload.wav, sounds\reload_alt.wav
 $ReloadSoundMode: Cycle
@@ -802,13 +807,14 @@ $RELOAD_PITCH: 0.0
 ```
 
 - `MODEL` is a path relative to the pack root and should omit the `.xnb` extension.
-- Shoot and reload SFX can be:
+- Shoot, reload, and swing SFX can be:
   - a vanilla cue name, or
   - a pack-relative file path ending in `.wav` or `.mp3`
-- `UseSoundMode` / `ReloadSoundMode` support `Single`, `Random`, and `Cycle`.
-- `Single` is the default. In `Single` mode, `UseSound` / `ReloadSound` is used first, with the first list entry only as a fallback.
-- `UseSounds` / `ReloadSounds` are comma-separated and may mix vanilla cue names with pack-relative `.wav` / `.mp3` paths.
-- Backward-compatible aliases still work: `SHOOT_SFX`, `SHOT`, `RELOAD_SFX`, and `RELOAD`.
+- `SWING_SFX` is intended for knife/tool packs such as knives, pickaxes, axes, and spades.
+- `UseSoundMode` / `ReloadSoundMode` / `SWING_SOUND_MODE` support `Single`, `Random`, and `Cycle`.
+- `Single` is the default. In `Single` mode, `UseSound` / `ReloadSound` / `SWING_SFX` is used first, with the first list entry only as a fallback.
+- `UseSounds` / `ReloadSounds` / `SWING_SOUNDS` are comma-separated and may mix vanilla cue names with pack-relative `.wav` / `.mp3` paths.
+- Backward-compatible aliases still work: `SHOOT_SFX`, `SHOT`, `SWING_SFX`, `MELEE_SFX`, `RELOAD_SFX`, and `RELOAD`.
 - File-based sound volume is clamped to **0..1**
 - File-based sound pitch is clamped to **-1..1**
 

@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -15,6 +15,7 @@ using DNA.CastleMinerZ.UI;
 using System.Reflection;
 using DNA.CastleMinerZ;
 using System.Linq;
+using DNA.Timers;
 using HarmonyLib;                       // Harmony patching library.
 using DNA.Audio;
 using DNA.Input;
@@ -1349,6 +1350,112 @@ namespace WeaponAddons
                 try { WeaponAddonRecipePlacement.RelayoutTier2Item(__instance); }
                 catch { /* best-effort */ }
             }
+        }
+        #endregion
+
+
+        // =====================================================================================
+        // Melee / Tool Swing Sound
+        // =====================================================================================
+        /// <summary>
+        /// Plays WeaponAddons USE_SOUND/SWING_SFX values for melee and hand-tool packs.
+        ///
+        /// Summary:
+        /// - KnifeInventoryItem, AxeInventoryItem, and SpadeInventoryItem use the base
+        ///   InventoryItem.ProcessInput path.
+        /// - PickInventoryItem has its own small sound hook for vanilla laser swords, then calls
+        ///   the base InventoryItem.ProcessInput path.
+        /// - This prefix mirrors the base cooldown/use gate and plays the configured UseSound
+        ///   once per swing for supported WeaponAddons item classes.
+        /// </summary>
+
+        #region Melee / Tool Swing Sound
+
+        [HarmonyPatch(typeof(InventoryItem), nameof(InventoryItem.ProcessInput))]
+        private static class Patch_InventoryItem_ProcessInput_CustomSwingSound
+        {
+            private static void Prefix(
+                InventoryItem __instance,
+                InGameHUD hud,
+                CastleMinerZControllerMapping controller,
+                OneShotTimer ____coolDownTimer)
+            {
+                try
+                {
+                    if (__instance == null || hud == null || controller == null || ____coolDownTimer == null)
+                        return;
+
+                    var cls = __instance.ItemClass;
+                    if (!IsCustomSwingSoundClass(cls))
+                        return;
+
+                    var useSound = cls.UseSound;
+                    if (string.IsNullOrWhiteSpace(useSound))
+                        return;
+
+                    if (!____coolDownTimer.Expired)
+                        return;
+
+                    if (!(controller.Use.Held || controller.Shoulder.Held))
+                        return;
+
+                    var sm = SoundManager.Instance;
+                    if (sm == null)
+                        return;
+
+                    var emitter = hud.LocalPlayer?.SoundEmitter;
+                    if (emitter != null)
+                        sm.PlayInstance(useSound, emitter);
+                    else
+                        sm.PlayInstance(useSound);
+                }
+                catch
+                {
+                    // Best-effort only: Sound failure should never block melee/tool input.
+                }
+            }
+        }
+
+        /// <summary>
+        /// Suppresses PickInventoryItem's private vanilla swing cue when a custom WeaponAddons
+        /// swing sound is configured on the item class.
+        ///
+        /// Summary:
+        /// - Normal pickaxes have no private _useSound and are unaffected.
+        /// - Vanilla laser swords keep LightSaberSwing unless a pack explicitly sets SWING_SFX/UseSound.
+        /// - The shared InventoryItem.ProcessInput prefix above then plays the custom sound.
+        /// </summary>
+        [HarmonyPatch(typeof(PickInventoryItem), nameof(PickInventoryItem.ProcessInput))]
+        private static class Patch_PickInventoryItem_ProcessInput_CustomSwingSound
+        {
+            private static void Prefix(PickInventoryItem __instance, ref string ____useSound)
+            {
+                try
+                {
+                    if (__instance == null || string.IsNullOrWhiteSpace(____useSound))
+                        return;
+
+                    if (IsCustomSwingSoundClass(__instance.ItemClass) &&
+                        !string.IsNullOrWhiteSpace(__instance.ItemClass.UseSound))
+                        ____useSound = null;
+                }
+                catch
+                {
+                    // Best-effort only: never block vanilla pick input.
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns true for item classes that can play custom WeaponAddons swing sounds.
+        /// Summary: Guns continue using their normal shoot/reload sound path.
+        /// </summary>
+        private static bool IsCustomSwingSoundClass(InventoryItem.InventoryItemClass cls)
+        {
+            return cls is KnifeInventoryItemClass ||
+                   cls is PickInventoryItemClass  ||
+                   cls is AxeInventoryClass       ||
+                   cls is SpadeInventoryClass;
         }
         #endregion
 
