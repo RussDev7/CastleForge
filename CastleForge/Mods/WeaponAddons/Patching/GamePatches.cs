@@ -813,6 +813,157 @@ namespace WeaponAddons
             catch { return false; }
         }
 
+        private const int PendingLocalFireRemapLimit = 16;
+
+        private static readonly object _pendingLocalFireRemapLock = new object();
+
+        private static readonly Queue<InventoryItemIDs> _pendingLocalGunshotSynthetic =
+            new Queue<InventoryItemIDs>();
+
+        private static readonly Queue<InventoryItemIDs> _pendingLocalShotgunSynthetic =
+            new Queue<InventoryItemIDs>();
+
+        private static int _invalidFireMessageLogCount;
+
+        /// <summary>
+        /// Remembers the exact synthetic item that was just remapped for network send.
+        /// Summary: The local echo can arrive after HUD.ActiveInventoryItem changed, so relying only
+        /// on the currently held item can make shotgun sounds/tracers use the wrong ID.
+        /// </summary>
+        private static void RememberPendingLocalFireRemap(bool shotgun, InventoryItemIDs syntheticId)
+        {
+            try
+            {
+                if (!WeaponAddonItemInjector.TryGetBaseId(syntheticId, out var baseId))
+                    return;
+
+                if (!(InventoryItem.GetClass(baseId) is GunInventoryItemClass) ||
+                    !(InventoryItem.GetClass(syntheticId) is GunInventoryItemClass))
+                    return;
+
+                var queue = shotgun ? _pendingLocalShotgunSynthetic : _pendingLocalGunshotSynthetic;
+
+                lock (_pendingLocalFireRemapLock)
+                {
+                    queue.Enqueue(syntheticId);
+
+                    while (queue.Count > PendingLocalFireRemapLimit)
+                        queue.Dequeue();
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Consumes a pending local synthetic remap that matches the base ID in the echoed fire message.
+        /// Summary: This is preferred over HUD.ActiveInventoryItem because it is tied to the actual
+        /// shot that was sent, not whatever the player happens to be holding when the echo is handled.
+        /// </summary>
+        private static bool TryTakePendingLocalFireRemap(bool shotgun, InventoryItemIDs baseIdFromMsg, out InventoryItemIDs syntheticId)
+        {
+            syntheticId = default;
+
+            try
+            {
+                var queue = shotgun ? _pendingLocalShotgunSynthetic : _pendingLocalGunshotSynthetic;
+
+                lock (_pendingLocalFireRemapLock)
+                {
+                    int count = queue.Count;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        var candidate = queue.Dequeue();
+
+                        bool valid =
+                            WeaponAddonItemInjector.TryGetBaseId(candidate, out var mappedBase) &&
+                            InventoryItem.GetClass(candidate) is GunInventoryItemClass;
+
+                        if (valid && mappedBase == baseIdFromMsg)
+                        {
+                            syntheticId = candidate;
+                            return true;
+                        }
+
+                        // Preserve still-valid non-matching entries. This keeps mixed gun/shotgun
+                        // messages from eating each other's pending synthetic IDs if delivery order varies.
+                        if (valid)
+                            queue.Enqueue(candidate);
+                    }
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Fallback resolver for local synthetic fire messages.
+        /// Summary: Uses the pending-send queue first, then falls back to the current held item for
+        /// older paths where the send prefix did not record a remap.
+        /// </summary>
+        private static bool TryResolveLocalSyntheticFireId(bool shotgun, InventoryItemIDs baseIdFromMsg, out InventoryItemIDs syntheticId)
+        {
+            if (TryTakePendingLocalFireRemap(shotgun, baseIdFromMsg, out syntheticId))
+                return true;
+
+            syntheticId = default;
+
+            try
+            {
+                var heldId = CastleMinerZGame.Instance?.GameScreen?.HUD?.ActiveInventoryItem?.ItemClass?.ID;
+                if (heldId == null)
+                    return false;
+
+                if (!WeaponAddonItemInjector.TryGetBaseId(heldId.Value, out var mappedBase) || mappedBase != baseIdFromMsg)
+                    return false;
+
+                if (!(InventoryItem.GetClass(heldId.Value) is GunInventoryItemClass))
+                    return false;
+
+                syntheticId = heldId.Value;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Returns true only when an item ID resolves to a gun class.
+        /// Summary: Vanilla TracerManager casts blindly to GunInventoryItemClass, so invalid fire
+        /// messages like BareHands must be ignored before they can crash the network update.
+        /// </summary>
+        private static bool IsGunItemId(InventoryItemIDs itemId, out InventoryItem.InventoryItemClass invClass)
+        {
+            invClass = null;
+
+            try
+            {
+                invClass = InventoryItem.GetClass(itemId);
+                return invClass is GunInventoryItemClass;
+            }
+            catch
+            {
+                invClass = null;
+                return false;
+            }
+        }
+
+        private static void LogInvalidFireMessageOnce(string kind, InventoryItemIDs itemId)
+        {
+            try
+            {
+                if (_invalidFireMessageLogCount >= 6)
+                    return;
+
+                _invalidFireMessageLogCount++;
+                Log($"[WAddns] Ignored invalid {kind} fire message item {itemId} ({(int)itemId}); expected a gun item.");
+            }
+            catch { }
+        }
+
         /// <summary>
         /// GunshotMessage.Send remap:
         /// Summary: Synthetic ItemID -> base SLOT_ID for vanilla-safe networking.
@@ -823,8 +974,19 @@ namespace WeaponAddons
             private static void Prefix(LocalNetworkGamer from, ref InventoryItemIDs item)
             {
                 if (!IsNetworked(from)) return;
+
                 if (WeaponAddonItemInjector.TryGetBaseId(item, out var baseId))
+                {
+                    // Do not send a non-gun fallback like BareHands into vanilla tracer code.
+                    if (!IsGunItemId(baseId, out _))
+                    {
+                        LogInvalidFireMessageOnce("gunshot remap", baseId);
+                        return;
+                    }
+
+                    RememberPendingLocalFireRemap(shotgun: false, syntheticId: item);
                     item = baseId;
+                }
             }
         }
 
@@ -838,8 +1000,19 @@ namespace WeaponAddons
             private static void Prefix(LocalNetworkGamer from, ref InventoryItemIDs item)
             {
                 if (!IsNetworked(from)) return;
+
                 if (WeaponAddonItemInjector.TryGetBaseId(item, out var baseId))
+                {
+                    // Do not send a non-gun fallback like BareHands into vanilla tracer code.
+                    if (!IsGunItemId(baseId, out _))
+                    {
+                        LogInvalidFireMessageOnce("shotgun remap", baseId);
+                        return;
+                    }
+
+                    RememberPendingLocalFireRemap(shotgun: true, syntheticId: item);
                     item = baseId;
+                }
             }
         }
 
@@ -911,29 +1084,35 @@ namespace WeaponAddons
                 try
                 {
                     if (__instance == null || message == null) return true;
-
-                    // Only for the local shooter. Remote players should stay vanilla-safe.
-                    if (!__instance.IsLocal) return true;
-
                     if (!(message is GunshotMessage gsm)) return true;
 
                     // Message contains the network-safe (base) ItemID.
                     var baseIdFromMsg = gsm.ItemID;
 
-                    // Current equipped item on this client (synthetic if applicable).
-                    var heldId = CastleMinerZGame.Instance?.GameScreen?.HUD?.ActiveInventoryItem?.ItemClass?.ID;
-                    if (heldId == null) return true;
+                    // Vanilla's tracer path assumes the message ID is a gun. Ignore bad packets
+                    // instead of letting BareHands or another non-gun item crash TracerManager.
+                    // This guard applies to local and remote players.
+                    if (!IsGunItemId(baseIdFromMsg, out _))
+                    {
+                        LogInvalidFireMessageOnce("gunshot", baseIdFromMsg);
+                        return false;
+                    }
 
-                    // Only override if heldId is synthetic and maps back to the baseId in the message.
-                    if (!WeaponAddonItemInjector.TryGetBaseId(heldId.Value, out var mappedBase) || mappedBase != baseIdFromMsg)
+                    // Only de-remap for the local shooter. Remote players should stay vanilla-safe.
+                    if (!__instance.IsLocal) return true;
+
+                    // Resolve the synthetic item that actually fired. Prefer the pending-send queue
+                    // so switching/holding a vanilla shotgun cannot steal the modded shotgun sound.
+                    if (!TryResolveLocalSyntheticFireId(shotgun: false, baseIdFromMsg, out var effectiveId))
                         return true;
 
-                    // -----------------------------------------
-                    // Re-run the original logic, but use heldId
+                    // ---------------------------------------------
+                    // Re-run the original logic, but use effectiveId
                     // for visuals/sounds (local-only).
-                    // -----------------------------------------
-                    var effectiveId = heldId.Value;
+                    // ---------------------------------------------
                     var invClass = InventoryItem.GetClass(effectiveId);
+                    if (!(invClass is GunInventoryItemClass))
+                        return true;
 
                     if (invClass is LaserGunInventoryItemClass)
                     {
@@ -1016,20 +1195,30 @@ namespace WeaponAddons
                 try
                 {
                     if (__instance == null || message == null) return true;
-                    if (!__instance.IsLocal) return true;
-
                     if (!(message is ShotgunShotMessage gsm)) return true;
 
                     var baseIdFromMsg = gsm.ItemID;
 
-                    var heldId = CastleMinerZGame.Instance?.GameScreen?.HUD?.ActiveInventoryItem?.ItemClass?.ID;
-                    if (heldId == null) return true;
+                    // Vanilla's tracer path assumes the message ID is a gun. Ignore bad packets
+                    // instead of letting BareHands or another non-gun item crash TracerManager.
+                    // This guard applies to local and remote players.
+                    if (!IsGunItemId(baseIdFromMsg, out _))
+                    {
+                        LogInvalidFireMessageOnce("shotgun", baseIdFromMsg);
+                        return false;
+                    }
 
-                    if (!WeaponAddonItemInjector.TryGetBaseId(heldId.Value, out var mappedBase) || mappedBase != baseIdFromMsg)
+                    // Only de-remap for the local shooter. Remote players should stay vanilla-safe.
+                    if (!__instance.IsLocal) return true;
+
+                    // Resolve the synthetic item that actually fired. This fixes shotgun sounds
+                    // when the local echo is handled after the player swapped/held a vanilla shotgun.
+                    if (!TryResolveLocalSyntheticFireId(shotgun: true, baseIdFromMsg, out var effectiveId))
                         return true;
 
-                    var effectiveId = heldId.Value;
                     var invClass = InventoryItem.GetClass(effectiveId);
+                    if (!(invClass is GunInventoryItemClass))
+                        return true;
 
                     if (invClass is LaserGunInventoryItemClass)
                     {

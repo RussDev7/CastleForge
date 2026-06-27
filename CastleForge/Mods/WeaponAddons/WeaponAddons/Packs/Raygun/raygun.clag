@@ -83,10 +83,14 @@ $ICON_RENDER_ZOOM: 1.0
 ;
 ; Optional multi-cue sounds:
 ; - UseSounds / ReloadSounds are comma-separated.
-; - UseSoundMode / ReloadSoundMode can be Single, Random, or Cycle.
-; - Single = default, use UseSound / ReloadSound.
-; - Random = pick from UseSounds / ReloadSounds.
-; - Cycle  = play UseSounds / ReloadSounds in order.
+; - UseSoundMode / ReloadSoundMode can be Single, Random, Cycle, or Sequence.
+; - Single   = default, use UseSound / ReloadSound.
+; - Random   = pick from UseSounds / ReloadSounds.
+; - Cycle    = pick the next listed sound each time the weapon fires/reloads.
+; - Sequence = play the whole list back-to-back from one trigger.
+;              Useful for reload1 -> reload2 -> reload3 style reload chains.
+; - UseSoundMode and ReloadSoundMode are independent, so shooting can stay
+;   Random/Cycle while reloading uses Sequence.
 ; - If the plural list is missing, it falls back to the single sound.
 ;
 ;   Example:
@@ -98,6 +102,11 @@ $ICON_RENDER_ZOOM: 1.0
 ;     $ReloadSound:     GunReload
 ;     $ReloadSounds:    GunReload, GunReloadAlt1, sounds\reload_alt.wav
 ;     $ReloadSoundMode: Random
+;
+;   Example:
+;     $ReloadSound:     GunReload
+;     $ReloadSounds:    sounds\reload1.wav, sounds\reload2.wav, sounds\reload3.wav
+;     $ReloadSoundMode: Sequence
 ;
 ; Knife / melee / tool swing sounds:
 ; - SWING_SFX is an alias for the weapon's use/shoot sound, but is clearer

@@ -1,4 +1,4 @@
-/*
+﻿/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -515,6 +515,7 @@ namespace WeaponAddons
 
                     // Use/Shoot/Swing SFX aliases:
                     // - UseSound / UseSounds / UseSoundMode are the preferred cue-list keys.
+                    // - UseSoundMode and ReloadSoundMode are independent, so shoot/use and reload can differ.
                     // - SHOOT_SFX and SHOT are kept for existing firearm packs.
                     // - SWING_* / MELEE_* aliases are accepted for knife/melee/tool packs.
                     ShootSfx          = GetFirst(doc, "USE_SOUND", "UseSound", "SWING_SFX", "SWING_SOUND", "MELEE_SFX", "MELEE_SOUND", "SHOOT_SFX", "SHOT_SFX", "SHOT"),
@@ -522,6 +523,7 @@ namespace WeaponAddons
                     ShootSoundMode    = ParseSoundMode(GetFirst(doc, "USE_SOUND_MODE", "UseSoundMode", "SWING_SOUND_MODE", "MELEE_SOUND_MODE", "SHOOT_SOUND_MODE", "ShotSoundMode"), WeaponAddonSoundMode.Single),
 
                     // Reload SFX aliases mirror shoot where possible.
+                    // ReloadSoundMode may be Sequence even when UseSoundMode remains Random/Cycle.
                     ReloadSfx         = GetFirst(doc, "RELOAD_SOUND", "ReloadSound", "RELOAD_SFX", "RELOAD"),
                     ReloadSfxList     = ParseSoundList(GetFirst(doc, "RELOAD_SOUNDS", "ReloadSounds", "RELOAD_SFX_LIST", "RELOADS")),
                     ReloadSoundMode   = ParseSoundMode(GetFirst(doc, "RELOAD_SOUND_MODE", "ReloadSoundMode"), WeaponAddonSoundMode.Single),
@@ -757,7 +759,7 @@ namespace WeaponAddons
 
         /// <summary>
         /// Parses UseSoundMode/ReloadSoundMode.
-        /// Summary: Defaults to Single unless Random or Cycle is explicitly requested.
+        /// Summary: Defaults to Single unless Random, Cycle, or Sequence is explicitly requested.
         /// </summary>
         private static WeaponAddonSoundMode ParseSoundMode(string value, WeaponAddonSoundMode def)
         {
@@ -776,6 +778,19 @@ namespace WeaponAddons
                 normalized.Equals("Cyclic", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Equals("Sequential", StringComparison.OrdinalIgnoreCase))
                 return WeaponAddonSoundMode.Cycle;
+
+            if (normalized.Equals("Sequence", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Sequenced", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Chain", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Chained", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Queue", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Queued", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("All", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("PlayAll", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("CycleAll", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("FullCycle", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("BackToBack", StringComparison.OrdinalIgnoreCase))
+                return WeaponAddonSoundMode.Sequence;
 
             if (normalized.Equals("Single", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Equals("Default", StringComparison.OrdinalIgnoreCase))

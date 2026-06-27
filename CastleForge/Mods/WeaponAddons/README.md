@@ -1,4 +1,4 @@
-# WeaponAddons
+﻿# WeaponAddons
 
 > Turn CastleMiner Z weapons into data-driven content packs.  
 > Build custom guns and other weapon-style addons with a `.clag` file, optional custom models, custom icons, custom sounds, optional crafting recipes, and runtime-safe synthetic item IDs.
@@ -797,8 +797,8 @@ $SWING_SOUNDS: sounds\swing1.wav, sounds\swing2.wav
 $SWING_SOUND_MODE: Random
 
 $ReloadSound: sounds\reload.wav
-$ReloadSounds: sounds\reload.wav, sounds\reload_alt.wav
-$ReloadSoundMode: Cycle
+$ReloadSounds: sounds\reload1.wav, sounds\reload2.wav, sounds\reload3.wav
+$ReloadSoundMode: Sequence
 
 $SHOOT_VOL: 1.0
 $SHOOT_PITCH: 0.0
@@ -811,8 +811,12 @@ $RELOAD_PITCH: 0.0
   - a vanilla cue name, or
   - a pack-relative file path ending in `.wav` or `.mp3`
 - `SWING_SFX` is intended for knife/tool packs such as knives, pickaxes, axes, and spades.
-- `UseSoundMode` / `ReloadSoundMode` / `SWING_SOUND_MODE` support `Single`, `Random`, and `Cycle`.
+- `UseSoundMode` / `ReloadSoundMode` / `SWING_SOUND_MODE` support `Single`, `Random`, `Cycle`, and `Sequence`.
 - `Single` is the default. In `Single` mode, `UseSound` / `ReloadSound` / `SWING_SFX` is used first, with the first list entry only as a fallback.
+- `Random` chooses one list entry per trigger. `Cycle` chooses the next list entry per trigger.
+- `Sequence` plays every list entry back-to-back for one trigger, for example `reload1` then `reload2` then `reload3`.
+- `Sequence` also accepts aliases such as `Chain`, `Queue`, `CycleAll`, `PlayAll`, `FullCycle`, and `BackToBack`.
+- These modes are independent, so `ReloadSoundMode: Sequence` can be used while `UseSoundMode` stays `Random` or `Cycle`.
 - `UseSounds` / `ReloadSounds` / `SWING_SOUNDS` are comma-separated and may mix vanilla cue names with pack-relative `.wav` / `.mp3` paths.
 - Backward-compatible aliases still work: `SHOOT_SFX`, `SHOT`, `SWING_SFX`, `MELEE_SFX`, `RELOAD_SFX`, and `RELOAD`.
 - File-based sound volume is clamped to **0..1**

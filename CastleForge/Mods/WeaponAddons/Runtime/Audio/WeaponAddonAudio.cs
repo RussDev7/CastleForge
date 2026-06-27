@@ -16,12 +16,14 @@ namespace WeaponAddons
     /// <summary>
     /// Selects how a WeaponAddons sound list is used.
     /// Summary: Single preserves vanilla-style one-cue behavior and is the default.
+    /// Sequence plays every list entry back-to-back for one trigger.
     /// </summary>
     internal enum WeaponAddonSoundMode
     {
         Single,
         Random,
-        Cycle
+        Cycle,
+        Sequence
     }
 
     /// <summary>
@@ -33,7 +35,7 @@ namespace WeaponAddons
     /// - Supports .clag SFX values as either:
     ///   • Vanilla cue name,
     ///   • Pack-relative file path (.wav/.mp3) loaded into SoundEffect, OR
-    ///   • A Random/Cycle list containing cue names and/or file paths.
+    ///   • A Random/Cycle/Sequence list containing cue names and/or file paths.
     /// - For file-based or multi-choice sounds:
     ///   • Registers per-item SHOOT/RELOAD routes.
     ///   • Stores per-item Volume/Pitch tuning for file-backed choices.
@@ -51,7 +53,7 @@ namespace WeaponAddons
         //
         // Summary:
         // - These prefixes are written into gun _useSoundCue / _reloadSound when a file-backed
-        //   sound or Random/Cycle route is needed.
+        //   sound or Random/Cycle/Sequence route is needed.
         // - SoundManager.PlayInstance(...) patches detect these and play the resolved choice.
         //
         // Example:
@@ -76,8 +78,11 @@ namespace WeaponAddons
         private static readonly Dictionary<int, SoundRoute> _shootRoutes  = new Dictionary<int, SoundRoute>();
         private static readonly Dictionary<int, SoundRoute> _reloadRoutes = new Dictionary<int, SoundRoute>();
 
-        // 3D/2D token-created instances need disposal after they finish.
+        // 3D/2D token-created one-shot instances need disposal after they finish.
         private static readonly List<SoundEffectInstance> _active3D = new List<SoundEffectInstance>();
+
+        // Active Sequence-mode chains. These own their current cue/SoundEffectInstance.
+        private static readonly List<ActiveSequence> _activeSequences = new List<ActiveSequence>();
 
         private static readonly Random _random = new Random();
         private static readonly object _randomLock = new object();
@@ -103,7 +108,7 @@ namespace WeaponAddons
         }
 
         /// <summary>
-        /// Per-item sound route used by Single file-backed sounds and Random/Cycle lists.
+        /// Per-item sound route used by Single file-backed sounds and Random/Cycle/Sequence lists.
         /// </summary>
         private sealed class SoundRoute
         {
@@ -111,6 +116,21 @@ namespace WeaponAddons
             public SfxParams Params;
             public readonly List<SoundChoice> Choices = new List<SoundChoice>();
             public int NextIndex;
+        }
+
+        /// <summary>
+        /// One in-progress Sequence playback chain.
+        /// Summary: Tracks the current cue/file instance and advances when it has stopped.
+        /// </summary>
+        private sealed class ActiveSequence
+        {
+            public SoundRoute Route;
+            public bool Is3D;
+            public AudioEmitter Emitter;
+            public int NextIndex;
+            public Microsoft.Xna.Framework.Audio.Cue ActiveCue2D;
+            public DNA.Audio.SoundCue3D ActiveCue3D;
+            public SoundEffectInstance ActiveSfx;
         }
 
         // =====================================================================================
@@ -126,6 +146,14 @@ namespace WeaponAddons
 
         public static void Reset()
         {
+            try
+            {
+                for (int i = _activeSequences.Count - 1; i >= 0; i--)
+                    StopAndDisposeSequence(_activeSequences[i]);
+                _activeSequences.Clear();
+            }
+            catch { }
+
             try
             {
                 for (int i = _active3D.Count - 1; i >= 0; i--)
@@ -189,7 +217,7 @@ namespace WeaponAddons
         // Summary:
         // - TryPrepareShootSound/TryPrepareReloadSound:
         //   • Single mode returns a direct cue name when possible (vanilla behavior).
-        //   • File-backed sounds and Random/Cycle lists are registered as token routes.
+        //   • File-backed sounds and Random/Cycle/Sequence lists are registered as token routes.
         //   • Lists may mix vanilla cue names and pack-relative .wav/.mp3 paths.
         // - TryRegisterShoot/TryRegisterReload are kept as compatibility wrappers.
         //
@@ -197,7 +225,7 @@ namespace WeaponAddons
 
         /// <summary>
         /// Prepares the value that should be written into the gun's _useSoundCue field.
-        /// Summary: Single is default/preserved behavior; Random/Cycle use the supplied list.
+        /// Summary: Single is default/preserved behavior; Random/Cycle/Sequence use the supplied list.
         /// </summary>
         public static string TryPrepareShootSound(
             int itemId,
@@ -266,7 +294,7 @@ namespace WeaponAddons
         /// Builds the effective choice list for the requested mode.
         /// Summary:
         /// - Single uses primary first, then the first list entry as fallback.
-        /// - Random/Cycle use the list when present, otherwise primary as fallback.
+        /// - Random/Cycle/Sequence use the list when present, otherwise primary as fallback.
         /// </summary>
         private static List<string> BuildChoiceList(string primary, string[] values, WeaponAddonSoundMode mode)
         {
@@ -447,8 +475,9 @@ namespace WeaponAddons
         // Summary:
         // - TryPlay2D / TryPlay3D:
         //   • Parse token, locate route for item id, select based on Single/Random/Cycle, and play.
+        //   • Sequence starts a one-trigger chain and advances in Update() as each sound stops.
         //   • Cue choices are passed back into SoundManager as normal cue names.
-        //   • File choices create SoundEffectInstances tracked in _active3D and disposed later.
+        //   • File choices create SoundEffectInstances tracked and disposed later.
         //
         // =====================================================================================
 
@@ -456,6 +485,9 @@ namespace WeaponAddons
         {
             if (!TryResolveToken(name, out var isShoot, out var id)) return false;
             if (!TryGetRoute(isShoot, id, out var route)) return false;
+
+            if (route.Mode == WeaponAddonSoundMode.Sequence)
+                return TryStartSequence(route, is3D: false, emitter: null);
 
             var choice = Choose(route);
             if (choice == null) return false;
@@ -478,6 +510,9 @@ namespace WeaponAddons
             if (!TryResolveToken(name, out var isShoot, out var id)) return false;
             if (!TryGetRoute(isShoot, id, out var route)) return false;
 
+            if (route.Mode == WeaponAddonSoundMode.Sequence)
+                return TryStartSequence(route, is3D: true, emitter: emitter);
+
             var choice = Choose(route);
             if (choice == null) return false;
 
@@ -492,6 +527,163 @@ namespace WeaponAddons
             }
 
             return TryPlaySfx3D(choice.Sfx, route.Params, emitter);
+        }
+
+        private static bool TryStartSequence(SoundRoute route, bool is3D, AudioEmitter emitter)
+        {
+            if (route == null || route.Choices.Count == 0)
+                return false;
+
+            var seq = new ActiveSequence
+            {
+                Route = route,
+                Is3D = is3D,
+                Emitter = emitter,
+                NextIndex = 0
+            };
+
+            if (!TryStartNextSequenceChoice(seq))
+                return false;
+
+            _activeSequences.Add(seq);
+            return true;
+        }
+
+        private static bool TryStartNextSequenceChoice(ActiveSequence seq)
+        {
+            if (seq == null || seq.Route == null || seq.Route.Choices.Count == 0)
+                return false;
+
+            ClearCurrentSequenceChoice(seq);
+
+            while (seq.NextIndex < seq.Route.Choices.Count)
+            {
+                var choice = seq.Route.Choices[seq.NextIndex];
+                seq.NextIndex++;
+
+                if (choice == null)
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(choice.CueName))
+                {
+                    if (TryStartSequenceCue(seq, choice.CueName))
+                        return true;
+
+                    continue;
+                }
+
+                if (TryStartSequenceSfx(seq, choice.Sfx))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryStartSequenceCue(ActiveSequence seq, string cueName)
+        {
+            try
+            {
+                var sm = DNA.Audio.SoundManager.Instance;
+                if (sm == null || string.IsNullOrWhiteSpace(cueName))
+                    return false;
+
+                if (seq.Is3D)
+                {
+                    seq.ActiveCue3D = sm.PlayInstance(cueName, seq.Emitter);
+                    return seq.ActiveCue3D != null;
+                }
+
+                seq.ActiveCue2D = sm.PlayInstance(cueName);
+                return seq.ActiveCue2D != null;
+            }
+            catch
+            {
+                seq.ActiveCue2D = null;
+                seq.ActiveCue3D = null;
+                return false;
+            }
+        }
+
+        private static bool TryStartSequenceSfx(ActiveSequence seq, SoundEffect sfx)
+        {
+            if (sfx == null || sfx.IsDisposed)
+                return false;
+
+            try
+            {
+                var inst = sfx.CreateInstance();
+                inst.IsLooped = false;
+                inst.Volume   = Clamp01(seq.Route.Params.Volume <= 0f ? 1f : seq.Route.Params.Volume);
+                inst.Pitch    = ClampPitch(seq.Route.Params.Pitch);
+
+                if (seq.Is3D)
+                    inst.Apply3D(DNA.Audio.SoundManager.ActiveListener, seq.Emitter);
+
+                inst.Play();
+
+                seq.ActiveSfx = inst;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsCurrentSequenceChoiceFinished(ActiveSequence seq)
+        {
+            try
+            {
+                if (seq == null)
+                    return true;
+
+                if (seq.ActiveSfx != null)
+                    return seq.ActiveSfx.State == SoundState.Stopped;
+
+                if (seq.ActiveCue3D != null)
+                    return seq.ActiveCue3D.IsDisposed || seq.ActiveCue3D.IsStopped;
+
+                if (seq.ActiveCue2D != null)
+                    return seq.ActiveCue2D.IsDisposed || seq.ActiveCue2D.IsStopped;
+
+                return true;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private static void ClearCurrentSequenceChoice(ActiveSequence seq)
+        {
+            if (seq == null)
+                return;
+
+            try { seq.ActiveSfx?.Dispose(); } catch { }
+            seq.ActiveSfx = null;
+
+            try
+            {
+                if (seq.ActiveCue3D != null && !seq.ActiveCue3D.IsStopped)
+                    seq.ActiveCue3D.Stop(AudioStopOptions.Immediate);
+            }
+            catch { }
+            try { seq.ActiveCue3D?.Dispose(); } catch { }
+            seq.ActiveCue3D = null;
+
+            try
+            {
+                if (seq.ActiveCue2D != null && !seq.ActiveCue2D.IsStopped)
+                    seq.ActiveCue2D.Stop(AudioStopOptions.Immediate);
+            }
+            catch { }
+            try { seq.ActiveCue2D?.Dispose(); } catch { }
+            seq.ActiveCue2D = null;
+        }
+
+        private static void StopAndDisposeSequence(ActiveSequence seq)
+        {
+            ClearCurrentSequenceChoice(seq);
         }
 
         private static bool TryGetRoute(bool isShoot, int id, out SoundRoute route)
@@ -570,6 +762,20 @@ namespace WeaponAddons
 
         public static void Update()
         {
+            for (int i = _activeSequences.Count - 1; i >= 0; i--)
+            {
+                var seq = _activeSequences[i];
+
+                if (!IsCurrentSequenceChoiceFinished(seq))
+                    continue;
+
+                if (!TryStartNextSequenceChoice(seq))
+                {
+                    StopAndDisposeSequence(seq);
+                    _activeSequences.RemoveAt(i);
+                }
+            }
+
             for (int i = _active3D.Count - 1; i >= 0; i--)
             {
                 var inst = _active3D[i];
