@@ -1,4 +1,4 @@
-﻿FbxToXnbXna - ReadMe.txt
+FbxToXnbXna - ReadMe.txt
 ========================
 
 What this is
@@ -12,6 +12,11 @@ Key features
 ------------
 • Converts FBX -> XNB using the XNA 4.0 Content Pipeline (BuildContent task wrapper).
 • Builds each FBX into its own isolated output folder to avoid dependency collisions.
+• Calculates model Scale from TexturePacks FbxComp, matching larger round-trip exports.
+• Uses ScaledModelProcessor when available so BarrelTip/socket root space, basis scale,
+  and Blender/GLB round-trip orientation are corrected separately from visible mesh scale.
+• Can remove optional TexturePacks GLB RootNode authoring Location/Quaternion values
+  when converting edited FBX files back to XNB.
 • Supports drag-and-drop conversion and batch conversion.
 • Can prompt-install XNA pipeline references if missing (via embedded MSI).
 
@@ -61,6 +66,8 @@ Option A: Drag-and-drop
 Option B: Command line
   FbxToXnbXna.exe "C:\path\model.fbx"
   FbxToXnbXna.exe "C:\path\a.fbx" "C:\path\b.fbx"
+  FbxToXnbXna.exe --fbxComp 10.0 "C:\path\larger_round_trip_model.fbx"
+  FbxToXnbXna.exe --scale 0.001 "C:\path\manual_scale_override.fbx"
 
 Option C: Interactive mode (no args)
   If you run the program with no .fbx arguments, it enters interactive mode:
@@ -70,6 +77,77 @@ Option C: Interactive mode (no args)
 
   You can paste paths like:
     "C:\path\a.fbx" "C:\path\b.fbx"
+
+Scale behavior
+--------------
+TexturePacks exports GLB models full-size by default with:
+  [Models]
+  FbxComp = 10.0
+
+FbxToXnb then calculates the ModelProcessor / SkinedModelProcessor scale:
+
+  Scale = 0.01 / FbxComp
+
+So with FbxComp = 10.0, the converter uses:
+
+  Scale = 0.001
+
+User-friendly option:
+  --fbxComp 10.0    Use the TexturePacks export setting and calculate Scale automatically
+
+Override the default when needed:
+  --scale 0.001     Explicit model scale
+  --noScale         Do not auto-apply calculated scale
+  --param Scale=1   Generic processor parameter form; overrides --fbxComp
+
+Authoring transform behavior
+----------------------------
+TexturePacks can optionally export GLBs with a Blender-friendly RootNode transform:
+
+  [Models]
+  AuthoringLocation = 0, 0, 0
+  AuthoringRotation = 0, 0, 0
+
+If those values are changed, pass the same values when converting the edited FBX back:
+
+  FbxToXnb.exe --fbxComp 10.0 --authoringLocation "0.64,-1.12,-0.58" --authoringRotation "0,0,0" "C:\path\model.fbx"
+
+Use the values exactly as Blender shows them on the imported RootNode:
+  --authoringLocation              Location X,Y,Z
+  --authoringRotation              3 values = Euler degrees X,Y,Z
+  --authoringRotation              4 values = Quaternion W,X,Y,Z
+  --authoringRotationDegrees       Explicit Euler-degree alias
+  --authoringRotationQuaternion    Explicit/legacy quaternion form
+
+Advanced:
+  --authoringLocationScale 100     Default FBX importer unit conversion; normally leave this alone
+
+TexturePacks rigid mesh rotation cleanup:
+  NormalizeRigidMeshRotation = true
+  RigidMeshRotation = 180, 0, 0
+
+  This is handled by the GLB extractor. It writes cleaner Blender-visible mesh rotation
+  values, moves root-level helpers and secondary root-level mesh nodes with the
+  visible mesh for authoring, and creates
+  a matching .cmzrigid.ini sidecar with both original and authoring transforms; FbxToXnb applies a world-space restore delta during conversion. The delta includes the exported RootNode authoring transform so root-level meshes and sockets do not drift in hand.
+  Keep that sidecar beside the edited FBX. FbxToXnb first tries an exact FBX-name match, then a texture/FBX-reference match, then a single-sidecar fallback. If more than one sidecar is present and none clearly matches, pass --rigidMeshRestoreFile explicitly. FbxToXnb restores those
+  rotations before XNA builds the XNB.
+
+Socket correction overrides:
+  --param SocketDebugLog=True
+                     Write BarrelTip bake details to the pipeline log
+  --param SocketBakeToModelRoot=False
+                     Disable root-space socket baking for a one-off asset
+  --param SocketBasisScale=0.01
+                     Manual override only; normal rigid default is 0.01
+  --param SocketBasisTransform=BlenderGlbRoundTripForward
+                     Manual override only; normal rigid default
+  --param SocketTranslationScale=1
+                     Manual override only; normal rigid default is 1.0
+  --param SocketRotationCorrection=True
+  --param SocketRotationCorrectionAxis=Y
+  --param SocketRotationCorrectionDegrees=180
+                     Optional one-off BarrelTip basis correction for unusual FBX exports
 
 Exit codes
 ----------

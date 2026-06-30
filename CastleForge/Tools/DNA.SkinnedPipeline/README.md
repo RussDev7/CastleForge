@@ -1,4 +1,4 @@
-﻿# DNA.SkinnedPipeline
+# DNA.SkinnedPipeline
 
 > Compile CastleMiner Z / DNA-style **skinned FBX models** into runtime-friendly `.xnb` assets by pairing a custom XNA pipeline extension with **FbxToXnb**.
 
@@ -28,6 +28,8 @@ It ships a custom XNA content pipeline extension named **`SkinedModelProcessor`*
 
 In plain terms, this tool exists so that **skinned content can be compiled in a way the game actually understands**.
 
+It also includes **`ScaledModelProcessor`** for normal rigid/static TexturePacks model round-trips. That processor keeps the stock XNA model path, but adds the CastleMiner Z socket fixes needed for helper nodes such as `BarrelTip`.
+
 ---
 
 ## Why this tool stands out
@@ -54,7 +56,9 @@ This project is designed to pair with **FbxToXnb**. It even includes a drag-and-
 This project includes:
 
 - **`DNA.SkinnedPipeline.dll`**
+- **`ScaledModelProcessor`** content processor for rigid/static TexturePacks round-trips
 - **`SkinedModelProcessor`** content processor
+- **`AnimationClipProcessor`** content processor
 - **`SkeletonWriter`**
 - **`AnimationClipWriter`**
 - **`FbxToXnb_Drop_Skinned.bat`**
@@ -72,9 +76,9 @@ It is best thought of as part of the content-authoring workflow:
 
 ```mermaid
 flowchart LR
-    A[Rigged FBX model] --> B[FbxToXnb]
-    B --> C[DNA.SkinnedPipeline / SkinedModelProcessor]
-    C --> D[Compiled skinned .xnb output]
+    A[FBX model or animation] --> B[FbxToXnb]
+    B --> C[DNA.SkinnedPipeline processors]
+    C --> D[Compiled .xnb output]
     D --> E[CastleForge mod or content pack]
 ```
 
@@ -89,7 +93,50 @@ This is especially useful when you are preparing assets for systems like:
 
 ## Key feature breakdown
 
-### 1) Custom `SkinedModelProcessor`
+### 1) `ScaledModelProcessor` for rigid TexturePacks round-trips
+
+`ScaledModelProcessor` is the recommended processor for normal rigid/static item models exported from TexturePacks, especially weapons with named socket/helper nodes.
+
+It:
+
+- removes optional TexturePacks GLB authoring transforms before the stock XNA processor runs,
+- bakes configured socket nodes such as `BarrelTip` to model-root space,
+- lets XNA `ModelProcessor.Scale` handle visible mesh scale,
+- post-corrects socket basis scale and Blender/GLB round-trip orientation,
+- and leaves socket translation at the correct post-processor value by default.
+
+The important defaults are:
+
+| Parameter | Default | Purpose |
+|---|---:|---|
+| `SocketNodeNames` | `BarrelTip,Flame` | Socket/helper bones that can receive post-processing. |
+| `SocketBakeToModelRootNames` | `BarrelTip` | Nodes baked to model-root space before stock processing. |
+| `SocketPostProcessCorrection` | `True` | Enables socket basis correction after stock processing. |
+| `SocketBasisScale` | `0.01` | Keeps helper/socket basis scale game-sized. |
+| `SocketBasisTransform` | `BlenderGlbRoundTripForward` | Corrects the Blender/GLB/FBX socket basis used by the TexturePacks workflow. |
+| `SocketTranslationScale` | `1.0` | Rigid default; stock processing has already placed the socket translation. |
+| `SocketRotationCorrection` | `False` | Optional one-off extra rotation correction, disabled by default. |
+| `AuthoringLocation` | `0,0,0` | Optional inverse of TexturePacks GLB RootNode authoring Location. |
+| `AuthoringRotation` | blank | Optional inverse of TexturePacks GLB RootNode authoring rotation. Three values mean Blender Euler degrees `X,Y,Z`; four values mean Blender Quaternion `W,X,Y,Z`. |
+| `AuthoringRotationQuaternion` | `1,0,0,0` | Legacy explicit quaternion form. Used when `AuthoringRotation` is blank. |
+| `AuthoringLocationScale` | `100` | Advanced FBX importer unit conversion for authoring location. |
+
+Use the authoring values exactly as Blender displays them on the imported RootNode:
+
+```powershell
+FbxToXnb.exe --processor ScaledModelProcessor --pipeline "C:\Path\To\DNA.SkinnedPipeline.dll" --fbxComp 10.0 --authoringLocation "0.64,-1.12,-0.58" --authoringRotation "1,-1,0,0" "C:\Authoring\0051_Pistol_model.fbx"
+```
+
+TexturePacks can also normalize rigid mesh-parent rotations during GLB export:
+
+```ini
+NormalizeRigidMeshRotation = true
+RigidMeshRotation = 180, 0, 0
+```
+
+That cleanup writes a `.cmzrigid.ini` sidecar beside the exported GLB. Keep that file beside the edited FBX. FbxToXnb first tries an exact FBX-name match, then a texture/FBX-reference match, then a single-sidecar fallback. If more than one sidecar is present and none clearly matches, pass `--rigidMeshRestoreFile` explicitly. The selected file is passed to `ScaledModelProcessor` as `RigidMeshRestoreFile`, scaling the sidecar values into FBX importer units and applying the original-vs-authoring restore delta before the normal XNA build. The restore is delta-based and includes the exported RootNode authoring transform when computing the original-vs-authoring delta. This matters because Blender/FBX can bake the RootNode authoring offset into root-level children before the XNA importer sees them; using the world-space authoring delta keeps sockets and visible meshes from drifting under, beside, or away from the held item.
+
+### 2) Custom `SkinedModelProcessor`
 The heart of this project is the custom XNA content processor:
 
 ```text
@@ -109,7 +156,7 @@ Its flow is intentionally simple and predictable:
 
 That means the compiled asset carries the runtime skinning metadata along with it.
 
-### 2) DNA-compatible skeleton generation
+### 3) DNA-compatible skeleton generation
 The processor builds the skeleton directly from the processed bone list.
 
 It preserves:
@@ -121,19 +168,19 @@ It preserves:
 
 This is important for runtime systems that expect reliable bone lookup by name, such as muzzle points, hand bones, head bones, or named attachment bones.
 
-### 3) Inverse bind pose generation
+### 4) Inverse bind pose generation
 The processor computes absolute bind pose matrices and then inverts them.
 
 That inverse bind pose array is one of the key pieces a runtime skinning system needs in order to deform the mesh correctly.
 
-### 4) Runtime-safe `.xnb` reader binding
+### 5) Runtime-safe `.xnb` reader binding
 The two writer classes are a major part of why this project matters.
 
 Instead of letting XNA pick a fallback reflective reader, the writers explicitly point compiled content back at the game’s expected runtime reader types.
 
 That makes the output safer and more predictable for the DNA / CMZ runtime.
 
-### 5) Drag-and-drop skinned conversion helper
+### 6) Drag-and-drop skinned conversion helper
 The included batch file:
 
 ```text
@@ -318,16 +365,17 @@ This isolated-per-asset layout helps avoid collisions between generic dependency
 
 Use **DNA.SkinnedPipeline** when your FBX is:
 
+- a TexturePacks rigid/static round-trip that needs `ScaledModelProcessor`,
+- a weapon or item model with named helper sockets such as `BarrelTip`,
 - rigged,
 - bone-driven,
 - expected to carry skeleton information at runtime,
 - or intended for a DNA / CMZ runtime path that expects skinning metadata in `Model.Tag`.
 
-Use normal **FbxToXnb** processing without this extension when your model is simply:
+Use normal **FbxToXnb** processing without this extension only when your model is simply:
 
-- a rigid item,
+- a rigid item with no socket/helper transform requirements,
 - a static prop,
-- a weapon model with no real skeleton requirement,
 - or any other plain model that is fine with the stock `ModelProcessor`.
 
 ---
@@ -390,9 +438,9 @@ Double-check:
 <details>
 <summary><strong>I am building a normal static model. Do I need this?</strong></summary>
 
-Probably not.
+It depends on the static model.
 
-If the asset is just a static model, use the normal FbxToXnb flow with the default `ModelProcessor`.
+If the asset has no helper sockets and does not need TexturePacks round-trip correction, the default `ModelProcessor` can be enough. If it is a weapon or item model with nodes such as `BarrelTip`, use `ScaledModelProcessor` from this pipeline.
 
 </details>
 

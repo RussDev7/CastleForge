@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -55,6 +55,73 @@ namespace CMZ.ContentPipeline
     [ContentProcessor(DisplayName = "SkinedModelProcessor")]
     public sealed class SkinedModelProcessor : ModelProcessor
     {
+        /// <summary>
+        /// Comma/semicolon/pipe-separated socket/helper bone names that should receive the
+        /// same Scale compensation as the visible mesh before DNA skeleton metadata is built.
+        /// </summary>
+        public string SocketNodeNames { get; set; } = ProcessorScaleUtility.DefaultSocketNodeNames;
+
+        /// <summary>
+        /// Translation scale for socket/helper bones before DNA skeleton metadata is built.
+        /// A value <= 0 means use the inherited ModelProcessor Scale value.
+        ///
+        /// For TexturePacks round-trips, leave this automatic unless you are fixing a one-off
+        /// asset. A value <= 0 uses the same Scale value as the mesh.
+        /// </summary>
+        public float SocketTranslationScale { get; set; } = ProcessorScaleUtility.AutoSocketTranslationScale;
+
+        /// <summary>
+        /// Optional BarrelTip basis correction before DNA skeleton metadata is built. Disabled
+        /// by default because the normal fix is separate basis/translation scaling, not a
+        /// hardcoded rotation flip.
+        /// </summary>
+        public bool SocketRotationCorrection { get; set; } = false;
+
+        /// <summary>
+        /// Socket names that should receive the basis correction. Defaults to BarrelTip only.
+        /// </summary>
+        public string SocketRotationCorrectionNames { get; set; } = ProcessorScaleUtility.DefaultSocketRotationCorrectionNames;
+
+        /// <summary>
+        /// Axis used for the socket-only basis correction. Valid values: X, Y, Z.
+        /// </summary>
+        public string SocketRotationCorrectionAxis { get; set; } = ProcessorScaleUtility.DefaultSocketRotationCorrectionAxis;
+
+        /// <summary>
+        /// Degrees used for the optional socket-only basis correction.
+        /// </summary>
+        public float SocketRotationCorrectionDegrees { get; set; } = ProcessorScaleUtility.DefaultSocketRotationCorrectionDegrees;
+
+        /// <summary>
+        /// Optional GLB authoring location to remove before processing. Format: X,Y,Z.
+        /// Values should match TexturePacks [Models] AuthoringLocation.
+        /// </summary>
+        public string AuthoringLocation { get; set; } = ProcessorScaleUtility.DefaultAuthoringLocation;
+
+        /// <summary>
+        /// Optional GLB authoring rotation to remove before processing.
+        /// Format is either Blender Euler degrees X,Y,Z or Blender Quaternion W,X,Y,Z.
+        /// </summary>
+        public string AuthoringRotation { get; set; } = ProcessorScaleUtility.DefaultAuthoringRotation;
+
+        /// <summary>
+        /// Optional GLB authoring rotation to remove before processing.
+        /// Format is W,X,Y,Z, matching Blender's displayed quaternion order.
+        /// Kept for compatibility; AuthoringRotation takes priority when provided.
+        /// </summary>
+        public string AuthoringRotationQuaternion { get; set; } = ProcessorScaleUtility.DefaultAuthoringRotationQuaternion;
+
+        /// <summary>
+        /// Converts authoring location from GLB/Blender units into FBX importer units.
+        /// </summary>
+        public float AuthoringLocationScale { get; set; } = ProcessorScaleUtility.DefaultAuthoringLocationScale;
+
+        /// <summary>
+        /// Optional TexturePacks .cmzrigid.ini sidecar used to restore original rigid node
+        /// transforms after NormalizeRigidMeshRotation authoring cleanup.
+        /// </summary>
+        public string RigidMeshRestoreFile { get; set; } = ProcessorScaleUtility.DefaultRigidMeshRestoreFile;
+
         #region Content Pipeline Entry Point
 
         /// <summary>
@@ -62,8 +129,61 @@ namespace CMZ.ContentPipeline
         /// </summary>
         public override ModelContent Process(NodeContent input, ContentProcessorContext context)
         {
+            bool hasFullRigidRestore = ProcessorScaleUtility.HasRigidNodeTransformRestoreFile(RigidMeshRestoreFile);
+
+            if (hasFullRigidRestore)
+            {
+                ProcessorScaleUtility.ResetAuthoringRootTransforms(input, context, debugLog: false);
+
+                ProcessorScaleUtility.ApplyRigidMeshRotationRestore(
+                    input,
+                    RigidMeshRestoreFile,
+                    AuthoringLocationScale,
+                    AuthoringLocation,
+                    AuthoringRotation,
+                    AuthoringRotationQuaternion,
+                    AuthoringLocationScale,
+                    context,
+                    debugLog: false);
+            }
+            else
+            {
+                ProcessorScaleUtility.ApplyInverseAuthoringTransform(
+                    input,
+                    AuthoringLocation,
+                    AuthoringRotation,
+                    AuthoringRotationQuaternion,
+                    AuthoringLocationScale,
+                    context,
+                    debugLog: false);
+
+                ProcessorScaleUtility.ApplyRigidMeshRotationRestore(
+                    input,
+                    RigidMeshRestoreFile,
+                    AuthoringLocationScale,
+                    AuthoringLocation,
+                    AuthoringRotation,
+                    AuthoringRotationQuaternion,
+                    AuthoringLocationScale,
+                    context,
+                    debugLog: false);
+            }
+
             // Let stock XNA do the heavy lifting (including skin vertex channels).
             var model = base.Process(input, context);
+
+            // Stock ModelProcessor.Scale handles mesh geometry, but transform-only sockets
+            // such as BarrelTip need the same position/scale/orientation round-trip compensation
+            // before the DNA skeleton tag is built.
+            ProcessorScaleUtility.FixNamedSocketBones(
+                model,
+                socketBasisScale: Scale,
+                socketTranslationScale: SocketTranslationScale,
+                socketNodeNames: SocketNodeNames,
+                enableSocketRotationCorrection: SocketRotationCorrection,
+                socketRotationCorrectionNames: SocketRotationCorrectionNames,
+                socketRotationCorrectionAxis: SocketRotationCorrectionAxis,
+                socketRotationCorrectionDegrees: SocketRotationCorrectionDegrees);
 
             // Build skeleton + inverse bind pose from the processed bones.
             AttachSkinningTag(model);

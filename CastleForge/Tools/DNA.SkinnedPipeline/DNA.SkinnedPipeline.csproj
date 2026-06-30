@@ -59,6 +59,8 @@
     <Compile Include="Writers\AnimationClipWriter.cs" />
     <Compile Include="Writers\SkeletonWriter.cs" />
     <Compile Include="Processors\AnimationClipProcessor.cs" />
+    <Compile Include="Processors\ProcessorScaleUtility.cs" />
+    <Compile Include="Processors\ScaledModelProcessor.cs" />
     <Compile Include="Processors\SkinedModelProcessor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

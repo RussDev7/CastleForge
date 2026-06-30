@@ -16,6 +16,9 @@ if "%~1"=="" (
   exit /b 1
 )
 
+REM NOTE: AnimationClipProcessor builds motion data, not model geometry.
+REM Do not pass --fbxComp or --param Scale here.
+
 REM --- run for each dropped file ---
 :loop
 if "%~1"=="" goto done

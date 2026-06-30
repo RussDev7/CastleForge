@@ -1,4 +1,4 @@
-﻿# TexturePacks
+# TexturePacks
 
 > **Re-skin CastleMiner Z far beyond simple block textures.**
 >  
@@ -329,7 +329,23 @@ IconPad    = 6
 IconGap    = 10
 
 [Models]
-FbxComp    = 0.01
+FbxComp    = 10.0
+
+; Optional GLB authoring transform for Blender convenience.
+; Defaults are identity/no-op.
+; Copy Location X, Y, Z from Blender's RootNode transform UI.
+AuthoringLocation = 0, 0, 0
+; 3 values = Blender Euler degrees X, Y, Z.
+; 4 values = Blender Quaternion W, X, Y, Z.
+AuthoringRotation = 0, 0, 0
+
+; Optional rigid mesh authoring cleanup.
+; When enabled, safe rigid mesh-parent nodes are exported with the rotation below,
+; and a .cmzrigid.ini sidecar stores both the original and Blender-authoring transforms so FbxToXnb can apply a restore delta during conversion.
+; 3 values = Blender Euler degrees X, Y, Z.
+; 4 values = Blender Quaternion W, X, Y, Z.
+NormalizeRigidMeshRotation = true
+RigidMeshRotation = 180, 0, 0
 ```
 
 ### Config keys
@@ -346,7 +362,12 @@ FbxComp    = 0.01
 | `PickerUI` | `ButtonsGap` | `18` | Space above the bottom button row. |
 | `PickerUI` | `IconPad` | `6` | Inner padding around row icons. |
 | `PickerUI` | `IconGap` | `10` | Gap between the icon and row text. |
-| `Models` | `FbxComp` | `0.01` | Root scale compensation for GLB → Blender → FBX → XNB model round-trips. Set `1.0` to disable. |
+| `Models` | `FbxComp` | `10.0` | GLB export scale for model round-trips. `10.0` exports extracted models larger for Blender. Rigid exports bake this into positions/translations instead of root node scale so sockets such as `BarrelTip` survive Blender/FBX. FbxToXnb applies `Scale=0.01/FbxComp` when compiling FBX back to XNB, so the default converter scale is `0.001`. |
+| `Models` | `AuthoringLocation` | `0, 0, 0` | Optional GLB root authoring offset. Copy Blender's RootNode Location values in `X, Y, Z` order. The exporter converts Blender's displayed Z-up values to GLB coordinates internally. |
+| `Models` | `AuthoringRotation` | `0, 0, 0` | Optional GLB root authoring rotation. Three values mean Blender Euler degrees `X, Y, Z`; four values mean Blender Quaternion `W, X, Y, Z`. The exporter normalizes quaternions and converts Blender's displayed basis internally. |
+| `Models` | `AuthoringRotationQuaternion` | `1, 0, 0, 0` | Legacy compatibility key. Still read when `AuthoringRotation` is missing. Prefer `AuthoringRotation` for new configs. |
+| `Models` | `NormalizeRigidMeshRotation` | `true` | Optional rigid/static export cleanup. When enabled, one primary safe leaf mesh-parent node is exported with `RigidMeshRotation`, root-level helper/socket nodes and secondary root-level mesh nodes are moved with the visible mesh for Blender authoring, and a `.cmzrigid.ini` sidecar stores both the original and Blender-authoring transforms so FbxToXnb can apply a restore delta during conversion. The restore is delta-based and includes the exported RootNode authoring transform when calculating the authored-to-original correction. This prevents Blender/FBX-baked root offsets from pushing held weapons too low, sideways, or away from helper nodes during XNB conversion. |
+| `Models` | `RigidMeshRotation` | `180, 0, 0` | Target Blender-visible mesh-parent rotation used when `NormalizeRigidMeshRotation=true`. Three values mean Euler degrees `X, Y, Z`; four values mean Quaternion `W, X, Y, Z`. |
 
 ---
 
@@ -1747,8 +1768,97 @@ One of TexturePacks' strongest features is its support for **real model round-tr
 3. Preserve required node and bone names
 4. Edit meshes or textures
 5. Export to FBX
-6. Rebuild to XNB with an XNA-compatible content pipeline
+6. Rebuild to XNB with FbxToXnb using the same `FbxComp` and authoring-transform values
 7. Place the model and its dependencies into the appropriate pack folder
+
+### Scale and RootNode authoring transform
+`FbxComp` controls the larger Blender-friendly export scale. The default is:
+
+```ini
+[Models]
+FbxComp = 10.0
+```
+
+When you convert the edited FBX back to XNB, pass the same value to FbxToXnb:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 "C:\Authoring\0051_Pistol_model.fbx"
+```
+
+FbxToXnb converts that into:
+
+```text
+Scale = 0.01 / FbxComp
+Scale = 0.001
+```
+
+If you want exported GLBs to open in Blender with a custom root offset or rotation, set the optional authoring transform in TexturePacks:
+
+```ini
+[Models]
+AuthoringLocation = 0.64, -1.12, -0.58
+AuthoringRotation = 0, 0, 0
+```
+
+These values are copied from Blender's **RootNode** transform UI:
+
+- `AuthoringLocation` is Blender Location `X, Y, Z`.
+- `AuthoringRotation` with three values is Blender Euler degrees `X, Y, Z`.
+- `AuthoringRotation` with four values is Blender Quaternion `W, X, Y, Z`.
+
+Quaternion example:
+
+```ini
+AuthoringRotation = 1, -1, 0, 0
+```
+
+When converting the edited FBX back to XNB, pass the same values so FbxToXnb can remove the authoring transform before the XNA model is built:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 --authoringLocation "0.64,-1.12,-0.58" --authoringRotation "0,0,0" "C:\Authoring\0051_Pistol_model.fbx"
+```
+
+Leave both authoring values at their defaults if you do not want TexturePacks to move or rotate the GLB root for Blender convenience.
+
+### Normalize rigid mesh rotations for Blender
+
+Some vanilla rigid models store their visible mesh under a rotated local mesh node. That is why one model may open with a clean-looking mesh rotation such as:
+
+```text
+X: 180
+Y: 0
+Z: 0
+```
+
+while another model opens with odd values such as:
+
+```text
+X: -178.528
+Y: -13.7763
+Z: -8.12668
+```
+
+Those rotations come from the original XNA model's local bone/mesh-parent transforms. For rigid/static exports, TexturePacks can optionally write a cleaner Blender authoring rotation while saving the original + Blender-authoring transform pairs to a sidecar metadata file:
+
+```ini
+[Models]
+NormalizeRigidMeshRotation = true
+RigidMeshRotation = 180, 0, 0
+```
+
+When this is enabled, each exported GLB can be accompanied by:
+
+```text
+0052_Shotgun.cmzrigid.ini
+```
+
+Keep that file beside the edited FBX. FbxToXnb first tries an exact FBX-name match, then a texture/FBX-reference match, then a single-sidecar fallback. If more than one sidecar is present and none clearly matches, pass `--rigidMeshRestoreFile` explicitly. The selected file is passed to `ScaledModelProcessor`, which scales the sidecar values into FBX importer units, then applies the original-vs-authoring delta before XNA builds the XNB:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 "C:\Authoring\0051_Pistol_model.fbx"
+```
+
+The cleanup starts from a primary rigid leaf mesh-parent node, then moves root-level helper/socket nodes and secondary root-level mesh nodes such as `BarrelTip` or `Gem` through the same authoring-space change so they stay visually attached to the model in Blender. It does not apply to skinned/animated hierarchies. If the `.cmzrigid.ini` file is missing during conversion, the model can compile with the clean Blender authoring transforms instead of the game transforms; FbxToXnb uses the original + authoring pair as a delta during conversion.
 
 ### Why GLB is recommended
 GLB keeps:

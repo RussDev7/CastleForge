@@ -5,6 +5,7 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 */
 
 using System.Collections.Generic;
+using System.Globalization;
 using XNAConverter;
 using System.Linq;
 using System.Text;
@@ -39,6 +40,14 @@ using System;
 ///   --pipeline     "<path>"   (repeatable) Path to a pipeline DLL *or* folder containing it.
 ///   --pipelineDir  "<path>"   (repeatable) Same as --pipeline, but name makes intent clearer.
 ///   --processor    "<name>"   FBX processor name (ex: SkinedModelProcessor).
+///   --fbxComp      "10.0"     TexturePacks [Models] FbxComp value. Tool computes Scale=0.01/FbxComp.
+///   --scale        "0.001"    Manual FBX ModelProcessor scale override.
+///   --authoringLocation "0,0,0"
+///   --authoringRotation "0,0,0"               3 values = Blender Euler degrees X,Y,Z.
+///   --authoringRotation "1,0,0,0"             4 values = Blender Quaternion W,X,Y,Z.
+///   --authoringRotationQuaternion "1,0,0,0"   Legacy explicit quaternion form.
+///   --rigidMeshRestoreFile "<path>"           Optional TexturePacks .cmzrigid.ini sidecar override.
+///   --noScale                 Do not auto-apply the default FBX scale.
 ///   --animName     "<name>"   AnimationClipProcessor output clip name.
 ///   --sourceClip   "<name>"   FBX take name to use when multiple takes exist.
 ///   --frameRate    "30"       AnimationClipProcessor sample rate.
@@ -46,8 +55,8 @@ using System;
 ///
 /// Examples
 /// --------
-///  (items / rigid)
-///    FbxToXnbXna.exe "C:\...\0051_Pistol_model.fbx"
+///  (items / rigid exported from TexturePacks with FbxComp=10.0)
+///    FbxToXnbXna.exe --fbxComp 10.0 "C:\...\0051_Pistol_model.fbx"
 ///
 ///  (skinned - you MUST provide the custom pipeline DLL that defines SkinedModelProcessor)
 ///    FbxToXnbXna.exe --processor SkinedModelProcessor --pipelineDir "C:\...\YourPipelineBin" "C:\...\ALIEN.fbx"
@@ -69,6 +78,17 @@ using System;
 /// </summary>
 internal static class Program
 {
+    /// <summary>
+    /// Final root scale the game expects for FBX model content.
+    /// </summary>
+    private const float GameFbxModelScale = 0.01f;
+
+    /// <summary>
+    /// Default TexturePacks [Models] FbxComp value used for GLB/FBX round-trip exports.
+    /// Effective converter Scale is GameFbxModelScale / FbxComp.
+    /// </summary>
+    private const float DefaultExtractorFbxComp = 10.0f;
+
     #region Entry Point
 
     /// <summary>
@@ -159,6 +179,9 @@ internal static class Program
     /// - Fbxs: list of .fbx paths detected in args.
     /// - ExtraPipeline: repeatable list of DLL/dir paths used to resolve custom processors.
     /// - FbxProcessor: optional processor override (kept null/empty by default for compatibility).
+    /// - ProcessorParameters: generic pipeline processor parameters such as Scale=0.001.
+    /// - FbxComp: TexturePacks [Models] FbxComp value used to calculate Scale=0.01/FbxComp.
+    /// - DisableFbxScale: prevents the automatic model scale injection.
     /// - ShowHelp: indicates help was requested.
     /// </summary>
     private sealed class Options
@@ -175,6 +198,12 @@ internal static class Program
         // Optional processor parameters, used by custom processors such as AnimationClipProcessor.
         public readonly Dictionary<string, string> ProcessorParameters =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // TexturePacks [Models] FbxComp value. When set, model Scale is calculated as 0.01 / FbxComp.
+        public float? FbxComp;
+
+        // When false, model processors receive a calculated Scale by default.
+        public bool DisableFbxScale;
 
         public bool ShowHelp;
     }
@@ -234,6 +263,96 @@ internal static class Program
                 {
                     opt.FbxProcessor = TrimQuotes(args[++i]);
                 }
+                continue;
+            }
+
+            if (IsFlag(a, "--fbxComp", "--extractorFbxComp", "--extractorScale", "--tpFbxComp"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    string fbxCompText = TrimQuotes(args[++i]);
+                    if (TryParsePositiveFloat(fbxCompText, out float fbxComp))
+                    {
+                        opt.FbxComp = fbxComp;
+                        opt.DisableFbxScale = false;
+                    }
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--scale", "--fbxScale", "--modelScale"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    string scaleText = TrimQuotes(args[++i]);
+                    if (TryParsePositiveFloat(scaleText, out float scale))
+                    {
+                        opt.ProcessorParameters["Scale"] = scale.ToString(CultureInfo.InvariantCulture);
+                        opt.DisableFbxScale = false;
+                    }
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--authoringLocation", "--authorLocation", "--exportLocation"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["AuthoringLocation"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--authoringRotation", "--authorRotation", "--exportRotation"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["AuthoringRotation"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--authoringRotationDegrees", "--authorRotationDegrees", "--exportRotationDegrees"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["AuthoringRotation"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--authoringRotationQuaternion", "--authorRotationQuaternion", "--exportRotationQuaternion"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["AuthoringRotationQuaternion"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--authoringLocationScale", "--authorLocationScale"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["AuthoringLocationScale"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--rigidMeshRestoreFile", "--rigidMeshRestore", "--cmzRigidRestore"))
+            {
+                if (i + 1 < args.Length)
+                {
+                    opt.ProcessorParameters["RigidMeshRestoreFile"] = TrimQuotes(args[++i]);
+                }
+                continue;
+            }
+
+            if (IsFlag(a, "--noScale", "--noFbxScale"))
+            {
+                opt.DisableFbxScale = true;
+                opt.FbxComp = null;
+                opt.ProcessorParameters.Remove("Scale");
                 continue;
             }
 
@@ -314,6 +433,330 @@ internal static class Program
     }
 
     /// <summary>
+    /// Uses the bundled DNA.SkinnedPipeline processor automatically when it is available.
+    /// This keeps drag/drop normal model builds socket-safe without requiring users to type
+    /// --processor ScaledModelProcessor every time.
+    /// </summary>
+    private static void ApplyDefaultScaledModelProcessorIfAvailable(Options opt)
+    {
+        if (opt == null)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(opt.FbxProcessor))
+            return;
+
+        string bundledDll = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SkinedModelProcessor", "DNA.SkinnedPipeline.dll");
+        if (File.Exists(bundledDll))
+        {
+            AddUniquePath(opt.ExtraPipeline, bundledDll);
+            opt.FbxProcessor = "ScaledModelProcessor";
+            return;
+        }
+
+        // If the caller already supplied a pipeline folder/file that looks like the DNA pipeline,
+        // still select ScaledModelProcessor by default.
+        foreach (var raw in opt.ExtraPipeline)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            string p = raw.Trim().Trim('"');
+
+            if (File.Exists(p) && string.Equals(Path.GetFileName(p), "DNA.SkinnedPipeline.dll", StringComparison.OrdinalIgnoreCase))
+            {
+                opt.FbxProcessor = "ScaledModelProcessor";
+                return;
+            }
+
+            if (Directory.Exists(p) && File.Exists(Path.Combine(p, "DNA.SkinnedPipeline.dll")))
+            {
+                opt.FbxProcessor = "ScaledModelProcessor";
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the final processor parameter set for a conversion.
+    /// Adds a calculated Scale for standard model processors unless the user already supplied Scale,
+    /// disabled auto-scale, or selected an animation-only processor.
+    /// </summary>
+    private static Dictionary<string, string> BuildEffectiveProcessorParameters(Options opt)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (opt != null && opt.ProcessorParameters != null)
+        {
+            foreach (var pair in opt.ProcessorParameters)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                    continue;
+
+                parameters[pair.Key.Trim()] = pair.Value ?? "";
+            }
+        }
+
+        if (opt != null &&
+            !opt.DisableFbxScale &&
+            !parameters.ContainsKey("Scale") &&
+            ShouldApplyDefaultFbxModelScale(opt.FbxProcessor))
+        {
+            float fbxComp = opt.FbxComp ?? DefaultExtractorFbxComp;
+            float scale = CalculateModelScaleForFbxComp(fbxComp);
+            parameters["Scale"] = scale.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return parameters;
+    }
+
+    /// <summary>
+    /// Adds the rigid mesh restore sidecar processor parameter when one is available for the FBX.
+    /// </summary>
+    /// <remarks>
+    /// TexturePacks writes a <c>.cmzrigid.ini</c> sidecar when rigid mesh rotation normalization is used.
+    /// FbxToXnb passes that sidecar into the content pipeline so the processor can undo the
+    /// Blender-friendly authoring rotation cleanup and rebuild the model in game-space.
+    /// 
+    /// An explicitly supplied <c>RigidMeshRestoreFile</c> always wins. Otherwise, the converter attempts
+    /// to auto-detect the sidecar beside the FBX using the normal TexturePacks round-trip naming flow.
+    /// </remarks>
+    private static void ApplyRigidMeshRestoreSidecarIfAvailable(string fbxPath, Dictionary<string, string> processorParameters)
+    {
+        if (string.IsNullOrWhiteSpace(fbxPath) || processorParameters == null)
+            return;
+
+        if (processorParameters.ContainsKey("RigidMeshRestoreFile"))
+        {
+            EchoRigidMeshRestoreSidecar(processorParameters["RigidMeshRestoreFile"], "explicit");
+            return;
+        }
+
+        string sidecar = FindRigidMeshRestoreSidecar(fbxPath, out string reason);
+        if (!string.IsNullOrWhiteSpace(sidecar))
+        {
+            processorParameters["RigidMeshRestoreFile"] = Path.GetFullPath(sidecar);
+            EchoRigidMeshRestoreSidecar(sidecar, reason);
+        }
+    }
+
+    /// <summary>
+    /// Finds the best <c>.cmzrigid.ini</c> sidecar for a given FBX file.
+    /// </summary>
+    /// <remarks>
+    /// The preferred match is an exact base-name match, such as <c>Raygun.fbx</c> with
+    /// <c>Raygun.cmzrigid.ini</c>. If the user renamed the FBX after editing in Blender, this falls back
+    /// to common TexturePacks clues such as embedded FBX references, nearby texture names, or a single
+    /// sidecar in the folder.
+    /// </remarks>
+    private static string FindRigidMeshRestoreSidecar(string fbxPath, out string reason)
+    {
+        reason = null;
+
+        if (string.IsNullOrWhiteSpace(fbxPath))
+            return null;
+
+        string dir = Path.GetDirectoryName(fbxPath);
+        if (string.IsNullOrWhiteSpace(dir))
+            dir = ".";
+
+        if (!Directory.Exists(dir))
+            return null;
+
+        string asset = Path.GetFileNameWithoutExtension(fbxPath);
+        string exact = Path.Combine(dir, asset + ".cmzrigid.ini");
+
+        if (File.Exists(exact))
+        {
+            reason = "exact name";
+            return exact;
+        }
+
+        string[] sidecars = Directory.GetFiles(dir, "*.cmzrigid.ini", SearchOption.TopDirectoryOnly);
+        if (sidecars.Length == 0)
+            return null;
+
+        // Common workflow: export 0051_Pistol.glb + 0051_Pistol.cmzrigid.ini,
+        // edit in Blender, then save/convert as Raygun.fbx. In that case the FBX
+        // no longer shares the sidecar's base name, but it usually still contains
+        // the texture/source name such as 0051_Pistol_model.png. Match that first.
+        string[] fbxMatched = sidecars
+            .Where(path => FbxAppearsToReferenceSidecarBase(fbxPath, GetRigidMeshSidecarBase(path)))
+            .ToArray();
+
+        if (fbxMatched.Length == 1)
+        {
+            reason = "FBX reference match";
+            return fbxMatched[0];
+        }
+
+        // Secondary hint: if exactly one sidecar has a nearby texture with the same
+        // exported model base name, use it. This catches folders where the FBX importer
+        // strips/rewrites texture strings.
+        string[] textureMatched = sidecars
+            .Where(path => DirectoryContainsTextureForSidecarBase(dir, GetRigidMeshSidecarBase(path)))
+            .ToArray();
+
+        if (textureMatched.Length == 1)
+        {
+            reason = "texture name match";
+            return textureMatched[0];
+        }
+
+        if (sidecars.Length == 1)
+        {
+            reason = "single sidecar fallback";
+            return sidecars[0];
+        }
+
+        Console.WriteLine("  ! Multiple .cmzrigid.ini files found and none matched this FBX. Use --rigidMeshRestoreFile \"path\\to\\model.cmzrigid.ini\".");
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the original exported model base name from a rigid mesh restore sidecar path.
+    /// </summary>
+    /// <remarks>
+    /// Sidecars use the compound extension <c>.cmzrigid.ini</c>, so this trims that full suffix instead
+    /// of only removing <c>.ini</c>. For example, <c>0051_Pistol.cmzrigid.ini</c> becomes
+    /// <c>0051_Pistol</c>.
+    /// </remarks>
+    private static string GetRigidMeshSidecarBase(string path)
+    {
+        string name = Path.GetFileName(path) ?? "";
+
+        const string suffix = ".cmzrigid.ini";
+        if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            return name.Substring(0, name.Length - suffix.Length);
+
+        return Path.GetFileNameWithoutExtension(path);
+    }
+
+    /// <summary>
+    /// Checks whether the FBX file appears to reference the source model name used by a sidecar.
+    /// </summary>
+    /// <remarks>
+    /// This supports the common Blender workflow where the edited FBX is renamed, but still contains
+    /// texture or source references such as <c>0051_Pistol</c> or <c>0051_Pistol_model</c>.
+    /// </remarks>
+    private static bool FbxAppearsToReferenceSidecarBase(string fbxPath, string sidecarBase)
+    {
+        if (string.IsNullOrWhiteSpace(fbxPath) || string.IsNullOrWhiteSpace(sidecarBase) || !File.Exists(fbxPath))
+            return false;
+
+        try
+        {
+            byte[] bytes = File.ReadAllBytes(fbxPath);
+            string text = System.Text.Encoding.UTF8.GetString(bytes);
+            return text.IndexOf(sidecarBase, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf(sidecarBase + "_model", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Checks for nearby texture files that indicate a sidecar belongs to the current FBX folder.
+    /// </summary>
+    /// <remarks>
+    /// TexturePacks exports commonly use names like <c>0051_Pistol_model.png</c>. This fallback helps
+    /// auto-detect the correct restore sidecar when the FBX no longer contains readable source strings.
+    /// </remarks>
+    private static bool DirectoryContainsTextureForSidecarBase(string dir, string sidecarBase)
+    {
+        if (string.IsNullOrWhiteSpace(dir) || string.IsNullOrWhiteSpace(sidecarBase))
+            return false;
+
+        string[] patterns =
+        {
+        sidecarBase + ".png",
+        sidecarBase + "_model.png",
+        sidecarBase + "_model_0.png",
+        sidecarBase + "*.png"
+    };
+
+        foreach (string pattern in patterns)
+        {
+            try
+            {
+                if (Directory.GetFiles(dir, pattern, SearchOption.TopDirectoryOnly).Length > 0)
+                    return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Prints the rigid mesh restore sidecar selected for this conversion.
+    /// </summary>
+    /// <remarks>
+    /// The reason text explains whether the sidecar was explicitly supplied or auto-detected by exact
+    /// name, FBX reference, texture name, or single-sidecar fallback. This makes converter logs easier
+    /// to verify when debugging TexturePacks GLB → Blender → FBX → XNB round-trips.
+    /// </remarks>
+    private static void EchoRigidMeshRestoreSidecar(string sidecarPath, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(sidecarPath))
+            return;
+
+        string suffix = string.IsNullOrWhiteSpace(reason) ? "" : " (" + reason + ")";
+        Console.WriteLine("  * Rigid Mesh Restore: " + sidecarPath + suffix);
+    }
+
+    /// <summary>
+    /// Converts a TexturePacks FbxComp value into the XNA ModelProcessor Scale value needed for game-ready content.
+    /// Example: FbxComp=10.0 -> Scale=0.001 because 0.01 / 10.0 = 0.001.
+    /// </summary>
+    private static float CalculateModelScaleForFbxComp(float fbxComp)
+    {
+        if (fbxComp <= 0f || float.IsNaN(fbxComp) || float.IsInfinity(fbxComp))
+            return GameFbxModelScale / DefaultExtractorFbxComp;
+
+        return GameFbxModelScale / fbxComp;
+    }
+
+    /// <summary>
+    /// Only auto-scale processors that are expected to produce models.
+    /// AnimationClipProcessor is intentionally excluded because it builds animation clips, not model geometry.
+    /// </summary>
+    private static bool ShouldApplyDefaultFbxModelScale(string processorName)
+    {
+        if (string.IsNullOrWhiteSpace(processorName))
+            return true; // XNBBuilderEx default is ModelProcessor.
+
+        processorName = processorName.Trim();
+
+        if (processorName.IndexOf("Animation", StringComparison.OrdinalIgnoreCase) >= 0)
+            return false;
+
+        return processorName.IndexOf("ModelProcessor", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// Parses positive float values using invariant culture while accepting comma decimal separators.
+    /// </summary>
+    private static bool TryParsePositiveFloat(string text, out float value)
+    {
+        value = 0f;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        text = text.Trim().Replace(',', '.');
+
+        if (!float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            return false;
+
+        return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
+    /// <summary>
     /// Case-insensitive flag matcher.
     /// </summary>
     private static bool IsFlag(string token, params string[] flags)
@@ -344,8 +787,34 @@ internal static class Program
         Console.WriteLine("Flags:");
         Console.WriteLine("  --pipeline <dllOrDir>     Add custom pipeline DLL or folder (repeatable)");
         Console.WriteLine("  --pipelineDir <dir>       Same as --pipeline (repeatable)");
-        Console.WriteLine("  --processor <name>        FBX processor name (ex: SkinedModelProcessor)");
+        Console.WriteLine("  --processor <name>        FBX processor name (ex: ScaledModelProcessor, SkinedModelProcessor)");
+        Console.WriteLine("  --fbxComp <value>         TexturePacks [Models] FbxComp; computes Scale=0.01/FbxComp");
+        Console.WriteLine("  --scale <value>           Manual FBX model scale override");
+        Console.WriteLine("  --authoringLocation <x,y,z>");
+        Console.WriteLine("                             Inverse-correct Blender RootNode UI Location from TexturePacks config");
+        Console.WriteLine("  --authoringRotation <x,y,z | w,x,y,z>");
+        Console.WriteLine("                             3 values = Blender Euler degrees X,Y,Z; 4 values = Quaternion W,X,Y,Z");
+        Console.WriteLine("  --authoringRotationDegrees <x,y,z>");
+        Console.WriteLine("                             Explicit Blender Euler degrees form; alias for --authoringRotation");
+        Console.WriteLine("  --authoringRotationQuaternion <w,x,y,z>");
+        Console.WriteLine("                             Explicit/legacy Blender RootNode UI Quaternion; order is W,X,Y,Z");
+        Console.WriteLine("  --authoringLocationScale <value>");
+        Console.WriteLine("                             Advanced: default 100 for Blender FBX importer units");
+        Console.WriteLine("  --rigidMeshRestoreFile <path>");
+        Console.WriteLine("                             Optional TexturePacks .cmzrigid.ini sidecar");
+        Console.WriteLine("                             Auto-detect tries exact FBX name, FBX/texture reference match, then single-sidecar fallback");
+        Console.WriteLine("  --noScale                 Do not auto-apply the calculated FBX model scale");
         Console.WriteLine("  --param Name=Value        Generic processor parameter");
+        Console.WriteLine("                              Useful socket params:");
+        Console.WriteLine("                              SocketDebugLog=True");
+        Console.WriteLine("                              SocketBakeToModelRoot=False");
+        Console.WriteLine("                              SocketPostProcessCorrection=True");
+        Console.WriteLine("                              SocketBasisTransform=BlenderGlbRoundTripForward");
+        Console.WriteLine("                              SocketBasisScale=0.01");
+        Console.WriteLine("                              SocketTranslationScale=<manual override>");
+        Console.WriteLine("                              SocketRotationCorrection=True");
+        Console.WriteLine("                              SocketRotationCorrectionAxis=Y");
+        Console.WriteLine("                              SocketRotationCorrectionDegrees=180");
         Console.WriteLine("  --animName <name>         AnimationClipProcessor output clip name");
         Console.WriteLine("  --sourceClip <name>       AnimationClipProcessor source FBX take");
         Console.WriteLine("  --frameRate <fps>         AnimationClipProcessor sample rate, usually 30");
@@ -357,7 +826,10 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  FbxToXnbXna.exe \"C:\\...\\0051_Pistol_model.fbx\"");
-        Console.WriteLine("  FbxToXnbXna.exe --processor SkinedModelProcessor --pipelineDir \"C:\\...\\PipelineBin\" \"C:\\...\\ALIEN.fbx\"");
+        Console.WriteLine("  FbxToXnbXna.exe --fbxComp 10.0 \"C:\\...\\TexturePacksRoundTrip.fbx\"");
+        Console.WriteLine("  FbxToXnbXna.exe --scale 0.001 \"C:\\...\\ManualScaleOverride.fbx\"");
+        Console.WriteLine("  FbxToXnbXna.exe --processor ScaledModelProcessor --pipelineDir \"C:\\...\\SkinedModelProcessor\" --fbxComp 10.0 \"C:\\...\\0051_Pistol_model.fbx\"");
+        Console.WriteLine("  FbxToXnbXna.exe --processor SkinedModelProcessor --pipelineDir \"C:\\...\\PipelineBin\" --fbxComp 10.0 \"C:\\...\\ALIEN.fbx\"");
         Console.WriteLine("  FbxToXnbXna.exe --processor AnimationClipProcessor --pipelineDir \"C:\\...\\SkinedModelProcessor\" --animName Reload \"C:\\...\\reload.fbx\"");
         Console.WriteLine();
     }
@@ -429,12 +901,23 @@ internal static class Program
 
             // --- Invoke pipeline build ---
 
-            var builder = new XNBBuilderEx(targetPlatform: "Windows", targetProfile: "Reach", compressContent: true);
+            var builder = new XNBBuilderEx(targetPlatform: "Windows", targetProfile: "Reach", compressContent: true)
+            {
+                LogFilePath = Path.Combine(outDir, "logfile.txt")
+            };
+
+            // If the bundled CMZ/DNA pipeline is available and the user did not choose a
+            // processor, prefer ScaledModelProcessor so transform-only sockets such as
+            // BarrelTip receive the same round-trip scale as visible mesh geometry.
+            ApplyDefaultScaledModelProcessorIfAvailable(opt);
 
             // OPTIONAL: If you add a property in XNBBuilderEx like builder.FbxProcessorName, set it here.
             // If you DIDN'T add such a property, ignore this and keep processor selection inside XNBBuilderEx.
+            var effectiveProcessorParameters = BuildEffectiveProcessorParameters(opt);
+            ApplyRigidMeshRestoreSidecarIfAvailable(fbxPath, effectiveProcessorParameters);
+
             TrySetBuilderFbxProcessor(builder, opt.FbxProcessor);
-            TrySetBuilderProcessorParameters(builder, opt.ProcessorParameters);
+            TrySetBuilderProcessorParameters(builder, effectiveProcessorParameters);
 
             string intermediateDir = Path.Combine(Path.GetTempPath(), "XNB_Inter_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(intermediateDir);
@@ -449,8 +932,13 @@ internal static class Program
                 Console.WriteLine($"  * FBX Processor: {opt.FbxProcessor}");
             if (opt.ExtraPipeline.Count > 0)
                 Console.WriteLine($"  * Extra Pipeline: {string.Join("; ", opt.ExtraPipeline)}");
-            if (opt.ProcessorParameters.Count > 0)
-                Console.WriteLine($"  * Processor Params: {string.Join(", ", opt.ProcessorParameters.Select(kv => kv.Key + "=" + kv.Value))}");
+            if (!opt.DisableFbxScale && ShouldApplyDefaultFbxModelScale(opt.FbxProcessor) && !opt.ProcessorParameters.ContainsKey("Scale"))
+            {
+                float fbxComp = opt.FbxComp ?? DefaultExtractorFbxComp;
+                Console.WriteLine($"  * FbxComp: {fbxComp.ToString(CultureInfo.InvariantCulture)} -> Scale={CalculateModelScaleForFbxComp(fbxComp).ToString(CultureInfo.InvariantCulture)}");
+            }
+            if (effectiveProcessorParameters.Count > 0)
+                Console.WriteLine($"  * Processor Params: {string.Join(", ", effectiveProcessorParameters.Select(kv => kv.Key + "=" + kv.Value))}");
 
             // NOTE: This call assumes you updated XNBBuilderEx.PackageContent signature to include:
             //   string[] extraPipelineAssembliesOrDirs
@@ -654,8 +1142,7 @@ internal static class Program
             if (p == null)
                 return;
 
-            var target = p.GetValue(builder, null) as IDictionary<string, string>;
-            if (target == null)
+            if (!(p.GetValue(builder, null) is IDictionary<string, string> target))
                 return;
 
             foreach (var pair in parameters)

@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -29,9 +29,31 @@ namespace TexturePacks
         public int    UI_IconGap    = 10;
 
         // Model export / round-trip tuning.
-        // FBX_COMP: Root scale compensation for GLB->Blender->FBX->XNB workflows.
-        // Common value is 0.01 (cm vs m). Set to 1.0 to disable.
-        public float ModelFbxComp = 0.01f;
+        // FbxComp is the GLB export scale.
+        // 10.0 exports extracted models much larger for Blender editing.
+        // Rigid model exports bake this into positions/translations instead of root node scale,
+        // which keeps socket nodes like BarrelTip stable through Blender/FBX.
+        // FbxToXnb applies Scale=0.01/FbxComp when compiling edited FBX files back to game-ready XNB.
+        public float ModelFbxComp = 10.0f;
+
+        // Optional authoring transform applied to exported GLBs for Blender convenience.
+        // Defaults are identity/no-op. AuthoringRotation accepts either Blender Euler degrees
+        // X,Y,Z or Blender quaternion W,X,Y,Z. The legacy AuthoringRotationQuaternion key is
+        // still read when AuthoringRotation is missing.
+        public float ModelAuthoringLocationX = 0f;
+        public float ModelAuthoringLocationY = 0f;
+        public float ModelAuthoringLocationZ = 0f;
+        public string ModelAuthoringRotation = "0, 0, 0";
+        public float ModelAuthoringRotationW = 1f;
+        public float ModelAuthoringRotationX = 0f;
+        public float ModelAuthoringRotationY = 0f;
+        public float ModelAuthoringRotationZ = 0f;
+        public bool ModelNormalizeRigidMeshRotation = true;
+        public string ModelRigidMeshRotation = "180, 0, 0";
+        public float ModelRigidMeshRotationW = 0f;
+        public float ModelRigidMeshRotationX = 1f;
+        public float ModelRigidMeshRotationY = 0f;
+        public float ModelRigidMeshRotationZ = 0f;
 
         /// <summary>
         /// Export ALL game assets via an hotkey combo.
@@ -83,13 +105,48 @@ namespace TexturePacks
                     "IconGap    = 10",
                     "",
                     "[Models]",
-                    "; Root scale compensation for GLB exports (Blender/FBX round-trip).",
-                    "; 0.01 is common (cm vs m). Set to 1.0 to disable.",
-                    "FbxComp    = 0.01",
+                    "; GLB export scale for Blender/FBX round-trips.",
+                    "; 10.0 exports models larger/easier to edit.",
+                    "; Rigid exports bake this into positions/translations instead of root node scale,",
+                    "; keeping socket nodes like BarrelTip stable through Blender/FBX.",
+                    "; FbxToXnb applies Scale=0.01/FbxComp when compiling FBX back to XNB.",
+                    "FbxComp    = 10.0",
+                    "",
+                    "; Optional GLB authoring transform for Blender convenience.",
+                    "; Defaults are identity/no-op.",
+                    "; Copy Location X, Y, Z from Blender's RootNode transform UI.",
+                    "AuthoringLocation = 0, 0, 0",
+                    "; 3 values = Blender Euler degrees X, Y, Z.",
+                    "; 4 values = Blender Quaternion W, X, Y, Z.",
+                    "AuthoringRotation = 0, 0, 0",
+                    "",
+                    "; Optional rigid mesh authoring cleanup.",
+                    "; When enabled, safe rigid mesh-parent nodes use the rotation below,",
+                    "; and a .cmzrigid.ini sidecar stores original + authoring transforms for FbxToXnb.",
+                    "; 3 values = Blender Euler degrees X, Y, Z.",
+                    "; 4 values = Blender Quaternion W, X, Y, Z.",
+                    "NormalizeRigidMeshRotation = true",
+                    "RigidMeshRotation = 180, 0, 0",
                 });
             }
 
             var ini = SimpleIni.Load(ConfigPath);
+            var authoringLocation = ParseFloatList(
+                ini.GetString("Models", "AuthoringLocation", "0, 0, 0"),
+                new[] { 0f, 0f, 0f },
+                3);
+            string authoringRotationText = ini.GetString("Models", "AuthoringRotation", null);
+            string authoringRotationQuaternionText = ini.GetString("Models", "AuthoringRotationQuaternion", "1, 0, 0, 0");
+            var authoringRotation = ParseAuthoringRotation(
+                authoringRotationText,
+                authoringRotationQuaternionText,
+                out string savedAuthoringRotation);
+            string rigidMeshRotationText = ini.GetString("Models", "RigidMeshRotation", "180, 0, 0");
+            var rigidMeshRotation = ParseAuthoringRotation(
+                rigidMeshRotationText,
+                "0, 1, 0, 0",
+                out string savedRigidMeshRotation);
+
             return new TPConfig
             {
                 // General.
@@ -107,7 +164,21 @@ namespace TexturePacks
                 UI_IconGap    = ini.GetClamp("PickerUI","IconGap",    10, 0,  32),
 
                 // Models.
-                ModelFbxComp  = ini.GetFloat("Models", "FbxComp", 0.01f),
+                ModelFbxComp  = ini.GetFloat("Models", "FbxComp", 10.0f),
+                ModelAuthoringLocationX = authoringLocation[0],
+                ModelAuthoringLocationY = authoringLocation[1],
+                ModelAuthoringLocationZ = authoringLocation[2],
+                ModelAuthoringRotation = savedAuthoringRotation,
+                ModelAuthoringRotationW = authoringRotation[0],
+                ModelAuthoringRotationX = authoringRotation[1],
+                ModelAuthoringRotationY = authoringRotation[2],
+                ModelAuthoringRotationZ = authoringRotation[3],
+                ModelNormalizeRigidMeshRotation = ini.GetBool("Models", "NormalizeRigidMeshRotation", true),
+                ModelRigidMeshRotation = savedRigidMeshRotation,
+                ModelRigidMeshRotationW = rigidMeshRotation[0],
+                ModelRigidMeshRotationX = rigidMeshRotation[1],
+                ModelRigidMeshRotationY = rigidMeshRotation[2],
+                ModelRigidMeshRotationZ = rigidMeshRotation[3],
             };
         }
 
@@ -143,7 +214,31 @@ namespace TexturePacks
                 $"; Icon padding inside a row.",
                 $"IconPad    = {UI_IconPad}",
                 $"; Gap between icon and text.",
-                $"IconGap    = {UI_IconGap}"
+                $"IconGap    = {UI_IconGap}",
+                $"",
+                $"[Models]",
+                $"; GLB export scale for Blender/FBX round-trips.",
+                $"; 10.0 exports models larger/easier to edit.",
+                $"; Rigid exports bake this into positions/translations instead of root node scale,",
+                $"; keeping socket nodes like BarrelTip stable through Blender/FBX.",
+                $"; FbxToXnb applies Scale=0.01/FbxComp when compiling FBX back to XNB.",
+                $"FbxComp    = {ModelFbxComp.ToString(CultureInfo.InvariantCulture)}",
+                $"",
+                $"; Optional GLB authoring transform for Blender convenience.",
+                $"; Defaults are identity/no-op.",
+                $"; Copy Location X, Y, Z from Blender's RootNode transform UI.",
+                $"AuthoringLocation = {ModelAuthoringLocationX.ToString(CultureInfo.InvariantCulture)}, {ModelAuthoringLocationY.ToString(CultureInfo.InvariantCulture)}, {ModelAuthoringLocationZ.ToString(CultureInfo.InvariantCulture)}",
+                $"; 3 values = Blender Euler degrees X, Y, Z.",
+                $"; 4 values = Blender Quaternion W, X, Y, Z.",
+                $"AuthoringRotation = {ModelAuthoringRotation}",
+                $"",
+                $"; Optional rigid mesh authoring cleanup.",
+                $"; When enabled, safe rigid mesh-parent nodes use the rotation below,",
+                $"; and a .cmzrigid.ini sidecar stores original + authoring transforms for FbxToXnb.",
+                $"; 3 values = Blender Euler degrees X, Y, Z.",
+                $"; 4 values = Blender Quaternion W, X, Y, Z.",
+                $"NormalizeRigidMeshRotation = {ModelNormalizeRigidMeshRotation.ToString().ToLowerInvariant()}",
+                $"RigidMeshRotation = {ModelRigidMeshRotation}"
             });
 
             try
@@ -166,6 +261,93 @@ namespace TexturePacks
             var cfg = LoadOrCreate();
             cfg.ActivePack = string.IsNullOrWhiteSpace(pack) ? "" : pack.Trim();
             cfg.Save();
+        }
+
+        private static float[] ParseFloatList(string text, float[] defaults, int count)
+        {
+            var values = new float[count];
+            for (int i = 0; i < count; i++)
+                values[i] = (defaults != null && i < defaults.Length) ? defaults[i] : 0f;
+
+            if (string.IsNullOrWhiteSpace(text))
+                return values;
+
+            var parts = text.Split(new[] { ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < count && i < parts.Length; i++)
+            {
+                var s = (parts[i] ?? "").Trim().Replace(',', '.');
+                if (float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+                    values[i] = v;
+            }
+
+            return values;
+        }
+
+        private static float[] ParseAuthoringRotation(string flexibleText, string quaternionText, out string savedText)
+        {
+            string text = !string.IsNullOrWhiteSpace(flexibleText)
+                ? flexibleText
+                : quaternionText;
+
+            savedText = !string.IsNullOrWhiteSpace(text) ? text.Trim() : "0, 0, 0";
+
+            var values = ParseFloatListAny(text);
+            if (values != null)
+            {
+                if (values.Length == 3)
+                {
+                    var q = QuaternionFromEulerDegrees(values[0], values[1], values[2]);
+                    return new[] { q.W, q.X, q.Y, q.Z };
+                }
+
+                if (values.Length == 4)
+                {
+                    var q = new System.Numerics.Quaternion(values[1], values[2], values[3], values[0]);
+                    if (q.LengthSquared() < 0.0000001f)
+                        q = System.Numerics.Quaternion.Identity;
+                    else
+                        q = System.Numerics.Quaternion.Normalize(q);
+
+                    return new[] { q.W, q.X, q.Y, q.Z };
+                }
+            }
+
+            savedText = "0, 0, 0";
+            return new[] { 1f, 0f, 0f, 0f };
+        }
+
+        private static System.Numerics.Quaternion QuaternionFromEulerDegrees(float xDegrees, float yDegrees, float zDegrees)
+        {
+            const float degToRad = (float)(Math.PI / 180.0);
+            var qx = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitX, xDegrees * degToRad);
+            var qy = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitY, yDegrees * degToRad);
+            var qz = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitZ, zDegrees * degToRad);
+            var q = qx * qy * qz;
+
+            if (q.LengthSquared() < 0.0000001f)
+                return System.Numerics.Quaternion.Identity;
+
+            return System.Numerics.Quaternion.Normalize(q);
+        }
+
+        private static float[] ParseFloatListAny(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var parts = text.Split(new[] { ',', ';', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3 && parts.Length != 4)
+                return null;
+
+            var values = new float[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var s = (parts[i] ?? "").Trim().Replace(',', '.');
+                if (!float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out values[i]))
+                    return null;
+            }
+
+            return values;
         }
     }
 

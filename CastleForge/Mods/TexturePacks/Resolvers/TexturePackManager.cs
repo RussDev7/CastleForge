@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -7928,6 +7928,213 @@ namespace TexturePacks
         /// </summary>
         static class ModelExporter
         {
+            /// <summary>
+            /// Optional root-level authoring transform applied to exported GLB models for Blender convenience.
+            /// </summary>
+            /// <remarks>
+            /// Config values are copied from Blender's RootNode transform UI, then converted into raw glTF
+            /// node-space before export. FbxToXnb receives the same Blender-facing values and removes the
+            /// inverse transform during conversion so the final XNB returns to the game's expected space.
+            /// </remarks>
+            private struct ModelAuthoringTransform
+            {
+                /// <summary>Root translation in raw glTF node-space units.</summary>
+                public System.Numerics.Vector3 Location;
+
+                /// <summary>Root rotation in raw glTF node-space quaternion form.</summary>
+                public System.Numerics.Quaternion Rotation;
+
+                /// <summary>
+                /// Returns whether this authoring transform is effectively identity/no-op.
+                /// </summary>
+                public bool IsIdentity
+                {
+                    get
+                    {
+                        return Location.LengthSquared() < 0.0000001f &&
+                               Math.Abs(Rotation.X) < 0.000001f &&
+                               Math.Abs(Rotation.Y) < 0.000001f &&
+                               Math.Abs(Rotation.Z) < 0.000001f &&
+                               Math.Abs(Rotation.W - 1f) < 0.000001f;
+                    }
+                }
+
+                /// <summary>
+                /// Builds a GLB-space authoring transform from TexturePacks model config values.
+                /// </summary>
+                /// <remarks>
+                /// The config stores Blender-facing values: Location as Blender X,Y,Z and rotation as either
+                /// Euler-derived or quaternion W,X,Y,Z values. This method normalizes the quaternion and
+                /// converts the Blender basis into the raw glTF basis used by SharpGLTF node transforms.
+                /// </remarks>
+                public static ModelAuthoringTransform FromConfig(TPConfig cfg)
+                {
+                    if (cfg == null)
+                        return Identity;
+
+                    var rotation = new System.Numerics.Quaternion(
+                        cfg.ModelAuthoringRotationX,
+                        cfg.ModelAuthoringRotationY,
+                        cfg.ModelAuthoringRotationZ,
+                        cfg.ModelAuthoringRotationW);
+
+                    if (rotation.LengthSquared() < 0.0000001f)
+                        rotation = System.Numerics.Quaternion.Identity;
+                    else
+                        rotation = System.Numerics.Quaternion.Normalize(rotation);
+
+                    return new ModelAuthoringTransform
+                    {
+                        Location = BlenderLocationToGltf(new System.Numerics.Vector3(
+                            cfg.ModelAuthoringLocationX,
+                            cfg.ModelAuthoringLocationY,
+                            cfg.ModelAuthoringLocationZ)),
+                        Rotation = BlenderQuaternionToGltf(rotation)
+                    };
+                }
+
+                /// <summary>
+                /// Identity authoring transform used when no Blender convenience transform is configured.
+                /// </summary>
+                public static ModelAuthoringTransform Identity => new ModelAuthoringTransform
+                {
+                    Location = System.Numerics.Vector3.Zero,
+                    Rotation = System.Numerics.Quaternion.Identity
+                };
+
+                /// <summary>
+                /// Converts a Blender UI location into raw glTF node-space location.
+                /// </summary>
+                /// <remarks>
+                /// Users copy values from Blender's Z-up RootNode UI. glTF node transforms are Y-up, so the
+                /// exporter stores the equivalent raw glTF-space location.
+                /// </remarks>
+                private static System.Numerics.Vector3 BlenderLocationToGltf(System.Numerics.Vector3 blender)
+                {
+                    // Blender displays Z-up object coordinates, while raw glTF node transforms
+                    // are Y-up. Let config values match Blender's RootNode UI:
+                    //   Blender (X, Y, Z) -> glTF (X, Z, -Y)
+                    return new System.Numerics.Vector3(blender.X, blender.Z, -blender.Y);
+                }
+
+                /// <summary>
+                /// Converts a Blender UI quaternion into raw glTF node-space quaternion form.
+                /// </summary>
+                /// <remarks>
+                /// The config-facing quaternion order remains Blender-style W,X,Y,Z. Internally,
+                /// System.Numerics stores X,Y,Z,W, and this helper applies the same Blender-to-glTF basis
+                /// conversion used for locations.
+                /// </remarks>
+                private static System.Numerics.Quaternion BlenderQuaternionToGltf(System.Numerics.Quaternion blender)
+                {
+                    // Same basis conversion for Blender W,X,Y,Z rotation:
+                    //   glTF W,X,Y,Z = Blender W,X,Z,-Y
+                    var gltf = new System.Numerics.Quaternion(
+                        blender.X,
+                        blender.Z,
+                        -blender.Y,
+                        blender.W);
+
+                    if (gltf.LengthSquared() < 0.0000001f)
+                        return System.Numerics.Quaternion.Identity;
+
+                    return System.Numerics.Quaternion.Normalize(gltf);
+                }
+            }
+
+            /// <summary>
+            /// Optional rigid mesh rotation cleanup used to make exported GLBs easier to edit in Blender.
+            /// </summary>
+            /// <remarks>
+            /// When enabled, safe rigid mesh-parent nodes are exported with a consistent authoring rotation,
+            /// while sidecar metadata records the original and authored transforms so FbxToXnb can restore
+            /// the game-space layout during conversion.
+            /// </remarks>
+            private struct RigidMeshRotationNormalization
+            {
+                /// <summary>Whether rigid mesh rotation normalization is enabled by config.</summary>
+                public bool Enabled;
+
+                /// <summary>Target Blender-friendly mesh rotation for safe rigid mesh-parent nodes.</summary>
+                public System.Numerics.Quaternion TargetRotation;
+
+                /// <summary>
+                /// Returns whether normalization should run with a valid target rotation.
+                /// </summary>
+                public bool IsEnabled
+                {
+                    get
+                    {
+                        return Enabled &&
+                               TargetRotation.LengthSquared() >= 0.0000001f;
+                    }
+                }
+
+                /// <summary>
+                /// Builds rigid mesh rotation normalization settings from TexturePacks model config values.
+                /// </summary>
+                /// <remarks>
+                /// Rotation may come from either Euler degrees or quaternion config parsing upstream. By the
+                /// time it reaches this struct, the config values are stored as a normalized quaternion.
+                /// </remarks>
+                public static RigidMeshRotationNormalization FromConfig(TPConfig cfg)
+                {
+                    if (cfg == null || !cfg.ModelNormalizeRigidMeshRotation)
+                        return Disabled;
+
+                    var rotation = new System.Numerics.Quaternion(
+                        cfg.ModelRigidMeshRotationX,
+                        cfg.ModelRigidMeshRotationY,
+                        cfg.ModelRigidMeshRotationZ,
+                        cfg.ModelRigidMeshRotationW);
+
+                    if (rotation.LengthSquared() < 0.0000001f)
+                        rotation = System.Numerics.Quaternion.Identity;
+                    else
+                        rotation = System.Numerics.Quaternion.Normalize(rotation);
+
+                    return new RigidMeshRotationNormalization
+                    {
+                        Enabled = true,
+                        TargetRotation = rotation
+                    };
+                }
+
+                /// <summary>
+                /// Disabled/no-op rigid mesh rotation normalization settings.
+                /// </summary>
+                public static RigidMeshRotationNormalization Disabled => new RigidMeshRotationNormalization
+                {
+                    Enabled = false,
+                    TargetRotation = System.Numerics.Quaternion.Identity
+                };
+            }
+
+            /// <summary>
+            /// Applies the optional authoring transform to the exported GLB root node.
+            /// </summary>
+            /// <remarks>
+            /// This is only for Blender authoring convenience. The matching FbxToXnb switches remove the
+            /// same transform during conversion so the compiled XNB returns to the game-space orientation
+            /// and location expected by CastleMiner Z.
+            /// </remarks>
+            private static void ApplyAuthoringTransform(NodeBuilder rootNode, ModelAuthoringTransform transform)
+            {
+                if (rootNode == null || transform.IsIdentity)
+                    return;
+
+                if (transform.Location.LengthSquared() >= 0.0000001f)
+                    rootNode.UseTranslation().Value = transform.Location;
+
+                if (Math.Abs(transform.Rotation.X) >= 0.000001f ||
+                    Math.Abs(transform.Rotation.Y) >= 0.000001f ||
+                    Math.Abs(transform.Rotation.Z) >= 0.000001f ||
+                    Math.Abs(transform.Rotation.W - 1f) >= 0.000001f)
+                {
+                    rootNode.UseRotation().Value = transform.Rotation;
+                }
+            }
+
             #region Entry Points
 
             /// <summary>
@@ -8237,6 +8444,8 @@ namespace TexturePacks
             //      - Reuses the scene RootNode if the model contains a bone named "RootNode"
             //        (prevents RootNode.001).
             //      - Attaches meshes under the mesh's ParentBone to preserve placement.
+            //      - Bakes FbxComp into rigid vertex positions and bone translations instead of
+            //        putting scale on RootNode, so sockets such as BarrelTip round-trip cleanly.
             //
             // Notes / Gotchas
             // --------------
@@ -8277,7 +8486,10 @@ namespace TexturePacks
                     // -------------------------------------------------------------
                     // Global export scaling (FBX round-trip compensation)
                     // -------------------------------------------------------------
-                    float FBX_COMP = TPConfig.LoadOrCreate().ModelFbxComp;
+                    var cfg = TPConfig.LoadOrCreate();
+                    float FBX_COMP = cfg.ModelFbxComp;
+                    var authoringTransform = ModelAuthoringTransform.FromConfig(cfg);
+                    var rigidMeshRotationNormalization = RigidMeshRotationNormalization.FromConfig(cfg);
 
                     // -------------------------------------------------------------
                     // Export mode selection
@@ -8286,10 +8498,10 @@ namespace TexturePacks
                     bool skinnedLike = IsSkinnedLike(xnaModel);
 
                     if (skinnedLike)
-                        return TryExportGlb_CharacterStructure(xnaModel, glbPath, FBX_COMP, embedTextures);
+                        return TryExportGlb_CharacterStructure(xnaModel, glbPath, FBX_COMP, authoringTransform, embedTextures);
 
                     // Rigid/static (items/guns/etc.)
-                    return TryExportGlb_RigidLegacy(xnaModel, glbPath, overwrite, embedTextures);
+                    return TryExportGlb_RigidLegacy(xnaModel, glbPath, overwrite, embedTextures, FBX_COMP, authoringTransform, rigidMeshRotationNormalization);
                 }
                 catch (Exception ex)
                 {
@@ -8318,7 +8530,7 @@ namespace TexturePacks
             /// - Uses MeshBuilder name as the node name produced by AddRigidMesh to keep hierarchy clean.
             /// - Avoids manually CreateNode()+AddRigidMesh on the same node, which can create extra child nodes.
             /// </summary>
-            private static bool TryExportGlb_CharacterStructure(Model xnaModel, string glbPath, float fbxComp, bool embedTextures)
+            private static bool TryExportGlb_CharacterStructure(Model xnaModel, string glbPath, float fbxComp, ModelAuthoringTransform authoringTransform, bool embedTextures)
             {
                 try
                 {
@@ -8414,6 +8626,8 @@ namespace TexturePacks
                             }
                         }
                     }
+
+                    ApplyAuthoringTransform(rootNode, authoringTransform);
 
                     // -------------------------------------------------------------
                     // Export geometry under Warrior_mesh as M_<meshname>[_n]
@@ -8557,7 +8771,7 @@ namespace TexturePacks
             /// - Reuses RootNode if the model has a bone named "RootNode" (prevents RootNode.001).
             /// - Parents each mesh under its ParentBone node.
             /// </summary>
-            private static bool TryExportGlb_RigidLegacy(Model xnaModel, string glbPath, bool overwrite, bool embedTextures)
+            private static bool TryExportGlb_RigidLegacy(Model xnaModel, string glbPath, bool overwrite, bool embedTextures, float fbxComp, ModelAuthoringTransform authoringTransform, RigidMeshRotationNormalization rigidMeshRotationNormalization)
             {
                 try
                 {
@@ -8575,31 +8789,30 @@ namespace TexturePacks
                     }
                     catch { }
 
-                    float FBX_COMP = TPConfig.LoadOrCreate().ModelFbxComp;
-
                     var scene = new SceneBuilder();
 
                     // Single root node (no _EXPORT_ROOT / _ROOT)
                     var root = new NodeBuilder("RootNode");
                     scene.AddNode(root);
 
-                    // If the model does NOT already have a RootNode bone, apply scale comp directly here.
-                    // (If it DOES have a RootNode bone, we'll apply comp when setting that bone's scale, below.)
-                    bool hasRootNodeBone = false;
-                    foreach (var b in xnaModel.Bones)
-                    {
-                        if (b != null && string.Equals(b.Name, "RootNode", StringComparison.Ordinal))
-                        {
-                            hasRootNodeBone = true;
-                            break;
-                        }
-                    }
-
-                    if (!hasRootNodeBone && Math.Abs(FBX_COMP - 1f) > 0.000001f)
-                        root.UseScale().Value = new System.Numerics.Vector3(FBX_COMP, FBX_COMP, FBX_COMP);
+                    // IMPORTANT:
+                    // Do not put FbxComp on the GLB root scale for rigid models.
+                    // Blender/FBX handles mesh nodes and empty/socket nodes differently when a
+                    // parent carries scale, which is what made BarrelTip survive at the wrong
+                    // side/back of the held gun. Instead, bake FbxComp into exported positions
+                    // and bone translations while keeping the node scales vanilla-clean.
 
                     // boneIndex -> node.
                     var boneNodes = new Dictionary<int, NodeBuilder>();
+                    var meshParentBoneIndices = new HashSet<int>();
+                    var rigidNodeTransformRestore = new Dictionary<string, Matrix>(StringComparer.OrdinalIgnoreCase);
+                    var rigidNodeAuthoringTransformRestore = new Dictionary<string, Matrix>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var mesh in xnaModel.Meshes)
+                    {
+                        if (mesh != null && mesh.ParentBone != null)
+                            meshParentBoneIndices.Add(mesh.ParentBone.Index);
+                    }
 
                     // Create nodes for every bone, but REUSE the scene root when a bone is named "RootNode"
                     foreach (var b in xnaModel.Bones)
@@ -8614,6 +8827,41 @@ namespace TexturePacks
                             boneNodes[b.Index] = new NodeBuilder(name);
                     }
 
+                    var normalizedMeshParentBones = new List<ModelBone>();
+                    foreach (var b in xnaModel.Bones)
+                    {
+                        if (ShouldNormalizeRigidMeshRotation(b, meshParentBoneIndices, rigidMeshRotationNormalization))
+                            normalizedMeshParentBones.Add(b);
+                    }
+
+                    ModelBone normalizedMeshParentBone = SelectPrimaryRigidMeshParent(normalizedMeshParentBones);
+                    Matrix normalizedMeshParentOld = Matrix.Identity;
+                    Matrix normalizedMeshParentNew = Matrix.Identity;
+                    Matrix normalizedMeshAuthoringDelta = Matrix.Identity;
+                    bool hasNormalizedMeshParent = false;
+
+                    if (normalizedMeshParentBone != null)
+                    {
+                        normalizedMeshParentBone.Transform.Decompose(out Vector3 s, out Quaternion r, out Vector3 t);
+                        Quaternion targetRotation = ToXnaQuaternion(rigidMeshRotationNormalization.TargetRotation);
+                        normalizedMeshParentOld = normalizedMeshParentBone.Transform;
+                        normalizedMeshParentNew =
+                            Matrix.CreateScale(s) *
+                            Matrix.CreateFromQuaternion(targetRotation) *
+                            Matrix.CreateTranslation(t);
+
+                        try
+                        {
+                            normalizedMeshAuthoringDelta = Matrix.Invert(normalizedMeshParentOld) * normalizedMeshParentNew;
+                            hasNormalizedMeshParent = true;
+                        }
+                        catch
+                        {
+                            normalizedMeshAuthoringDelta = Matrix.Identity;
+                            hasNormalizedMeshParent = false;
+                        }
+                    }
+
                     // Parent bones + set local TRS.
                     foreach (var b in xnaModel.Bones)
                     {
@@ -8621,17 +8869,50 @@ namespace TexturePacks
 
                         var node = boneNodes[b.Index];
 
-                        b.Transform.Decompose(out Vector3 s, out Quaternion r, out Vector3 t);
+                        Matrix originalLocalTransform = b.Transform;
+                        Matrix exportLocalTransform = originalLocalTransform;
+                        bool storeRigidRestore = false;
 
-                        node.UseTranslation().Value = new System.Numerics.Vector3(t.X, t.Y, t.Z);
-                        node.UseRotation().Value    = new System.Numerics.Quaternion(r.X, r.Y, r.Z, r.W);
+                        if (ShouldNormalizeRigidMeshRotation(b, meshParentBoneIndices, rigidMeshRotationNormalization))
+                        {
+                            if (ReferenceEquals(b, normalizedMeshParentBone))
+                            {
+                                exportLocalTransform = normalizedMeshParentNew;
+                            }
+                            else if (hasNormalizedMeshParent && ShouldMoveRigidNodeWithNormalizedMesh(b, meshParentBoneIndices))
+                            {
+                                exportLocalTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
+                            }
+                            else
+                            {
+                                b.Transform.Decompose(out Vector3 originalScale, out Quaternion r, out Vector3 originalTranslation);
+                                Quaternion targetRotation = ToXnaQuaternion(rigidMeshRotationNormalization.TargetRotation);
+                                exportLocalTransform =
+                                    Matrix.CreateScale(originalScale) *
+                                    Matrix.CreateFromQuaternion(targetRotation) *
+                                    Matrix.CreateTranslation(originalTranslation);
+                            }
 
-                        // Preserve scale comp if this bone is the RootNode and we mapped it to the scene root.
-                        var scale = new System.Numerics.Vector3(s.X, s.Y, s.Z);
-                        if (ReferenceEquals(node, root) && Math.Abs(FBX_COMP - 1f) > 0.000001f)
-                            scale = new System.Numerics.Vector3(scale.X * FBX_COMP, scale.Y * FBX_COMP, scale.Z * FBX_COMP);
+                            storeRigidRestore = true;
+                        }
+                        else if (hasNormalizedMeshParent && ShouldMoveRigidNodeWithNormalizedMesh(b, meshParentBoneIndices))
+                        {
+                            exportLocalTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
+                            storeRigidRestore = true;
+                        }
 
-                        node.UseScale().Value = scale;
+                        if (storeRigidRestore)
+                        {
+                            string restoreName = string.IsNullOrWhiteSpace(b.Name) ? $"Bone_{b.Index}" : b.Name.Trim();
+                            rigidNodeTransformRestore[restoreName] = ScaleLocalTransformTranslation(originalLocalTransform, fbxComp);
+                            rigidNodeAuthoringTransformRestore[restoreName] = ScaleLocalTransformTranslation(exportLocalTransform, fbxComp);
+                        }
+
+                        exportLocalTransform.Decompose(out Vector3 s, out Quaternion exportRotation, out Vector3 t);
+
+                        node.UseTranslation().Value = new System.Numerics.Vector3(t.X * fbxComp, t.Y * fbxComp, t.Z * fbxComp);
+                        node.UseRotation().Value    = new System.Numerics.Quaternion(exportRotation.X, exportRotation.Y, exportRotation.Z, exportRotation.W);
+                        node.UseScale().Value       = new System.Numerics.Vector3(s.X, s.Y, s.Z);
 
                         if (b.Parent != null && boneNodes.TryGetValue(b.Parent.Index, out var parentNode))
                         {
@@ -8646,6 +8927,8 @@ namespace TexturePacks
                                 root.AddNode(node);
                         }
                     }
+
+                    ApplyAuthoringTransform(root, authoringTransform);
 
                     var texMatCache = new Dictionary<Texture2D, MaterialBuilder>(new ReferenceEqualityComparerTexture2D());
 
@@ -8707,9 +8990,9 @@ namespace TexturePacks
                                     (uint)ic >= (uint)part.NumVertices)
                                     continue;
 
-                                var va = ReadVertex(vdata, stride, ia, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool na);
-                                var vb = ReadVertex(vdata, stride, ib, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool nb);
-                                var vc = ReadVertex(vdata, stride, ic, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool nc);
+                                var va = ReadVertex(vdata, stride, ia, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool na, fbxComp);
+                                var vb = ReadVertex(vdata, stride, ib, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool nb, fbxComp);
+                                var vc = ReadVertex(vdata, stride, ic, posOffset, posFmt, normOffset, normFmt, texOffset, texFmt, colOffset, colFmt, out bool nc, fbxComp);
 
                                 FixupNormalIfMissing(ref va, ref vb, ref vc, na && nb && nc);
                                 prim.AddTriangle(va, vb, vc);
@@ -8724,6 +9007,7 @@ namespace TexturePacks
                     }
 
                     scene.ToGltf2().SaveGLB(glbPath);
+                    WriteRigidMeshRotationRestoreMetadata(glbPath, rigidNodeTransformRestore, rigidNodeAuthoringTransformRestore);
                     return true;
                 }
                 catch (Exception ex)
@@ -8737,6 +9021,259 @@ namespace TexturePacks
             #endregion
 
             #region Materials (Optional Embedded Textures)
+
+            /// <summary>
+            /// Determines whether a rigid model bone is safe to normalize for Blender-friendly authoring.
+            /// </summary>
+            /// <remarks>
+            /// Normalization is limited to root-level, leaf mesh-parent bones so their local rotation can be
+            /// changed without accidentally rotating sockets, helper nodes, child meshes, or skeleton-style
+            /// hierarchies. This keeps common rigid weapon/prop mesh nodes clean in Blender while avoiding
+            /// unsafe parent-bone edits.
+            /// </remarks>
+            private static bool ShouldNormalizeRigidMeshRotation(ModelBone bone, HashSet<int> meshParentBoneIndices, RigidMeshRotationNormalization normalization)
+            {
+                if (!normalization.IsEnabled || bone == null || meshParentBoneIndices == null)
+                    return false;
+
+                if (!meshParentBoneIndices.Contains(bone.Index))
+                    return false;
+
+                string name = bone.Name ?? "";
+                if (name.Equals("RootNode", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                if (!IsRootLevelRigidNode(bone))
+                    return false;
+
+                // Only normalize leaf mesh nodes. If this bone has children, changing its local
+                // rotation would also alter socket/skeleton children unless each child is
+                // compensated. Leaf root-level mesh nodes cover the common rigid weapon/prop case safely.
+                if (bone.Children != null && bone.Children.Count > 0)
+                    return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Chooses the primary rigid mesh node used as the authoring-space reference for normalization.
+            /// </summary>
+            /// <remarks>
+            /// Weapons and rigid props may contain multiple root-level mesh nodes, such as the main gun mesh
+            /// plus gem/recolor parts. This method prefers the main visible weapon/mesh node so helper nodes
+            /// and secondary mesh nodes can be moved through the same authoring-space delta consistently.
+            /// </remarks>
+            private static ModelBone SelectPrimaryRigidMeshParent(List<ModelBone> normalizedMeshParentBones)
+            {
+                if (normalizedMeshParentBones == null || normalizedMeshParentBones.Count == 0)
+                    return null;
+
+                foreach (var bone in normalizedMeshParentBones)
+                {
+                    if (IsPreferredPrimaryRigidMeshParent(bone))
+                        return bone;
+                }
+
+                foreach (var bone in normalizedMeshParentBones)
+                {
+                    if (IsRootLevelRigidNode(bone))
+                        return bone;
+                }
+
+                return normalizedMeshParentBones[0];
+            }
+
+            /// <summary>
+            /// Returns whether a root-level rigid mesh node looks like the main weapon/prop mesh.
+            /// </summary>
+            /// <remarks>
+            /// Decorative or socket-related nodes such as gems, recolors, barrel helpers, and flame helpers
+            /// are intentionally excluded so they do not become the primary normalization reference.
+            /// </remarks>
+            private static bool IsPreferredPrimaryRigidMeshParent(ModelBone bone)
+            {
+                if (!IsRootLevelRigidNode(bone))
+                    return false;
+
+                string name = (bone.Name ?? "").Trim();
+                if (name.Length == 0)
+                    return false;
+
+                string lower = name.ToLowerInvariant();
+                if (lower.Contains("gem") ||
+                    lower.Contains("recolor") ||
+                    lower.Contains("barrel") ||
+                    lower.Contains("flame"))
+                    return false;
+
+                return lower.Contains("weap") ||
+                       lower.Contains("weapon") ||
+                       lower.Contains("gun") ||
+                       lower.Contains("mesh");
+            }
+
+            /// <summary>
+            /// Determines whether a root-level rigid node should follow the normalized mesh authoring delta.
+            /// </summary>
+            /// <remarks>
+            /// This includes helper/socket nodes such as BarrelTip and secondary root-level mesh nodes such as
+            /// recolor/gem parts. Moving these nodes with the primary mesh keeps the exported GLB visually
+            /// coherent in Blender while the sidecar metadata allows FbxToXnb to restore the game-space layout.
+            /// </remarks>
+            private static bool ShouldMoveRigidNodeWithNormalizedMesh(ModelBone bone, HashSet<int> meshParentBoneIndices)
+            {
+                if (bone == null || meshParentBoneIndices == null)
+                    return false;
+
+                string name = bone.Name ?? "";
+                if (name.Equals("RootNode", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                // Move top-level rigid helper/socket nodes and secondary root-level mesh nodes
+                // through the same authoring-space delta as the primary mesh parent. Their
+                // children inherit that move naturally.
+                if (!IsRootLevelRigidNode(bone))
+                    return false;
+
+                return true;
+            }
+
+            /// <summary>
+            /// Returns whether a model bone is either unparented or directly parented to RootNode.
+            /// </summary>
+            /// <remarks>
+            /// The rigid normalization workflow only treats these top-level nodes as independent rigid authoring
+            /// nodes. Child nodes are left to inherit their parent transform to avoid breaking local hierarchies.
+            /// </remarks>
+            private static bool IsRootLevelRigidNode(ModelBone bone)
+            {
+                if (bone == null)
+                    return false;
+
+                if (bone.Parent == null)
+                    return true;
+
+                string parentName = bone.Parent.Name ?? "";
+                return parentName.Equals("RootNode", StringComparison.OrdinalIgnoreCase);
+            }
+
+            /// <summary>
+            /// Converts a System.Numerics quaternion into an XNA quaternion.
+            /// </summary>
+            /// <remarks>
+            /// System.Numerics stores constructor values as X, Y, Z, W, while Blender-facing config and sidecar
+            /// text commonly use W, X, Y, Z. This helper is used after parsing/normalizing values into the
+            /// System.Numerics representation.
+            /// </remarks>
+            private static Quaternion ToXnaQuaternion(System.Numerics.Quaternion q)
+                => new Quaternion(q.X, q.Y, q.Z, q.W);
+
+            /// <summary>
+            /// Scales only the translation component of a local transform matrix.
+            /// </summary>
+            /// <remarks>
+            /// Scale and rotation are preserved. This is used when converting between GLB/Blender-sized
+            /// authoring units and converter/XNA importer units without changing the node basis.
+            /// </remarks>
+            private static Matrix ScaleLocalTransformTranslation(Matrix transform, float translationScale)
+            {
+                if (Math.Abs(translationScale - 1f) <= 0.000001f)
+                    return transform;
+
+                if (!transform.Decompose(out Vector3 s, out Quaternion r, out Vector3 t))
+                    return transform;
+
+                return
+                    Matrix.CreateScale(s) *
+                    Matrix.CreateFromQuaternion(r) *
+                    Matrix.CreateTranslation(t * translationScale);
+            }
+
+            /// <summary>
+            /// Adds one serialized rigid node transform entry to the sidecar metadata file.
+            /// </summary>
+            /// <remarks>
+            /// Entries are written as scale, quaternion, and translation values using invariant culture so the
+            /// converter can parse them reliably regardless of system locale.
+            /// </remarks>
+            private static void AddRigidTransformMetadataLine(List<string> lines, string name, Matrix transform)
+            {
+                if (lines == null || string.IsNullOrWhiteSpace(name))
+                    return;
+
+                transform.Decompose(out Vector3 s, out Quaternion q, out Vector3 t);
+                lines.Add(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} = {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}",
+                    name.Trim(),
+                    s.X,
+                    s.Y,
+                    s.Z,
+                    q.W,
+                    q.X,
+                    q.Y,
+                    q.Z,
+                    t.X,
+                    t.Y,
+                    t.Z));
+            }
+
+            /// <summary>
+            /// Writes the rigid mesh rotation restore sidecar used by FbxToXnb.
+            /// </summary>
+            /// <remarks>
+            /// When rigid mesh rotation normalization is enabled, the exported GLB is made easier to edit in
+            /// Blender by giving safe rigid mesh nodes a clean authoring rotation. This sidecar records both
+            /// the original local transforms and the Blender-friendly authoring transforms so FbxToXnb can
+            /// calculate a restore delta during conversion and rebuild the game-space model correctly.
+            /// </remarks>
+            private static void WriteRigidMeshRotationRestoreMetadata(string glbPath, Dictionary<string, Matrix> transforms, Dictionary<string, Matrix> authoringTransforms)
+            {
+                if (string.IsNullOrWhiteSpace(glbPath))
+                    return;
+
+                string metaPath = Path.ChangeExtension(glbPath, ".cmzrigid.ini");
+
+                try
+                {
+                    if (transforms == null || transforms.Count == 0)
+                    {
+                        if (File.Exists(metaPath))
+                            File.Delete(metaPath);
+                        return;
+                    }
+
+                    var lines = new List<string>
+                    {
+                        "; CastleForge TexturePacks rigid mesh rotation restore metadata",
+                        "; Generated when NormalizeRigidMeshRotation=true.",
+                        "; Keep this file beside the edited FBX so FbxToXnb can undo authoring-only rotation cleanup.",
+                        "; [RigidNodeTransforms] stores the original local transforms in GLB/Blender units.",
+                        "; [RigidNodeAuthoringTransforms] stores the Blender-friendly exported local transforms.",
+                        "; FbxToXnb uses the pair as a delta so edited FBX node placement is preserved.",
+                        "; Values are ScaleX, ScaleY, ScaleZ, RotationW, RotationX, RotationY, RotationZ, TranslationX, TranslationY, TranslationZ.",
+                        "[RigidNodeTransforms]"
+                    };
+
+                    foreach (var pair in transforms.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                        AddRigidTransformMetadataLine(lines, pair.Key, pair.Value);
+
+                    if (authoringTransforms != null && authoringTransforms.Count > 0)
+                    {
+                        lines.Add("");
+                        lines.Add("[RigidNodeAuthoringTransforms]");
+
+                        foreach (var pair in authoringTransforms.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                            AddRigidTransformMetadataLine(lines, pair.Key, pair.Value);
+                    }
+
+                    File.WriteAllLines(metaPath, lines);
+                }
+                catch (Exception ex)
+                {
+                    try { Log($"[GLB] Failed to write rigid mesh restore metadata: {ex.Message}."); } catch { }
+                }
+            }
 
             /// <summary>
             /// Build (or reuse) a GLTF material for a mesh-part.
@@ -8992,12 +9529,15 @@ namespace TexturePacks
                 int normOffset, VertexElementFormat normFmt,
                 int texOffset, VertexElementFormat texFmt,
                 int colOffset, VertexElementFormat colFmt,
-                out bool hadNormal)
+                out bool hadNormal,
+                float positionScale = 1f)
             {
                 int o = vIndex * stride;
 
                 // Position (required).
                 var pos = ReadVec3(vdata, o + posOffset, posFmt);
+                if (Math.Abs(positionScale - 1f) > 0.000001f)
+                    pos *= positionScale;
 
                 // Normal (optional).
                 hadNormal = (normOffset >= 0);

@@ -77,6 +77,7 @@ namespace XNAConverter
         /// <summary>
         /// Optional content-pipeline processor parameters.
         /// Metadata is emitted as ProcessorParameters_{Name}, matching XNA .contentproj behavior.
+        /// Examples: Scale=0.01 for ModelProcessor, ClipName=Reload for AnimationClipProcessor.
         /// </summary>
         public Dictionary<string, string> ProcessorParameters { get; } =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -309,10 +310,10 @@ namespace XNAConverter
                 meta["Name"] = Path.GetFileNameWithoutExtension(path);
 
                 // Optional processor parameters, e.g.:
+                //   ProcessorParameters_Scale = 0.01
                 //   ProcessorParameters_FrameRate = 30
                 //   ProcessorParameters_ClipName = Reload
-                // This is used by AnimationClipProcessor and remains harmless for processors that
-                // ignore unknown parameters.
+                // Used for ModelProcessor scale and custom processors such as AnimationClipProcessor.
                 if (ProcessorParameters != null)
                 {
                     foreach (var pair in ProcessorParameters)

@@ -1,4 +1,4 @@
-﻿# FbxToXnb
+# FbxToXnb
 
 > Convert one or more `.fbx` models into XNA-ready `.xnb` output with a workflow built for CastleForge creators, drag-and-drop usage, isolated output folders, and optional custom pipeline processors.
 
@@ -251,6 +251,82 @@ FbxToXnb.exe --processor SkinedModelProcessor --pipelineDir "C:\Path\To\Pipeline
 FbxToXnb.exe --processor SkinedModelProcessor --pipeline "C:\Path\To\DNA.SkinnedPipeline.dll" "C:\Path\To\Alien.fbx"
 ```
 
+### Scale full-size TexturePacks exports back to game size
+
+TexturePacks exports GLB models larger by default (`FbxComp = 10.0`) so they are easier to inspect and edit in Blender. FbxToXnb now understands that extractor setting directly:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 "C:\Path\To\MyModel.fbx"
+```
+
+For model processors, this calculates the XNA processor scale for you:
+
+```text
+Scale = 0.01 / FbxComp
+Scale = 0.01 / 10.0
+Scale = 0.001
+```
+
+The normal drag/drop batch now prefers `ScaledModelProcessor` when `SkinedModelProcessor\DNA.SkinnedPipeline.dll` is present. That processor still uses the normal XNA mesh scale, but it also fixes transform-only sockets such as `BarrelTip`: it bakes the socket to model-root space before the stock processor runs, then post-corrects the socket basis with the Blender/GLB round-trip transform. By default, `SocketBasisScale=0.01`, `SocketBasisTransform=BlenderGlbRoundTripForward`, and `SocketTranslationScale=1.0`. This keeps muzzle flashes/projectile origins at the barrel instead of inheriting a Blender/FBX parent transform near the trigger.
+
+Manual overrides still work when needed:
+
+```powershell
+FbxToXnb.exe --scale 0.001 "C:\Path\To\MyModel.fbx"
+FbxToXnb.exe --param Scale=0.001 "C:\Path\To\MyModel.fbx"
+FbxToXnb.exe --noScale "C:\Path\To\AlreadyScaledModel.fbx"
+```
+
+### Remove a TexturePacks authoring transform
+
+If the GLB was exported with TexturePacks `[Models] AuthoringLocation` or `AuthoringRotation`, pass the same values when converting the edited FBX back to XNB:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 --authoringLocation "0.64,-1.12,-0.58" --authoringRotation "0,0,0" "C:\Path\To\MyModel.fbx"
+```
+
+Use the values exactly as Blender shows them on the imported **RootNode**:
+
+- `--authoringLocation` uses Blender Location `X, Y, Z`.
+- `--authoringRotation` with three values uses Blender Euler degrees `X, Y, Z`.
+- `--authoringRotation` with four values uses Blender Quaternion `W, X, Y, Z`.
+
+Quaternion example:
+
+```powershell
+FbxToXnb.exe --fbxComp 10.0 --authoringLocation "0.64,-1.12,-0.58" --authoringRotation "1,-1,0,0" "C:\Path\To\MyModel.fbx"
+```
+
+FbxToXnb converts Blender's displayed Z-up values to the imported FBX/glTF basis internally, then removes that authoring transform before `ModelProcessor` builds the XNB. The advanced `--authoringLocationScale` option defaults to `100` for Blender FBX importer units and normally should be left alone.
+
+TexturePacks also has an extractor-only rigid mesh cleanup:
+
+```ini
+NormalizeRigidMeshRotation = true
+RigidMeshRotation = 180, 0, 0
+```
+
+That setting writes cleaner Blender-visible mesh rotation for the primary rigid mesh node, moves root-level helper/socket nodes and secondary root-level mesh nodes with the visible mesh for authoring, and saves both the original and Blender-authoring transforms in a matching `.cmzrigid.ini` sidecar. Keep that file beside the edited FBX. FbxToXnb first looks for an exact sidecar name matching the FBX, such as `Raygun.cmzrigid.ini`. If the FBX was renamed after export, it can also use a single sidecar in the folder or a sidecar whose base name is referenced by the FBX/texture files, such as `0051_Pistol.cmzrigid.ini` beside `Raygun.fbx`. If more than one sidecar is present and none clearly matches, pass `--rigidMeshRestoreFile` explicitly. The selected sidecar is passed to the processor as `RigidMeshRestoreFile`, scaling the sidecar values into FBX importer units and restoring those transforms before XNA builds the XNB. The processor uses the original + authoring transform pair as a world-space delta that includes the exported RootNode authoring transform, so normalized rigid weapons do not compile sideways, upside down, too low, or offset from the hand.
+
+Optional socket correction overrides:
+
+```powershell
+# Writes BarrelTip bake information to the pipeline log.
+FbxToXnb.exe --param SocketDebugLog=True "C:\Path\To\MyModel.fbx"
+
+# Only disable this for one-off assets that are already authored with root-space sockets.
+FbxToXnb.exe --param SocketBakeToModelRoot=False "C:\Path\To\MyModel.fbx"
+
+# Manual override only. The normal rigid default is SocketTranslationScale=1.0.
+FbxToXnb.exe --param SocketTranslationScale=1 "C:\Path\To\MyModel.fbx"
+
+# Manual override only. The normal rigid default is SocketBasisScale=0.01.
+FbxToXnb.exe --param SocketBasisScale=0.01 "C:\Path\To\MyModel.fbx"
+
+# Only enable this for unusual FBX exports that really need an extra socket basis flip.
+FbxToXnb.exe --param SocketRotationCorrection=True --param SocketRotationCorrectionAxis=Y --param SocketRotationCorrectionDegrees=180 "C:\Path\To\MyModel.fbx"
+```
+
 ### Use the environment variable for repeated sessions
 The tool also supports:
 
@@ -268,8 +344,17 @@ That makes it easier to keep your custom pipeline locations available automatica
 |-----------------------------|-----------------------------------------------------------------------------------------------|
 | `--pipeline <dllOrDir>`     | Adds a custom pipeline DLL or folder. Repeatable.                                             |
 | `--pipelineDir <dir>`       | Same idea as `--pipeline`, but clearer when pointing at a folder.                             |
-| `--processor <name>`        | Overrides the FBX processor name, such as `SkinedModelProcessor` or `AnimationClipProcessor`. |
-| `--param Name=Value`        | Passes a generic processor parameter.                                                         |
+| `--processor <name>`        | Overrides the FBX processor name, such as `ScaledModelProcessor`, `SkinedModelProcessor`, or `AnimationClipProcessor`. |
+| `--fbxComp <value>`         | Uses the TexturePacks `[Models] FbxComp` value and computes `Scale = 0.01 / FbxComp`.         |
+| `--scale <value>`           | Manual FBX model processor `Scale` override.                                                  |
+| `--authoringLocation <x,y,z>` | Removes a TexturePacks GLB authoring location before processing. Use Blender RootNode Location `X, Y, Z`. |
+| `--authoringRotation <values>` | Removes a TexturePacks GLB authoring rotation before processing. Three values mean Blender Euler degrees `X, Y, Z`; four values mean Blender Quaternion `W, X, Y, Z`. |
+| `--authoringRotationDegrees <x,y,z>` | Explicit Euler-degree alias for `--authoringRotation`. |
+| `--authoringRotationQuaternion <w,x,y,z>` | Explicit/legacy quaternion form. Still supported. |
+| `--authoringLocationScale <value>` | Advanced location unit conversion for imported FBX nodes. Defaults to `100`. |
+| `--rigidMeshRestoreFile <path>` | Optional TexturePacks `.cmzrigid.ini` sidecar path. Usually auto-detected beside the FBX. |
+| `--noScale`                 | Disables the automatic/calculated model round-trip compensation.                              |
+| `--param Name=Value`        | Passes a generic processor parameter; `Scale` here overrides `--fbxComp`.                     |
 | `--animName <name>`         | Shortcut for `AnimationClipProcessor` output clip name.                                       |
 | `--sourceClip <name>`       | Shortcut for choosing a specific FBX take.                                                    |
 | `--frameRate <fps>`         | Shortcut for `AnimationClipProcessor` sample rate; use `30` for vanilla-like clips.           |
@@ -277,13 +362,13 @@ That makes it easier to keep your custom pipeline locations available automatica
 | `--help`                    | Shows help text.                                                                              |
 
 ### Default processor behavior
-If you do not provide a processor override, the build path uses the normal XNA:
+If you do not provide a processor override, the build path now prefers:
 
 ```text
-ModelProcessor
+ScaledModelProcessor
 ```
 
-That is ideal for static or rigid assets.
+when the bundled DNA pipeline DLL is available. That keeps normal/static builds socket-safe by correcting `BarrelTip`/helper transforms separately from visible mesh geometry. Mesh scale uses the calculated XNA processor scale, socket basis scale defaults to `0.01`, and socket translation defaults to `1.0` after the normal processor has already placed it. If the DLL is missing, the tool falls back to stock `ModelProcessor`. For model processors, FbxToXnb also adds a calculated model scale by default. The default assumes TexturePacks used `FbxComp = 10.0`, so the effective XNA processor value is `Scale=0.001`. Animation-only processors are excluded from this automatic scale.
 
 ---
 
@@ -529,9 +614,9 @@ When a build fails, look at the first surfaced builder error and check for:
 <details>
 <summary><strong>“Cannot find content processor”</strong></summary>
 
-This usually means you requested a processor like `SkinedModelProcessor` without also providing the required pipeline DLL or pipeline directory.
+This usually means you requested a processor like `ScaledModelProcessor`, `SkinedModelProcessor`, or `AnimationClipProcessor` without also providing the required pipeline DLL or pipeline directory.
 
-Pass `--pipeline` or `--pipelineDir`, or use the skinned drag-and-drop helper that comes with **DNA.SkinnedPipeline**.
+Pass `--pipeline` or `--pipelineDir`, or use the normal/skinned/animation drag-and-drop helper that matches the asset you are building.
 
 </details>
 
@@ -545,9 +630,9 @@ Check whether the exported FBX expects exact filenames or relative subfolder pat
 <details>
 <summary><strong>I only want static model conversion. Do I need DNA.SkinnedPipeline too?</strong></summary>
 
-No.
+Not always.
 
-For standard rigid/static models, the default `ModelProcessor` path is usually all you need.
+For plain rigid/static models with no helper sockets, the stock `ModelProcessor` path is usually enough. For TexturePacks weapon round-trips, use the bundled DNA pipeline so `ScaledModelProcessor` can preserve socket nodes such as `BarrelTip`.
 
 </details>
 

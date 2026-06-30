@@ -19,7 +19,7 @@ REM --- run for each dropped file ---
 if "%~1"=="" goto done
 
 echo === Building: %~1
-"%TOOL%" "%~1" --pipeline "%PIPE%" --processor "%PROC%"
+"%TOOL%" "%~1" --pipeline "%PIPE%" --processor "%PROC%" --fbxComp 10.0
 if errorlevel 1 (
   echo ! Build failed for: %~1
 )
