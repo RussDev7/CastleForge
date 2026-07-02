@@ -7,6 +7,8 @@ This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for d
 using Microsoft.Xna.Framework.Content.Pipeline.Processors;
 using Microsoft.Xna.Framework.Content.Pipeline.Graphics;
 using Microsoft.Xna.Framework.Content.Pipeline;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 
 namespace CMZ.ContentPipeline
 {
@@ -200,6 +202,18 @@ namespace CMZ.ContentPipeline
                     SocketDebugLog);
             }
 
+            Dictionary<string, Matrix> restoredSocketBasisOverrides = null;
+            if (hasFullRigidRestore)
+            {
+                var restoredNodeNames = ProcessorScaleUtility.GetRigidNodeTransformRestoreNames(RigidMeshRestoreFile);
+                restoredSocketBasisOverrides = ProcessorScaleUtility.CaptureNamedSocketBasisOverrides(
+                    input,
+                    SocketBakeToModelRootNames,
+                    restoredNodeNames,
+                    context,
+                    SocketDebugLog);
+            }
+
             var model = base.Process(input, context);
 
             if (SocketDebugLog)
@@ -222,7 +236,8 @@ namespace CMZ.ContentPipeline
                     socketRotationCorrectionNames: SocketRotationCorrectionNames,
                     socketRotationCorrectionAxis: SocketRotationCorrectionAxis,
                     socketRotationCorrectionDegrees: SocketRotationCorrectionDegrees,
-                    socketBasisTransform: SocketBasisTransform);
+                    socketBasisTransform: SocketBasisTransform,
+                    socketBasisOverrides: restoredSocketBasisOverrides);
 
                 if (SocketDebugLog)
                 {

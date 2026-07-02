@@ -8837,8 +8837,6 @@ namespace TexturePacks
                     ModelBone normalizedMeshParentBone = SelectPrimaryRigidMeshParent(normalizedMeshParentBones);
                     Matrix normalizedMeshParentOld = Matrix.Identity;
                     Matrix normalizedMeshParentNew = Matrix.Identity;
-                    Matrix normalizedMeshParentAuthoringRestore = Matrix.Identity;
-                    Matrix normalizedMeshExportDelta = Matrix.Identity;
                     Matrix normalizedMeshAuthoringDelta = Matrix.Identity;
                     bool hasNormalizedMeshParent = false;
 
@@ -8846,30 +8844,19 @@ namespace TexturePacks
                     {
                         normalizedMeshParentBone.Transform.Decompose(out Vector3 s, out Quaternion r, out Vector3 t);
                         Quaternion targetRotation = ToXnaQuaternion(rigidMeshRotationNormalization.TargetRotation);
-                        Matrix targetRotationMatrix = Matrix.CreateFromQuaternion(targetRotation);
-                        Matrix rollCorrection = ComputeRigidMeshAuthoringRollCorrection(
-                            r);
-
                         normalizedMeshParentOld = normalizedMeshParentBone.Transform;
                         normalizedMeshParentNew =
                             Matrix.CreateScale(s) *
-                            targetRotationMatrix *
-                            Matrix.CreateTranslation(t);
-                        normalizedMeshParentAuthoringRestore =
-                            Matrix.CreateScale(s) *
-                            targetRotationMatrix *
-                            rollCorrection *
+                            Matrix.CreateFromQuaternion(targetRotation) *
                             Matrix.CreateTranslation(t);
 
                         try
                         {
-                            normalizedMeshExportDelta = Matrix.Invert(normalizedMeshParentOld) * normalizedMeshParentNew;
-                            normalizedMeshAuthoringDelta = Matrix.Invert(normalizedMeshParentOld) * normalizedMeshParentAuthoringRestore;
+                            normalizedMeshAuthoringDelta = Matrix.Invert(normalizedMeshParentOld) * normalizedMeshParentNew;
                             hasNormalizedMeshParent = true;
                         }
                         catch
                         {
-                            normalizedMeshExportDelta = Matrix.Identity;
                             normalizedMeshAuthoringDelta = Matrix.Identity;
                             hasNormalizedMeshParent = false;
                         }
@@ -8884,7 +8871,6 @@ namespace TexturePacks
 
                         Matrix originalLocalTransform = b.Transform;
                         Matrix exportLocalTransform = originalLocalTransform;
-                        Matrix authoringRestoreTransform = originalLocalTransform;
                         bool storeRigidRestore = false;
 
                         if (ShouldNormalizeRigidMeshRotation(b, meshParentBoneIndices, rigidMeshRotationNormalization))
@@ -8892,12 +8878,10 @@ namespace TexturePacks
                             if (ReferenceEquals(b, normalizedMeshParentBone))
                             {
                                 exportLocalTransform = normalizedMeshParentNew;
-                                authoringRestoreTransform = normalizedMeshParentAuthoringRestore;
                             }
                             else if (hasNormalizedMeshParent && ShouldMoveRigidNodeWithNormalizedMesh(b, meshParentBoneIndices))
                             {
-                                exportLocalTransform = originalLocalTransform * normalizedMeshExportDelta;
-                                authoringRestoreTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
+                                exportLocalTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
                             }
                             else
                             {
@@ -8907,15 +8891,13 @@ namespace TexturePacks
                                     Matrix.CreateScale(originalScale) *
                                     Matrix.CreateFromQuaternion(targetRotation) *
                                     Matrix.CreateTranslation(originalTranslation);
-                                authoringRestoreTransform = exportLocalTransform;
                             }
 
                             storeRigidRestore = true;
                         }
                         else if (hasNormalizedMeshParent && ShouldMoveRigidNodeWithNormalizedMesh(b, meshParentBoneIndices))
                         {
-                            exportLocalTransform = originalLocalTransform * normalizedMeshExportDelta;
-                            authoringRestoreTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
+                            exportLocalTransform = originalLocalTransform * normalizedMeshAuthoringDelta;
                             storeRigidRestore = true;
                         }
 
@@ -8923,7 +8905,7 @@ namespace TexturePacks
                         {
                             string restoreName = string.IsNullOrWhiteSpace(b.Name) ? $"Bone_{b.Index}" : b.Name.Trim();
                             rigidNodeTransformRestore[restoreName] = ScaleLocalTransformTranslation(originalLocalTransform, fbxComp);
-                            rigidNodeAuthoringTransformRestore[restoreName] = ScaleLocalTransformTranslation(authoringRestoreTransform, fbxComp);
+                            rigidNodeAuthoringTransformRestore[restoreName] = ScaleLocalTransformTranslation(exportLocalTransform, fbxComp);
                         }
 
                         exportLocalTransform.Decompose(out Vector3 s, out Quaternion exportRotation, out Vector3 t);
@@ -9131,65 +9113,6 @@ namespace TexturePacks
             }
 
             /// <summary>
-            /// Builds an authoring-only X roll from the rigid mesh's original local rotation.
-            /// </summary>
-            /// <remarks>
-            /// Clean CMZ rigid weapon meshes use a -90 degree source X rotation before they are exported with
-            /// a Blender-friendly target such as 180,0,0. Some weapons carry extra X roll in that original
-            /// quaternion. The exported GLB stays clean; this delta is stored only in sidecar authoring
-            /// metadata so FbxToXnb can restore the game-space pose without tilting the Blender model.
-            /// </remarks>
-            private static Matrix ComputeRigidMeshAuthoringRollCorrection(Quaternion originalRotation)
-            {
-                float lengthSquared =
-                    (originalRotation.W * originalRotation.W) +
-                    (originalRotation.X * originalRotation.X) +
-                    (originalRotation.Y * originalRotation.Y) +
-                    (originalRotation.Z * originalRotation.Z);
-
-                if (lengthSquared < 0.0000001f ||
-                    float.IsNaN(lengthSquared) ||
-                    float.IsInfinity(lengthSquared))
-                {
-                    return Matrix.Identity;
-                }
-
-                float invLength = 1f / (float)Math.Sqrt(lengthSquared);
-                float w = originalRotation.W * invLength;
-                float x = originalRotation.X * invLength;
-                float y = originalRotation.Y * invLength;
-                float z = originalRotation.Z * invLength;
-
-                float originalXRoll = (float)Math.Atan2(
-                    2f * ((w * x) + (y * z)),
-                    1f - (2f * ((x * x) + (y * y))));
-                float correction = NormalizeRadians(originalXRoll + MathHelper.PiOver2);
-                float absCorrection = Math.Abs(correction);
-
-                if (absCorrection < MathHelper.ToRadians(0.25f) ||
-                    absCorrection > MathHelper.ToRadians(45f))
-                {
-                    return Matrix.Identity;
-                }
-
-                return Matrix.CreateRotationX(correction);
-            }
-
-            /// <summary>
-            /// Normalizes an angle to the shortest signed full-turn equivalent.
-            /// </summary>
-            private static float NormalizeRadians(float radians)
-            {
-                while (radians > MathHelper.Pi)
-                    radians -= MathHelper.TwoPi;
-
-                while (radians < -MathHelper.Pi)
-                    radians += MathHelper.TwoPi;
-
-                return radians;
-            }
-
-            /// <summary>
             /// Determines whether a root-level rigid node should follow the normalized mesh authoring delta.
             /// </summary>
             /// <remarks>
@@ -9300,10 +9223,9 @@ namespace TexturePacks
             /// </summary>
             /// <remarks>
             /// When rigid mesh rotation normalization is enabled, the exported GLB is made easier to edit in
-            /// Blender by giving safe rigid mesh nodes a clean authoring rotation. This sidecar records the
-            /// original local transforms and the converter-facing authoring transforms, including sidecar-only
-            /// dynamic roll correction when needed, so FbxToXnb can calculate a restore delta during conversion
-            /// and rebuild the game-space model correctly.
+            /// Blender by giving safe rigid mesh nodes a clean authoring rotation. This sidecar records both
+            /// the original local transforms and the Blender-friendly authoring transforms so FbxToXnb can
+            /// calculate a restore delta during conversion and rebuild the game-space model correctly.
             /// </remarks>
             private static void WriteRigidMeshRotationRestoreMetadata(string glbPath, Dictionary<string, Matrix> transforms, Dictionary<string, Matrix> authoringTransforms)
             {
@@ -9327,8 +9249,7 @@ namespace TexturePacks
                         "; Generated when NormalizeRigidMeshRotation=true.",
                         "; Keep this file beside the edited FBX so FbxToXnb can undo authoring-only rotation cleanup.",
                         "; [RigidNodeTransforms] stores the original local transforms in GLB/Blender units.",
-                        "; [RigidNodeAuthoringTransforms] stores converter-facing authoring transforms.",
-                        "; These may include sidecar-only dynamic roll correction that is not applied to the GLB.",
+                        "; [RigidNodeAuthoringTransforms] stores the Blender-friendly exported local transforms.",
                         "; FbxToXnb uses the pair as a delta so edited FBX node placement is preserved.",
                         "; Values are ScaleX, ScaleY, ScaleZ, RotationW, RotationX, RotationY, RotationZ, TranslationX, TranslationY, TranslationZ.",
                         "[RigidNodeTransforms]"

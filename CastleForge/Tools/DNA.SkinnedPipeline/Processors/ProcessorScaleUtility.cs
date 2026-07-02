@@ -358,6 +358,16 @@ namespace CMZ.ContentPipeline
         }
 
         /// <summary>
+        /// Returns the node names present in a full rigid transform restore sidecar.
+        /// </summary>
+        public static HashSet<string> GetRigidNodeTransformRestoreNames(string restoreFile)
+        {
+            return new HashSet<string>(
+                ReadRigidNodeTransformRestoreFile(restoreFile, DefaultRigidMeshRestoreUnitScale).Keys,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Clears RootNode authoring transforms before a full rigid sidecar restore is applied.
         /// </summary>
         /// <remarks>
@@ -561,6 +571,68 @@ namespace CMZ.ContentPipeline
         }
 
         /// <summary>
+        /// Captures class-specific socket basis from restored/baked input nodes before the
+        /// stock ModelProcessor rewrites helper-node basis scale.
+        /// </summary>
+        public static Dictionary<string, Matrix> CaptureNamedSocketBasisOverrides(
+            NodeContent input,
+            string socketNodeNames,
+            HashSet<string> restoredNodeNames,
+            ContentProcessorContext context,
+            bool debugLog)
+        {
+            var overrides = new Dictionary<string, Matrix>(StringComparer.OrdinalIgnoreCase);
+
+            if (input == null)
+                return overrides;
+
+            var names = ParseNameSet(socketNodeNames, DefaultSocketBakeToModelRootNames);
+            if (names.Count == 0)
+                return overrides;
+
+            var matches = new List<NodeContent>();
+            CollectMatchingNodes(input, names, matches);
+
+            foreach (var node in matches)
+            {
+                if (node == null || string.IsNullOrWhiteSpace(node.Name))
+                    continue;
+
+                string name = node.Name.Trim();
+                if (restoredNodeNames != null &&
+                    restoredNodeNames.Count > 0 &&
+                    !restoredNodeNames.Contains(name))
+                {
+                    continue;
+                }
+
+                if (!TryCreateScaledBasisOverride(node.Transform, out Matrix basisOverride))
+                    continue;
+
+                // The restored input socket basis is in the FBX importer side basis. CMZ reads
+                // BarrelTip directly as a runtime bone, where the socket forward axis needs one
+                // final quarter-turn into game forward space.
+                basisOverride = CreateAxisRotation("X", 90f) * basisOverride;
+
+                overrides[name] = basisOverride;
+
+                if (debugLog && context != null)
+                {
+                    try
+                    {
+                        context.Logger.LogMessage(
+                            "[CMZ] Captured restored socket basis override for '{0}'. basis={1}",
+                            name,
+                            FormatMatrix(basisOverride));
+                    }
+                    catch { }
+                }
+            }
+
+            return overrides;
+        }
+
+        /// <summary>
         /// Applies scale/orientation compensation to named output bones after ModelProcessor.
         /// </summary>
         public static void FixNamedSocketBones(
@@ -572,7 +644,8 @@ namespace CMZ.ContentPipeline
             string socketRotationCorrectionNames,
             string socketRotationCorrectionAxis,
             float socketRotationCorrectionDegrees,
-            string socketBasisTransform = null)
+            string socketBasisTransform = null,
+            IDictionary<string, Matrix> socketBasisOverrides = null)
         {
             if (model == null || model.Bones == null || model.Bones.Count == 0)
                 return;
@@ -596,8 +669,9 @@ namespace CMZ.ContentPipeline
             var rotateNames = shouldRotate
                 ? ParseNameSet(socketRotationCorrectionNames, DefaultSocketRotationCorrectionNames)
                 : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool hasAnyBasisOverrides = socketBasisOverrides != null && socketBasisOverrides.Count > 0;
 
-            if (scaleNames.Count == 0 && rotateNames.Count == 0)
+            if (scaleNames.Count == 0 && rotateNames.Count == 0 && !hasAnyBasisOverrides)
                 return;
 
             Matrix rotationCorrection = shouldRotate
@@ -612,35 +686,54 @@ namespace CMZ.ContentPipeline
                 string name = bone.Name.Trim();
                 bool applyScale = scaleNames.Contains(name);
                 bool applyRotation = rotateNames.Contains(name);
+                Matrix basisOverride = Matrix.Identity;
+                bool hasBasisOverride = socketBasisOverrides != null &&
+                                        socketBasisOverrides.TryGetValue(name, out basisOverride);
 
-                if (!applyScale && !applyRotation)
+                if (!applyScale && !applyRotation && !hasBasisOverride)
                     continue;
 
                 Matrix transform = bone.Transform;
 
-                if (applyRotation)
+                if (hasBasisOverride)
                 {
-                    // Prepend for local-basis correction without rotating the translation row.
-                    transform = rotationCorrection * transform;
-                }
-
-                if (applyScale)
-                {
-                    // Keep basis scale and translation scale independent, but by default both
-                    // use the same Scale value. Do not force translation to 0.01 here; that
-                    // ignores the FbxComp multiplier and is why the previous fix barely moved it.
-                    if (shouldScaleBasis)
-                    {
-                        if (IsBlenderGlbRoundTripForwardBasisTransform(socketBasisTransform))
-                            RemapBlenderGlbRoundTripBasis(ref transform, socketBasisScale, flipForward: true);
-                        else if (IsBlenderGlbRoundTripBasisTransform(socketBasisTransform))
-                            RemapBlenderGlbRoundTripBasis(ref transform, socketBasisScale, flipForward: false);
-                        else
-                            ScaleBasisOnly(ref transform, socketBasisScale);
-                    }
-
+                    CopyBasisOnly(ref transform, basisOverride);
                     if (shouldScaleTranslation)
                         ScaleTranslationOnly(ref transform, effectiveTranslationScale);
+
+                    if (applyRotation)
+                    {
+                        // Keep the manual correction available as an explicit override on top
+                        // of the sidecar-derived basis.
+                        transform = rotationCorrection * transform;
+                    }
+                }
+                else
+                {
+                    if (applyRotation)
+                    {
+                        // Prepend for local-basis correction without rotating the translation row.
+                        transform = rotationCorrection * transform;
+                    }
+
+                    if (applyScale)
+                    {
+                        // Keep basis scale and translation scale independent, but by default both
+                        // use the same Scale value. Do not force translation to 0.01 here; that
+                        // ignores the FbxComp multiplier and is why the previous fix barely moved it.
+                        if (shouldScaleBasis)
+                        {
+                            if (IsBlenderGlbRoundTripForwardBasisTransform(socketBasisTransform))
+                                RemapBlenderGlbRoundTripBasis(ref transform, socketBasisScale, flipForward: true);
+                            else if (IsBlenderGlbRoundTripBasisTransform(socketBasisTransform))
+                                RemapBlenderGlbRoundTripBasis(ref transform, socketBasisScale, flipForward: false);
+                            else
+                                ScaleBasisOnly(ref transform, socketBasisScale);
+                        }
+
+                        if (shouldScaleTranslation)
+                            ScaleTranslationOnly(ref transform, effectiveTranslationScale);
+                    }
                 }
 
                 bone.Transform = transform;
@@ -887,6 +980,16 @@ namespace CMZ.ContentPipeline
         }
 
         /// <summary>
+        /// Replaces only the basis rows of a transform matrix, leaving translation untouched.
+        /// </summary>
+        private static void CopyBasisOnly(ref Matrix target, Matrix basis)
+        {
+            target.M11 = basis.M11; target.M12 = basis.M12; target.M13 = basis.M13;
+            target.M21 = basis.M21; target.M22 = basis.M22; target.M23 = basis.M23;
+            target.M31 = basis.M31; target.M32 = basis.M32; target.M33 = basis.M33;
+        }
+
+        /// <summary>
         /// Scales only the translation row of a transform matrix.
         /// </summary>
         private static void ScaleTranslationOnly(ref Matrix m, float scale)
@@ -894,6 +997,49 @@ namespace CMZ.ContentPipeline
             m.M41 *= scale;
             m.M42 *= scale;
             m.M43 *= scale;
+        }
+
+        /// <summary>
+        /// Builds a normalized basis-only matrix from a restored socket transform.
+        /// </summary>
+        private static bool TryCreateScaledBasisOverride(Matrix source, out Matrix basis)
+        {
+            basis = Matrix.Identity;
+
+            Vector3 right = new Vector3(source.M11, source.M12, source.M13);
+            Vector3 up = new Vector3(source.M21, source.M22, source.M23);
+            Vector3 forward = new Vector3(source.M31, source.M32, source.M33);
+
+            if (!TryNormalize(ref right) ||
+                !TryNormalize(ref up) ||
+                !TryNormalize(ref forward))
+            {
+                return false;
+            }
+
+            basis.M11 = right.X;
+            basis.M12 = right.Y;
+            basis.M13 = right.Z;
+
+            basis.M21 = up.X;
+            basis.M22 = up.Y;
+            basis.M23 = up.Z;
+
+            basis.M31 = forward.X;
+            basis.M32 = forward.Y;
+            basis.M33 = forward.Z;
+
+            return true;
+        }
+
+        private static bool TryNormalize(ref Vector3 value)
+        {
+            float lengthSquared = value.LengthSquared();
+            if (lengthSquared < 0.0000001f || float.IsNaN(lengthSquared) || float.IsInfinity(lengthSquared))
+                return false;
+
+            value *= 1f / (float)Math.Sqrt(lengthSquared);
+            return true;
         }
 
         /// <summary>

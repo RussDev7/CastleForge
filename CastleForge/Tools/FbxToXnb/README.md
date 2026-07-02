@@ -306,7 +306,27 @@ NormalizeRigidMeshRotation = true
 RigidMeshRotation = 180, 0, 0
 ```
 
-That setting writes cleaner Blender-visible mesh rotation for the primary rigid mesh node, moves root-level helper/socket nodes and secondary root-level mesh nodes with the visible mesh for authoring, and saves both the original and converter-facing authoring transforms in a matching `.cmzrigid.ini` sidecar. Any real extra X roll from the original rigid mesh quaternion is stored in the sidecar only, so the GLB stays clean in Blender while FbxToXnb can still preserve the in-game round-trip pose. Keep the sidecar beside the edited FBX. FbxToXnb first looks for an exact sidecar name matching the FBX, such as `Raygun.cmzrigid.ini`. If the FBX was renamed after export, it can also use a single sidecar in the folder or a sidecar whose base name is referenced by the FBX/texture files, such as `0051_Pistol.cmzrigid.ini` beside `Raygun.fbx`. If more than one sidecar is present and none clearly matches, pass `--rigidMeshRestoreFile` explicitly. The selected sidecar is passed to the processor as `RigidMeshRestoreFile`, scaling the sidecar values into FBX importer units and restoring those transforms before XNA builds the XNB. The processor uses the original + authoring transform pair as a world-space delta that includes the exported RootNode authoring transform, so normalized rigid weapons do not compile sideways, upside down, too low, or offset from the hand.
+That setting writes cleaner Blender-visible mesh rotation for the primary rigid mesh node, moves root-level helper/socket nodes and secondary root-level mesh nodes with the visible mesh for authoring, and saves both the original and Blender-authoring transforms in a matching `.cmzrigid.ini` sidecar. Keep that file beside the edited FBX. FbxToXnb first looks for an exact sidecar name matching the FBX, such as `Raygun.cmzrigid.ini`. If the FBX was renamed after export, it can also use a single sidecar in the folder or a sidecar whose base name is referenced by the FBX/texture files, such as `0051_Pistol.cmzrigid.ini` beside `Raygun.fbx`. If more than one sidecar is present and none clearly matches, pass `--rigidMeshRestoreFile` explicitly. The selected sidecar is passed to the processor as `RigidMeshRestoreFile`, scaling the sidecar values into FBX importer units and restoring those transforms before XNA builds the XNB. The processor uses the original + authoring transform pair as a world-space delta that includes the exported RootNode authoring transform, so normalized rigid weapons do not compile sideways, upside down, too low, or offset from the hand.
+
+#### WeaponAddons sidecar + SLOT_ID must match
+
+When compiling a model for **WeaponAddons**, the `.cmzrigid.ini` sidecar should come from the same vanilla weapon family that your pack uses as `$SLOT_ID`.
+
+The sidecar restores the model back into the original vanilla held-item pose. If you compile with one weapon's sidecar but use a different `$SLOT_ID`, the model can appear rotated, offset, or over-corrected in-game.
+
+Examples:
+
+```clag
+# 0083_Laser_Pistol.cmzrigid.ini
+$SLOT_ID: IronSpacePistol
+```
+
+```clag
+# 0051_Pistol.cmzrigid.ini
+$SLOT_ID: Pistol
+```
+
+This is especially important when renaming files. Renaming `0083_Laser_Pistol.cmzrigid.ini` to `Raygun.cmzrigid.ini` is fine, but the WeaponAddons slot should still match the original source weapon family.
 
 Optional socket correction overrides:
 
@@ -624,6 +644,15 @@ Pass `--pipeline` or `--pipelineDir`, or use the normal/skinned/animation drag-a
 <summary><strong>The FBX references textures, but the build still fails</strong></summary>
 
 Check whether the exported FBX expects exact filenames or relative subfolder paths. The tool stages likely texture files recursively, but the exported material references still need to line up with the files you actually provide.
+
+</details>
+
+<details>
+<summary><strong>Weapon is rotated wrong in-game</strong></summary>
+
+Make sure the `.cmzrigid.ini` used during compile came from the same vanilla weapon family as your WeaponAddons `$SLOT_ID`.
+
+For example, a model compiled with `0083_Laser_Pistol.cmzrigid.ini` should use `$SLOT_ID: IronSpacePistol`, while a model compiled with `0051_Pistol.cmzrigid.ini` should use `$SLOT_ID: Pistol`.
 
 </details>
 

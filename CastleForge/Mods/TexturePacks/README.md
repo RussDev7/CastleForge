@@ -366,7 +366,7 @@ RigidMeshRotation = 180, 0, 0
 | `Models` | `AuthoringLocation` | `0, 0, 0` | Optional GLB root authoring offset. Copy Blender's RootNode Location values in `X, Y, Z` order. The exporter converts Blender's displayed Z-up values to GLB coordinates internally. |
 | `Models` | `AuthoringRotation` | `0, 0, 0` | Optional GLB root authoring rotation. Three values mean Blender Euler degrees `X, Y, Z`; four values mean Blender Quaternion `W, X, Y, Z`. The exporter normalizes quaternions and converts Blender's displayed basis internally. |
 | `Models` | `AuthoringRotationQuaternion` | `1, 0, 0, 0` | Legacy compatibility key. Still read when `AuthoringRotation` is missing. Prefer `AuthoringRotation` for new configs. |
-| `Models` | `NormalizeRigidMeshRotation` | `true` | Optional rigid/static export cleanup. When enabled, one primary safe leaf mesh-parent node is exported with `RigidMeshRotation`, root-level helper/socket nodes and secondary root-level mesh nodes are moved with the visible mesh for Blender authoring, and a `.cmzrigid.ini` sidecar stores both the original and converter-facing authoring transforms so FbxToXnb can apply a restore delta during conversion. Any real extra X roll from the original rigid mesh quaternion is stored in the sidecar only, keeping the GLB clean in Blender while preserving the in-game round-trip pose. The restore is delta-based and includes the exported RootNode authoring transform when calculating the authored-to-original correction. This prevents Blender/FBX-baked root offsets from pushing held weapons too low, sideways, or away from helper nodes during XNB conversion. |
+| `Models` | `NormalizeRigidMeshRotation` | `true` | Optional rigid/static export cleanup. When enabled, one primary safe leaf mesh-parent node is exported with `RigidMeshRotation`, root-level helper/socket nodes and secondary root-level mesh nodes are moved with the visible mesh for Blender authoring, and a `.cmzrigid.ini` sidecar stores both the original and Blender-authoring transforms so FbxToXnb can apply a restore delta during conversion. The restore is delta-based and includes the exported RootNode authoring transform when calculating the authored-to-original correction. This prevents Blender/FBX-baked root offsets from pushing held weapons too low, sideways, or away from helper nodes during XNB conversion. |
 | `Models` | `RigidMeshRotation` | `180, 0, 0` | Target Blender-visible mesh-parent rotation used when `NormalizeRigidMeshRotation=true`. Three values mean Euler degrees `X, Y, Z`; four values mean Quaternion `W, X, Y, Z`. |
 
 ---
@@ -1845,8 +1845,6 @@ Those rotations come from the original XNA model's local bone/mesh-parent transf
 NormalizeRigidMeshRotation = true
 RigidMeshRotation = 180, 0, 0
 ```
-
-When `NormalizeRigidMeshRotation` is enabled, the exporter dynamically compares the primary rigid mesh node's original local X roll against the clean CMZ rigid source baseline. Weapons that already match the baseline receive no extra roll, while weapons with real authored roll, such as the space pistol, get that roll stored in the `.cmzrigid.ini` authoring metadata only. The GLB stays clean in Blender, and FbxToXnb uses the sidecar delta to preserve the in-game round-trip pose. This replaces the older `RigidMeshRollCorrectionStrength` and `RigidMeshRollCorrectionModels` workaround keys.
 
 When this is enabled, each exported GLB can be accompanied by:
 
