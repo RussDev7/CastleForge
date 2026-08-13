@@ -225,6 +225,7 @@ namespace CastleWallsMk2
                             _shootFBallForceTerrain,
                             _rocketSpeed,
                             _forceRespawn,
+                            _forceRespawnKillRevive,
                             _disableInvRetrieval,
                             _gravity,
                             _cameraSettings,
@@ -286,7 +287,7 @@ namespace CastleWallsMk2
             _shootHostAmmo = _shootGrenadeAmmo = _shootRocketAmmo = _freezeLasers = _extendLaserTime =
             _infiLaserPath = _infiLaserBounce = _explosiveLasers = _noTPOnServerRestart =
             _corruptOnKick = _projectileTuning = _freeFlyCamera = _rideDragon = _shootBowAmmo =
-            _noClip = _explodingOres = _shootFireballAmmo = _rocketSpeed = _forceRespawn =
+            _noClip = _explodingOres = _shootFireballAmmo = _rocketSpeed = _forceRespawn = _forceRespawnKillRevive =
             _disableInvRetrieval = _gravity = _cameraXyz = _cameraSettings = _cameraFov = _mute = _muteWarnOffender =
             _trail = _trailPrivate = _shower = _dragonCounter = _hat = _boots = _rapidItems = _disableControls =
             _itemVortex = _beaconMode = _chaosMode = _clockChaos = _dragonChaos = _ignoreChatNewlines = _hug =
@@ -855,6 +856,7 @@ namespace CastleWallsMk2
             public static Action<float>                                       OnRocketSpeedValue;
             public static Action<float>                                       OnGuidedRocketSpeedValue;
             public static Action<bool>                                        OnForceRespawn;
+            public static Action<bool>                                        OnForceRespawnKillRevive;
             public static Action<bool>                                        OnIgnoreChatNewlines;
             public static Action<bool>                                        OnDisableInvRetrieval;
             public static Action<bool>                                        OnGravity;
@@ -1476,6 +1478,7 @@ namespace CastleWallsMk2
                     if (!_disableControls) { _disableContMultiTarg = false; _disableContMultiTargetNetIds.Clear(); }
 
                     CB_Checkbox    ("Force Respawn:",    ref _forceRespawn,           Callbacks.OnForceRespawn);
+                    CB_Checkbox    (" - Kill & Revive",  ref _forceRespawnKillRevive, Callbacks.OnForceRespawnKillRevive, enabled: _forceRespawn);
                     CB_MultiPCombo ("##forceRePlrCombo", ref _forceRespawnMultiTarg,  Callbacks.OnRespawnPlayer,         _forceRespawnMultiTargetNetIds,  _forceRespawn);
                     if (!_forceRespawn) { _forceRespawnMultiTarg = false; _forceRespawnMultiTargetNetIds.Clear(); }
 

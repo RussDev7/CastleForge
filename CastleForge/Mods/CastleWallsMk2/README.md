@@ -279,6 +279,7 @@ The Main tab is the heart of the mod. It combines self-targeted tools, world/vis
 - Disable Controls
   - multi-player target selection
 - Force Respawn
+  - Kill & Revive option to damage/kill targets before forcing the respawn
   - multi-player target selection
 - Rapid Items
   - target picker

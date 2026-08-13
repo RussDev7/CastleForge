@@ -183,10 +183,10 @@ namespace CastleWallsMk2
                                 _noMobBlockingEnabled, _multiColorAmmoEnabled, _multiColorRNGEnabled, _shootBlocksEnabled, _shootHostAmmoEnabled, _shootGrenadeAmmoEnabled, _shootRocketAmmoEnabled, _freezeLasersEnabled,
                                 _extendLaserTimeEnabled, _infiLaserPathEnabled, _infiLaserBounceEnabled, _explosiveLasersEnabled, _noTPOnServerRestartEnabled, _corruptOnKickEnabled, _projectileTuningEnabled,
                                 _freeFlyCameraEnabled, _noClipEnabled, _rideDragonEnabled, _shootBowAmmoEnabled, _explodingOresEnabled, _shootFireballAmmoEnabled, _shootFBallForceTerrainEnabled, _rocketSpeedEnabled,
-                                _forceRespawnEnabled, _gravityEnabled, _disableInvRetrievalEnabled, _cameraXyzEnabled, _muteEnabled, _muteWarnOffenderEnabled, _muteShowMessageEnabled, _trailEnabled, _trailPrivateEnabled,
-                                _showerEnabled, _dragonCounterEnabled, _hatEnabled, _bootsEnabled, _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled, _chaosModeEnabled,
-                                _clockDiscordEnabled, _dragonDiscordEnabled, _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled, _spamTextEnabled,
-                                _spamTextSudoEnabled, _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
+                                _forceRespawnEnabled, _forceRespawnKillReviveEnabled, _gravityEnabled, _disableInvRetrievalEnabled, _cameraXyzEnabled, _muteEnabled, _muteWarnOffenderEnabled, _muteShowMessageEnabled,
+                                _trailEnabled, _trailPrivateEnabled, _showerEnabled, _dragonCounterEnabled, _hatEnabled, _bootsEnabled, _rapidItemsEnabled, _disableControlsEnabled, _itemVortexEnabled, _beaconModeEnabled,
+                                _chaosModeEnabled, _clockDiscordEnabled, _dragonDiscordEnabled, _hugEnabled, _noLavaVisualsEnabled, _reliableFloodEnabled, _blockEspEnabled, _blockEspNoTraceEnabled, _nametagsEnabled,
+                                _spamTextEnabled, _spamTextSudoEnabled, _chaoticAimEnabled, _disableItemPickupEnabled, _ghostModeEnabled, _ghostModeHideNameEnabled, _rapidPlaceEnabled, _sudoPlayerEnabled, _doorSpamEnabled,
                                 _allGunsHarvestEnabled, _pvpThornsEnabled, _trialModeEnabled, _deathAuraEnabled, _begoneAuraEnabled, _blockNukerEnabled, _cameraFovEnabled, _cameraSettingsEnabled;
 
         // Sliders:
@@ -2344,10 +2344,12 @@ namespace CastleWallsMk2
                     _forceRespawnTargetNetids = new byte[0];
                 }
 
-                if (enabled)
-                    SendLog($"Force Respawn: {enabled}");
-                else
-                    SendLog($"Force Respawn: {enabled}");
+                SendLog($"Force Respawn: {enabled}");
+            };
+            Callbacks.OnForceRespawnKillRevive = enabled =>
+            {
+                _forceRespawnKillReviveEnabled = enabled;
+                SendLog($"Force Respawn Kill & Revive: {enabled}");
             };
             Callbacks.OnRespawnPlayer = (mode, networkIds) =>
             {
@@ -3953,7 +3955,7 @@ namespace CastleWallsMk2
 
                     /* Global */   _noConsumeAmmo
                     /* Tick   */ = _noEnemiesEnabled           = _noTargetEnabled          = _playerAimbotEnabled           = _dragonAimbotEnabled    = _mobAimbotEnabled           = _playerPositionEnabled   =
-                                   _rideDragonEnabled          = _forceRespawnEnabled
+                                   _rideDragonEnabled          = _forceRespawnEnabled      = _forceRespawnKillReviveEnabled
                     /* Patch  */ = _infiniteItemsEnabled       = _tracersEnabled           = _hitboxesEnabled               = _noKickEnabled          = _vanishEnabled              = _godEnabled              =
                                    _pickupRangeEnabled         = _noGunCooldownEnabled     = _noGunRecoilEnabled            = _xrayEnabled            = _instantMineEnabled         = _rapidToolsEnabled       =
                                    _noMobBlockingEnabled       = _multiColorAmmoEnabled    = _multiColorRNGEnabled          = _shootBlocksEnabled     = _shootHostAmmoEnabled       = _shootGrenadeAmmoEnabled =
@@ -4608,12 +4610,18 @@ namespace CastleWallsMk2
                 else if (_forceRespawnTargetMode == PlayerTargetMode.AllPlayers)                                            // If player mode is 'AllPlayers', restart all.
                 {
                     if (TryGetReadyPlayer(networkGamer, out _) && networkGamer != CastleMinerZGame.Instance.MyNetworkGamer) // Exclude ourselves and players who are not fully loaded yet.
+                    {
+                        if (_forceRespawnKillReviveEnabled) KillSelectedPlayer(networkGamer);                               // If Kill & Revive is enabled, the target is killed first, then restarted.
                         RestartLevelPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
+                    }
                 }
                 else
                     if (_forceRespawnTargetMode == PlayerTargetMode.Player &&                                               // If player mode is 'Player', restart only the
                         IdMatchUtils.ContainsId(_forceRespawnTargetNetids, networkGamer.Id))                                // selected '_forceRespawnTargetNetid' players.
+                    {
+                        if (_forceRespawnKillReviveEnabled) KillSelectedPlayer(networkGamer);                               // If Kill & Revive is enabled, the target is killed first, then restarted.
                         RestartLevelPrivate(CastleMinerZGame.Instance.MyNetworkGamer, networkGamer);
+                    }
         }
         #endregion
 
