@@ -1,4 +1,4 @@
-﻿/*
+/*
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025 RussDev7
 This file is part of https://github.com/RussDev7/CastleForge - see LICENSE for details.
@@ -2225,15 +2225,7 @@ namespace CastleWallsMk2
                 _hatEnabled = enabled;
 
                 if (!enabled)
-                {
-                    // Hat disabled, restore the original block at location for all players but ourselves.
-                    if (oldWearBlockLocation != null && oldWearBlockType != null)
-                        PlaceBlocksAllExcept(CastleMinerZGame.Instance.MyNetworkGamer, (IntVector3)(Vector3)oldWearBlockLocation, (BlockTypeEnum)oldWearBlockType, CastleMinerZGame.Instance.MyNetworkGamer);
-
-                    // Reset the hat states.
-                    oldWearBlockLocation = null;
-                    oldWearBlockType     = null;
-                }
+                    ClearWearBlock(restore: true);
 
                 SendLog($"Hat: {enabled}");
             };
@@ -2242,15 +2234,7 @@ namespace CastleWallsMk2
                 _bootsEnabled = enabled;
 
                 if (!enabled)
-                {
-                    // Boots disabled, restore the original block at location for all players but ourselves.
-                    if (oldWearBlockLocation != null && oldWearBlockType != null)
-                        PlaceBlocksAllExcept(CastleMinerZGame.Instance.MyNetworkGamer, (IntVector3)(Vector3)oldWearBlockLocation, (BlockTypeEnum)oldWearBlockType, CastleMinerZGame.Instance.MyNetworkGamer);
-
-                    // Reset the hat states.
-                    oldWearBlockLocation = null;
-                    oldWearBlockType     = null;
-                }
+                    ClearWearBlock(restore: true);
 
                 SendLog($"Boots: {enabled}");
             };
@@ -3906,6 +3890,9 @@ namespace CastleWallsMk2
             // One-time transition: Just LEFT the game -> clean up & disable features.
             if (!inGame && _wasInGame)
             {
+                // The previous world's Hat/Boots block is no longer safe to restore.
+                ClearWearBlock(restore: false);
+
                 // Restore local spawn/world-spawn state changed by Move World Spawn.
                 try { PlayerTeleportRuntime.RestoreLocalSpawnStateOnLeave(); } catch { }
 
@@ -4908,12 +4895,45 @@ namespace CastleWallsMk2
 
         public static BlockTypeEnum? oldWearBlockType     = null;
         public static Vector3?       oldWearBlockLocation = null;
+
+        /// <summary>
+        /// Restores the last temporary Hat/Boots block only while a game session is active,
+        /// then clears the cached location so it cannot leak into another world.
+        /// </summary>
+        private static void ClearWearBlock(bool restore)
+        {
+            try
+            {
+                var game = CastleMinerZGame.Instance;
+                if (restore && oldWearBlockLocation.HasValue && oldWearBlockType.HasValue
+                    && IsInGame() && game?.MyNetworkGamer != null)
+                {
+                    // Hat/Boots disabled, restore the original block at location for all players but ourselves.
+                    PlaceBlocksAllExcept(
+                        game.MyNetworkGamer,
+                        (IntVector3)oldWearBlockLocation.Value,
+                        oldWearBlockType.Value,
+                        game.MyNetworkGamer);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[Hat/Boots] Could not restore temporary block: {ex}.");
+            }
+            finally
+            {
+                // Reset the hat states.
+                oldWearBlockLocation = null;
+                oldWearBlockType     = null;
+            }
+        }
+
         public static void WearTick()
         {
             var isBoots         = _bootsEnabled;
-            var playerLocation = new Vector3((int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.X                       ?? 0f),
-                                             (int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.Y + (isBoots ? 0f : 1f) ?? 0f),
-                                             (int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.Z                       ?? 0f));
+            var playerLocation  = new Vector3((int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.X                       ?? 0f),
+                                              (int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.Y + (isBoots ? 0f : 1f) ?? 0f),
+                                              (int)Math.Floor(CastleMinerZGame.Instance?.LocalPlayer?.LocalPosition.Z                       ?? 0f));
             var blockAtLocation = InGameHUD.GetBlock((IntVector3)playerLocation);
 
             // If the location is new, and the desired wear type is not at this location,
